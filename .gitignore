@@ -66,4 +66,5 @@ fastlane/test_output/
 .env.*
 *.secret
 Secrets.swift
+Secrets.xcconfig
 GoogleService-Info.plist

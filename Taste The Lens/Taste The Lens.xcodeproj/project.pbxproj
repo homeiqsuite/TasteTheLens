@@ -8,6 +8,7 @@
 
 /* Begin PBXFileReference section */
 		0A1B52E02F66B1C700347181 /* Taste The Lens.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Taste The Lens.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		0A1B53002F66B1CA00347181 /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Secrets.xcconfig; path = "Taste The Lens/Config/Secrets.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -34,6 +35,7 @@
 			children = (
 				0A1B52E22F66B1C700347181 /* Taste The Lens */,
 				0A1B52E12F66B1C700347181 /* Products */,
+				0A1B53002F66B1CA00347181 /* Secrets.xcconfig */,
 			);
 			sourceTree = "<group>";
 		};
@@ -248,14 +250,23 @@
 		};
 		0A1B52EC2F66B1C900347181 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 0A1B53002F66B1CA00347181 /* Secrets.xcconfig */;
 			buildSettings = {
+				ANTHROPIC_API_KEY = "$(ANTHROPIC_API_KEY)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 5WB3622RDP;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 5WB3622RDP;
 				ENABLE_PREVIEWS = YES;
+				FAL_API_KEY = "$(FAL_API_KEY)";
+				GEMINI_API_KEY = "$(GEMINI_API_KEY)";
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Taste The Lens uses your camera to capture images and translate them into culinary creations.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -268,6 +279,8 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.eightgates.Taste-The-Lens";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Taste The Lens";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -280,14 +293,23 @@
 		};
 		0A1B52ED2F66B1C900347181 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 0A1B53002F66B1CA00347181 /* Secrets.xcconfig */;
 			buildSettings = {
+				ANTHROPIC_API_KEY = "$(ANTHROPIC_API_KEY)";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
+				CODE_SIGN_STYLE = Manual;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 5WB3622RDP;
+				DEVELOPMENT_TEAM = "";
+				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = 5WB3622RDP;
 				ENABLE_PREVIEWS = YES;
+				FAL_API_KEY = "$(FAL_API_KEY)";
+				GEMINI_API_KEY = "$(GEMINI_API_KEY)";
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Taste The Lens uses your camera to capture images and translate them into culinary creations.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -300,6 +322,8 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.eightgates.Taste-The-Lens";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Taste The Lens";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
