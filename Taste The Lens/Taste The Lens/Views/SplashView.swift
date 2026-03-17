@@ -7,19 +7,19 @@ struct SplashView: View {
 
     var body: some View {
         ZStack {
-            Color(red: 0.051, green: 0.051, blue: 0.059) // #0D0D0F
+            Theme.darkBg
                 .ignoresSafeArea()
 
             VStack(spacing: 16) {
                 Text("Taste The Lens")
                     .font(.system(size: 36, weight: .bold, design: .serif))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Theme.darkTextPrimary)
                     .opacity(showTitle ? 1 : 0)
                     .scaleEffect(showTitle ? 1 : 0.9)
 
                 Text("What does the world taste like?")
                     .font(.system(size: 17, weight: .regular, design: .serif))
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(Theme.darkTextSecondary)
                     .opacity(showTagline ? 1 : 0)
             }
         }

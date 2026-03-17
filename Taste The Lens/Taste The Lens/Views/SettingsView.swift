@@ -28,6 +28,10 @@ struct SettingsView: View {
                     ChefSelectionView()
                         .padding(.horizontal, 16)
 
+                    // Dietary Preferences
+                    DietaryPreferenceSection()
+                        .padding(.horizontal, 16)
+
                     // Subscription Section
                     settingsSection("Subscription") {
                         VStack(spacing: 0) {
@@ -65,7 +69,7 @@ struct SettingsView: View {
 
                             if StoreManager.shared.isPro {
                                 settingsDivider
-                                settingsButton("Manage Subscription", icon: "creditcard", color: Theme.textSecondary) {
+                                settingsButton("Manage Subscription", icon: "creditcard", color: Theme.textPrimary) {
                                     if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
                                         UIApplication.shared.open(url)
                                     }
@@ -206,7 +210,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.textTertiary)
+                .foregroundStyle(Theme.textSecondary)
                 .textCase(.uppercase)
                 .tracking(1.2)
                 .padding(.horizontal, 16)
@@ -224,7 +228,7 @@ struct SettingsView: View {
         }
     }
 
-    private func settingsButton(_ title: String, icon: String, color: Color = Theme.textSecondary, action: @escaping () -> Void) -> some View {
+    private func settingsButton(_ title: String, icon: String, color: Color = Theme.textPrimary, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
@@ -251,11 +255,11 @@ struct SettingsView: View {
             HStack(spacing: 12) {
                 Image(systemName: icon)
                     .font(.system(size: 15))
-                    .foregroundStyle(Theme.textSecondary)
+                    .foregroundStyle(Theme.textPrimary)
                     .frame(width: 24)
                 Text(title)
                     .font(.system(size: 15))
-                    .foregroundStyle(Theme.textSecondary)
+                    .foregroundStyle(Theme.textPrimary)
                 Spacer()
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 11))

@@ -76,10 +76,10 @@ struct AIReasoningView: View {
                                 if index < revealedItems {
                                     Text(item)
                                         .font(.system(size: 12, weight: .medium))
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle(Theme.darkTextPrimary)
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 4)
-                                        .background(Theme.accent1.opacity(0.5))
+                                        .background(Theme.visual.opacity(0.5))
                                         .clipShape(Capsule())
                                         .transition(.scale.combined(with: .opacity))
                                 }
@@ -170,11 +170,11 @@ struct AIReasoningView: View {
                     // Visual element
                     HStack(spacing: 8) {
                         Circle()
-                            .fill(Theme.accent1.opacity(0.3))
+                            .fill(Theme.visual.opacity(0.3))
                             .frame(width: 8, height: 8)
                         Text(item.visual)
                             .font(.system(size: 14))
-                            .foregroundStyle(Theme.accent1)
+                            .foregroundStyle(Theme.visual)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -186,11 +186,11 @@ struct AIReasoningView: View {
                     // Culinary equivalent
                     HStack(spacing: 8) {
                         Circle()
-                            .fill(Theme.accent2.opacity(0.3))
+                            .fill(Theme.culinary.opacity(0.3))
                             .frame(width: 8, height: 8)
                         Text(item.culinary)
                             .font(.system(size: 14))
-                            .foregroundStyle(Theme.accent2)
+                            .foregroundStyle(Theme.culinary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }

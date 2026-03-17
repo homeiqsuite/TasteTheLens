@@ -128,6 +128,7 @@ struct SavedRecipesView: View {
                         }
                 }
             }
+            .preferredColorScheme(.light)
             .alert("Delete Recipe", isPresented: $showDeleteConfirmation) {
                 Button("Cancel", role: .cancel) { recipeToDelete = nil }
                 Button("Delete", role: .destructive) {
@@ -255,7 +256,7 @@ struct SavedRecipesView: View {
             } label: {
                 Label("Take a Photo", systemImage: "camera")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Theme.darkTextPrimary)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
                     .background(Theme.primary)

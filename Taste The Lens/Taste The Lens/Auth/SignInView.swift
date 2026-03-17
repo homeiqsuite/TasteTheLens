@@ -15,8 +15,8 @@ struct SignInView: View {
     @State private var errorMessage: String?
     @State private var currentNonce: String?
 
-    private let bg = Color(red: 0.051, green: 0.051, blue: 0.059)
-    private let gold = Color(red: 0.788, green: 0.659, blue: 0.298)
+    private let bg = Theme.darkBg
+    private let gold = Theme.gold
     private let authManager = AuthManager.shared
 
     var body: some View {
@@ -29,13 +29,13 @@ struct SignInView: View {
                     VStack(spacing: 8) {
                         Text("Welcome to")
                             .font(.system(size: 16))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(Theme.darkTextTertiary)
                         Text("Taste The Lens")
                             .font(.system(size: 28, weight: .bold, design: .serif))
                             .foregroundStyle(gold)
                         Text("Sign in to sync your recipes across devices")
                             .font(.system(size: 14))
-                            .foregroundStyle(.white.opacity(0.4))
+                            .foregroundStyle(Theme.darkTextTertiary)
                             .multilineTextAlignment(.center)
                     }
 
@@ -57,12 +57,12 @@ struct SignInView: View {
 
                     // Divider
                     HStack {
-                        Rectangle().fill(Color.white.opacity(0.1)).frame(height: 0.5)
+                        Rectangle().fill(Theme.darkStroke).frame(height: 0.5)
                         Text("or")
                             .font(.system(size: 13))
-                            .foregroundStyle(.white.opacity(0.3))
+                            .foregroundStyle(Theme.darkTextHint)
                             .padding(.horizontal, 12)
-                        Rectangle().fill(Color.white.opacity(0.1)).frame(height: 0.5)
+                        Rectangle().fill(Theme.darkStroke).frame(height: 0.5)
                     }
                     .padding(.horizontal, 32)
 
@@ -77,10 +77,10 @@ struct SignInView: View {
                         } label: {
                             Text("Continue with Email")
                                 .font(.system(size: 15, weight: .medium))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(Theme.darkTextPrimary)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 50)
-                                .background(Color.white.opacity(0.1))
+                                .background(Theme.darkStroke)
                                 .cornerRadius(12)
                         }
                         .padding(.horizontal, 32)
@@ -157,7 +157,7 @@ struct SignInView: View {
             } label: {
                 Text(isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up")
                     .font(.system(size: 13))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(Theme.darkTextTertiary)
             }
         }
         .padding(.horizontal, 32)
@@ -237,13 +237,13 @@ struct AuthTextFieldStyle: TextFieldStyle {
         configuration
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
-            .background(Color.white.opacity(0.08))
+            .background(Theme.darkStroke)
             .cornerRadius(12)
-            .foregroundStyle(.white)
+            .foregroundStyle(Theme.darkTextPrimary)
             .font(.system(size: 15))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                    .stroke(Theme.darkStroke, lineWidth: 0.5)
             )
     }
 }

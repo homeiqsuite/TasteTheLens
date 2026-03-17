@@ -90,19 +90,40 @@ final class StoreManager {
     // MARK: - Subscription Status
 
     func updateSubscriptionStatus() async {
-        var hasPro = false
+        var hasStoreKitPro = false
 
         for await result in Transaction.currentEntitlements {
             if case .verified(let transaction) = result {
                 if transaction.productID == Self.monthlyProductId ||
                    transaction.productID == Self.annualProductId {
-                    hasPro = true
+                    hasStoreKitPro = true
                 }
             }
         }
 
-        isPro = hasPro
-        logger.info("Subscription status: isPro=\(hasPro)")
+        let hasSupabasePro = await checkSupabaseProStatus()
+        isPro = hasStoreKitPro || hasSupabasePro
+        logger.info("Subscription status: isPro=\(self.isPro) (StoreKit=\(hasStoreKitPro), Supabase=\(hasSupabasePro))")
+    }
+
+    private func checkSupabaseProStatus() async -> Bool {
+        guard AuthManager.shared.isAuthenticated,
+              let userId = AuthManager.shared.currentUser?.id.uuidString else { return false }
+
+        do {
+            struct UserTier: Decodable { let subscription_tier: String? }
+            let response = try await SupabaseManager.shared.client
+                .from("users")
+                .select("subscription_tier")
+                .eq("id", value: userId)
+                .single()
+                .execute()
+            let user = try JSONDecoder().decode(UserTier.self, from: response.data)
+            return user.subscription_tier == "pro"
+        } catch {
+            logger.warning("Failed to check Supabase pro status: \(error)")
+            return false
+        }
     }
 
     // MARK: - Transaction Listener

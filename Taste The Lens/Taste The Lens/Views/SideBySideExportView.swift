@@ -5,8 +5,8 @@ struct SideBySideExportView: View {
 
     private let canvasSize: CGFloat = 1080
     private let bottomBarHeight: CGFloat = 80
-    private let bg = Color(red: 0.051, green: 0.051, blue: 0.059)
-    private let gold = Color(red: 0.788, green: 0.659, blue: 0.298)
+    private let bg = Theme.darkBg
+    private let gold = Theme.gold
 
     private var photoHeight: CGFloat { canvasSize - bottomBarHeight }
     private var photoWidth: CGFloat { (canvasSize - 2) / 2 } // 2pt divider
@@ -51,14 +51,14 @@ struct SideBySideExportView: View {
             HStack {
                 Text(recipe.dishName)
                     .font(.system(size: 14, weight: .semibold, design: .default))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Theme.darkTextPrimary)
                     .lineLimit(1)
 
                 Spacer()
 
                 Text("Taste The Lens")
                     .font(.system(size: 12, weight: .medium, design: .default))
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(Theme.darkTextSecondary)
             }
             .padding(.horizontal, 24)
             .frame(height: bottomBarHeight)

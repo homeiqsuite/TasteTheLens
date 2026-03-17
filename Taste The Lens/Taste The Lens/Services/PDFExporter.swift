@@ -42,7 +42,7 @@ struct PDFExporter {
 
             // Dish name
             let titleFont = UIFont(name: "Georgia-Bold", size: 24) ?? UIFont.boldSystemFont(ofSize: 24)
-            let titleHeight = drawText(recipe.dishName, font: titleFont, color: UIColor(red: 0.788, green: 0.659, blue: 0.298, alpha: 1))
+            let titleHeight = drawText(recipe.dishName, font: titleFont, color: Theme.goldUI)
             y += titleHeight + 12
 
             // Description
@@ -97,10 +97,10 @@ struct PDFExporter {
             func drawSection(_ title: String) {
                 ensureSpace(30)
                 let sectionFont = UIFont.systemFont(ofSize: 14, weight: .bold)
-                let h = drawText(title.uppercased(), font: sectionFont, color: UIColor(red: 0.788, green: 0.659, blue: 0.298, alpha: 1))
+                let h = drawText(title.uppercased(), font: sectionFont, color: Theme.goldUI)
                 y += h + 4
                 // Underline
-                UIColor(red: 0.788, green: 0.659, blue: 0.298, alpha: 0.3).setStroke()
+                Theme.goldUI30.setStroke()
                 let line = UIBezierPath()
                 line.move(to: CGPoint(x: margin, y: y))
                 line.addLine(to: CGPoint(x: margin + contentWidth, y: y))
@@ -189,6 +189,94 @@ struct PDFExporter {
             ]
             let footerStr = NSAttributedString(string: footerText, attributes: footerAttrs)
             footerStr.draw(at: CGPoint(x: margin, y: pageRect.height - margin + 10))
+        }
+    }
+
+    static func generateMenuPDF(theme: String, courses: [(courseType: String, recipe: Recipe)]) -> Data {
+        let pageRect = CGRect(x: 0, y: 0, width: 612, height: 792)
+        let margin: CGFloat = 50
+        let contentWidth = pageRect.width - margin * 2
+        let goldColor = Theme.goldUI
+
+        let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
+
+        return renderer.pdfData { context in
+            // Cover page
+            context.beginPage()
+            let coverTitleFont = UIFont(name: "Georgia-Bold", size: 32) ?? UIFont.boldSystemFont(ofSize: 32)
+            let coverSubFont = UIFont.systemFont(ofSize: 14, weight: .medium)
+
+            let titleAttrs: [NSAttributedString.Key: Any] = [.font: coverTitleFont, .foregroundColor: goldColor]
+            let titleStr = NSAttributedString(string: theme, attributes: titleAttrs)
+            let titleRect = titleStr.boundingRect(with: CGSize(width: contentWidth, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin], context: nil)
+            titleStr.draw(in: CGRect(x: margin, y: pageRect.midY - titleRect.height - 20, width: contentWidth, height: titleRect.height))
+
+            let subAttrs: [NSAttributedString.Key: Any] = [.font: coverSubFont, .foregroundColor: UIColor.gray]
+            let subStr = NSAttributedString(string: "A \(courses.count)-Course Tasting Menu", attributes: subAttrs)
+            subStr.draw(at: CGPoint(x: margin, y: pageRect.midY + 10))
+
+            let footerFont = UIFont.systemFont(ofSize: 9, weight: .light)
+            let footerAttrs: [NSAttributedString.Key: Any] = [.font: footerFont, .foregroundColor: UIColor.lightGray]
+            let footerStr = NSAttributedString(string: "Created with Taste The Lens", attributes: footerAttrs)
+            footerStr.draw(at: CGPoint(x: margin, y: pageRect.height - margin + 10))
+
+            // Course pages
+            let courseTypeFont = UIFont.systemFont(ofSize: 11, weight: .bold)
+            let dishNameFont = UIFont(name: "Georgia-Bold", size: 22) ?? UIFont.boldSystemFont(ofSize: 22)
+            let bodyFont = UIFont.systemFont(ofSize: 12)
+
+            for (courseType, recipe) in courses {
+                context.beginPage()
+                var y: CGFloat = margin
+
+                // Course type
+                let typeAttrs: [NSAttributedString.Key: Any] = [.font: courseTypeFont, .foregroundColor: goldColor]
+                NSAttributedString(string: courseType.uppercased(), attributes: typeAttrs).draw(at: CGPoint(x: margin, y: y))
+                y += 24
+
+                // Dish name
+                let nameAttrs: [NSAttributedString.Key: Any] = [.font: dishNameFont, .foregroundColor: UIColor.darkText]
+                let nameStr = NSAttributedString(string: recipe.dishName, attributes: nameAttrs)
+                let nameRect = nameStr.boundingRect(with: CGSize(width: contentWidth, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin], context: nil)
+                nameStr.draw(in: CGRect(x: margin, y: y, width: contentWidth, height: nameRect.height))
+                y += nameRect.height + 12
+
+                // Description
+                let descAttrs: [NSAttributedString.Key: Any] = [.font: bodyFont, .foregroundColor: UIColor.darkGray]
+                let descStr = NSAttributedString(string: recipe.recipeDescription, attributes: descAttrs)
+                let descRect = descStr.boundingRect(with: CGSize(width: contentWidth, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin], context: nil)
+                descStr.draw(in: CGRect(x: margin, y: y, width: contentWidth, height: descRect.height))
+                y += descRect.height + 20
+
+                // Dish image
+                if let imageData = recipe.generatedDishImageData, let image = UIImage(data: imageData) {
+                    let imageHeight: CGFloat = 200
+                    let imageRect = CGRect(x: margin, y: y, width: contentWidth, height: imageHeight)
+                    let path = UIBezierPath(roundedRect: imageRect, cornerRadius: 8)
+                    context.cgContext.saveGState()
+                    path.addClip()
+                    let scale = max(contentWidth / image.size.width, imageHeight / image.size.height)
+                    let scaledW = image.size.width * scale
+                    let scaledH = image.size.height * scale
+                    image.draw(in: CGRect(x: imageRect.midX - scaledW / 2, y: imageRect.midY - scaledH / 2, width: scaledW, height: scaledH))
+                    context.cgContext.restoreGState()
+                    y += imageHeight + 20
+                }
+
+                // Key ingredients
+                if let firstComponent = recipe.components.first {
+                    let sectionAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 12, weight: .bold), .foregroundColor: goldColor]
+                    NSAttributedString(string: "KEY INGREDIENTS", attributes: sectionAttrs).draw(at: CGPoint(x: margin, y: y))
+                    y += 20
+
+                    let ingredientFont = UIFont.systemFont(ofSize: 11)
+                    for ingredient in firstComponent.ingredients.prefix(6) {
+                        let attrs: [NSAttributedString.Key: Any] = [.font: ingredientFont, .foregroundColor: UIColor.darkText]
+                        NSAttributedString(string: "• \(ingredient)", attributes: attrs).draw(at: CGPoint(x: margin, y: y))
+                        y += 16
+                    }
+                }
+            }
         }
     }
 }

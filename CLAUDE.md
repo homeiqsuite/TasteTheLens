@@ -48,12 +48,18 @@ Taste The Lens/Taste The Lens/
 
 ## UI Conventions
 
-### Color Palette (Dark Theme)
+### Color Design Reference
+
+- [MobileColorDesign.md](MobileColorDesign.md) — Principles for choosing colors in mobile apps (color psychology, the "Fourth C" of design, and best practices).
+- [ColorTheory.md](ColorTheory.md) — Color theory fundamentals (the color wheel, color properties, and six color harmonies).
+
+### Color Palette (Dark Theme) — Analogous Warm + Cool Complement
 
 - Background: `#0D0D0F`
-- Gold accent: `#C9A84C`
-- Cyan (visual elements): `#64D2FF`
-- Coral (culinary elements): `#FF6B6B`
+- Gold (brand identity, decorative emphasis): `#D4A43A`
+- Primary (interactive elements, buttons): `#B89530`
+- Visual (photography/scene analysis domain): `#3A9E8F` (teal)
+- Culinary (cooking/recipe domain): `#C86B50` (terracotta)
 
 ### Fill Images — Use the Overlay Pattern
 

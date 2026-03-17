@@ -10,14 +10,14 @@ struct ColorSwatchRow: View {
                 HStack(spacing: 8) {
                     Text(hex)
                         .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.8))
+                        .foregroundStyle(Theme.darkTextSecondary)
 
                     RoundedRectangle(cornerRadius: 4)
                         .fill(Color(hex: hex))
                         .frame(width: 32, height: 32)
                         .overlay(
                             RoundedRectangle(cornerRadius: 4)
-                                .stroke(Color.white.opacity(0.3), lineWidth: 0.5)
+                                .stroke(Theme.darkStroke, lineWidth: 0.5)
                         )
                 }
                 .offset(x: appeared ? 0 : 100)
@@ -39,7 +39,7 @@ struct StatusText: View {
     var body: some View {
         Text(status)
             .font(.system(size: 14, weight: .medium, design: .monospaced))
-            .foregroundStyle(.white.opacity(0.7))
+            .foregroundStyle(Theme.darkTextSecondary)
             .opacity(opacity)
             .onChange(of: status) {
                 withAnimation(.easeOut(duration: 0.15)) { opacity = 0 }
@@ -76,7 +76,7 @@ struct GeometricOverlay: View {
 
                 context.stroke(
                     path,
-                    with: .color(.white.opacity(0.06)),
+                    with: .color(Theme.darkSurface),
                     lineWidth: 0.5
                 )
             }

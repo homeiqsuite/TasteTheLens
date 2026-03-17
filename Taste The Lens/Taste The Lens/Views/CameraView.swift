@@ -28,7 +28,7 @@ struct CameraView: View {
                 // Hint text
                 Text("Point at anything. Art, architecture, a sunset. Tap to taste.")
                     .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(Theme.darkTextSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
                     .opacity(isPulsing ? 1 : 0.5)
@@ -41,7 +41,7 @@ struct CameraView: View {
                     PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
                         Image(systemName: "photo.on.rectangle")
                             .font(.system(size: 22, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(Theme.darkTextSecondary)
                             .frame(width: 50, height: 50)
                             .background(Color.black.opacity(0.3))
                             .clipShape(Circle())
@@ -93,13 +93,13 @@ struct CameraView: View {
         VStack(spacing: 16) {
             Image(systemName: "camera.fill")
                 .font(.system(size: 48))
-                .foregroundStyle(.white.opacity(0.3))
+                .foregroundStyle(Theme.darkTextHint)
             Text("Camera access is required")
                 .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(Theme.darkTextSecondary)
             Text("Open Settings to grant camera permission.")
                 .font(.system(size: 14))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(Theme.darkTextTertiary)
         }
     }
 

@@ -5,6 +5,7 @@ import os
 private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "ContentView")
 
 enum AppScreen: Equatable {
+    case dashboard
     case camera
     case processing
     case recipeCard
@@ -19,13 +20,17 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let bg = Color(red: 0.051, green: 0.051, blue: 0.059)
+    private let bg = Theme.darkBg
 
     var body: some View {
         ZStack {
             bg.ignoresSafeArea()
 
             switch vm.currentScreen {
+            case .dashboard:
+                DashboardView(vm: vm)
+                    .transition(.opacity)
+
             case .camera:
                 cameraScreen
                     .transition(.opacity)
@@ -37,7 +42,7 @@ struct ContentView: View {
                 } else {
                     Color.clear.onAppear {
                         logger.error("Processing screen shown but capturedImage is nil")
-                        vm.currentScreen = .camera
+                        vm.currentScreen = .dashboard
                     }
                 }
 
@@ -48,7 +53,7 @@ struct ContentView: View {
                 } else {
                     Color.clear.onAppear {
                         logger.error("Recipe card screen shown but completedRecipe is nil")
-                        vm.currentScreen = .camera
+                        vm.currentScreen = .dashboard
                     }
                 }
             }
@@ -59,6 +64,7 @@ struct ContentView: View {
             }
         }
         .animation(reduceMotion ? .easeInOut(duration: 0.3) : .spring(response: 0.6, dampingFraction: 0.85), value: vm.currentScreen)
+        .preferredColorScheme(vm.currentScreen == .dashboard ? .light : .dark)
         .fullScreenCover(isPresented: $showSplash) {
             SplashView(isPresented: $showSplash)
         }
@@ -71,6 +77,12 @@ struct ContentView: View {
         .sheet(isPresented: $vm.showPaywall) {
             PaywallView()
         }
+        .sheet(isPresented: $vm.showChallengeFeed) {
+            ChallengeFeedView()
+        }
+        .sheet(isPresented: $vm.showTastingMenus) {
+            TastingMenuListView()
+        }
         .onAppear {
             logger.info("ContentView appeared — hasSeenOnboarding: \(hasSeenOnboarding)")
             if !hasSeenOnboarding {
@@ -80,6 +92,9 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .reimagineRecipe)) { notification in
             vm.handleReimaginNotification(notification)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .addMenuCourse)) { notification in
+            vm.handleAddMenuCourse(notification)
         }
     }
 
@@ -91,15 +106,17 @@ struct ContentView: View {
                 vm.handlePhotoCaptured(image)
             }
 
-            // Top bar: settings (left) + saved recipes (right)
+            // Top bar: back to dashboard (left)
             VStack {
                 HStack {
                     Button {
-                        vm.showSettings = true
+                        withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.5, dampingFraction: 0.8)) {
+                            vm.currentScreen = .dashboard
+                        }
                     } label: {
-                        Image(systemName: "gearshape")
+                        Image(systemName: "chevron.left")
                             .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(Theme.darkTextSecondary)
                             .frame(width: 44, height: 44)
                             .background(Color.black.opacity(0.3))
                             .clipShape(Circle())
@@ -108,19 +125,6 @@ struct ContentView: View {
                     .padding(.top, 8)
 
                     Spacer()
-
-                    Button {
-                        vm.showSavedRecipes = true
-                    } label: {
-                        Image(systemName: "book.closed")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.7))
-                            .frame(width: 44, height: 44)
-                            .background(Color.black.opacity(0.3))
-                            .clipShape(Circle())
-                    }
-                    .padding(.trailing, 16)
-                    .padding(.top, 8)
                 }
                 Spacer()
             }
@@ -143,10 +147,10 @@ struct ContentView: View {
                     ToolbarItem(placement: .topBarLeading) {
                         Button {
                             withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.5, dampingFraction: 0.8)) {
-                                vm.resetToCamera()
+                                vm.resetToDashboard()
                             }
                         } label: {
-                            Image(systemName: "camera")
+                            Image(systemName: "house")
                                 .foregroundStyle(Theme.primary)
                         }
                     }
@@ -163,17 +167,17 @@ struct ContentView: View {
                     .foregroundStyle(Theme.gold)
                 Text(message)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Theme.darkTextPrimary)
                     .lineLimit(2)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(Color.white.opacity(0.1))
+                    .fill(Theme.darkStroke)
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+                            .stroke(Theme.darkStroke, lineWidth: 0.5)
                     )
             )
             .padding(.horizontal, 24)

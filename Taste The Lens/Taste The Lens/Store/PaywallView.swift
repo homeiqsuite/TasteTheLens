@@ -12,8 +12,8 @@ struct PaywallView: View {
     private let storeManager = StoreManager.shared
     private let usageTracker = UsageTracker.shared
 
-    private let bg = Color(red: 0.051, green: 0.051, blue: 0.059)
-    private let gold = Color(red: 0.788, green: 0.659, blue: 0.298)
+    private let bg = Theme.darkBg
+    private let gold = Theme.gold
 
     var body: some View {
         ZStack {
@@ -31,12 +31,12 @@ struct PaywallView: View {
 
                         Text("You've used all your free tastings")
                             .font(.system(size: 20, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Theme.darkTextPrimary)
                             .multilineTextAlignment(.center)
 
                         Text("\(usageTracker.usageCount) of \(usageTracker.usageLimit) free tastings used this month")
                             .font(.system(size: 14))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(Theme.darkTextTertiary)
                     }
 
                     Spacer().frame(height: 8)
@@ -51,7 +51,7 @@ struct PaywallView: View {
                     .padding(20)
                     .background(
                         RoundedRectangle(cornerRadius: 16)
-                            .fill(Color.white.opacity(0.05))
+                            .fill(Theme.darkSurface)
                     )
                     .padding(.horizontal, 24)
 
@@ -70,7 +70,7 @@ struct PaywallView: View {
                         if storeManager.products.isEmpty {
                             Text("Loading pricing...")
                                 .font(.system(size: 14))
-                                .foregroundStyle(.white.opacity(0.4))
+                                .foregroundStyle(Theme.darkTextTertiary)
                                 .padding(.vertical, 12)
                         }
                     }
@@ -96,7 +96,7 @@ struct PaywallView: View {
                     } label: {
                         Text("Restore Purchases")
                             .font(.system(size: 13))
-                            .foregroundStyle(.white.opacity(0.4))
+                            .foregroundStyle(Theme.darkTextTertiary)
                     }
 
                     // Dismiss
@@ -105,7 +105,7 @@ struct PaywallView: View {
                     } label: {
                         Text("Not now")
                             .font(.system(size: 14))
-                            .foregroundStyle(.white.opacity(0.3))
+                            .foregroundStyle(Theme.darkTextHint)
                     }
                     .padding(.bottom, 24)
                 }
@@ -121,7 +121,7 @@ struct PaywallView: View {
                 .frame(width: 24)
             Text(text)
                 .font(.system(size: 15))
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(Theme.darkTextSecondary)
         }
     }
 
@@ -145,7 +145,7 @@ struct PaywallView: View {
                     HStack(spacing: 6) {
                         Text(label)
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Theme.darkTextPrimary)
                         if let badge {
                             Text(badge)
                                 .font(.system(size: 10, weight: .bold))
@@ -158,7 +158,7 @@ struct PaywallView: View {
                     }
                     Text(product.displayPrice)
                         .font(.system(size: 13))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(Theme.darkTextTertiary)
                 }
                 Spacer()
                 if isPurchasing {
@@ -173,10 +173,10 @@ struct PaywallView: View {
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(Color.white.opacity(0.08))
+                    .fill(Theme.darkStroke)
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
-                            .stroke(badge != nil ? gold.opacity(0.4) : Color.white.opacity(0.1), lineWidth: badge != nil ? 1.5 : 0.5)
+                            .stroke(badge != nil ? gold.opacity(0.4) : Theme.darkStroke, lineWidth: badge != nil ? 1.5 : 0.5)
                     )
             )
         }

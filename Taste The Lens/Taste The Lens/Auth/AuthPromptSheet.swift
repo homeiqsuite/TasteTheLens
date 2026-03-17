@@ -4,7 +4,7 @@ struct AuthPromptSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showSignIn = false
 
-    private let gold = Color(red: 0.788, green: 0.659, blue: 0.298)
+    private let gold = Theme.gold
 
     var body: some View {
         VStack(spacing: 20) {
@@ -23,11 +23,11 @@ struct AuthPromptSheet: View {
 
             Text("Save to the Cloud?")
                 .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(Theme.darkTextPrimary)
 
             Text("Sign in to sync your recipes across devices and never lose a dish.")
                 .font(.system(size: 14))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(Theme.darkTextTertiary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
 
@@ -51,12 +51,12 @@ struct AuthPromptSheet: View {
             } label: {
                 Text("Maybe Later")
                     .font(.system(size: 14))
-                    .foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(Theme.darkTextTertiary)
             }
 
             Spacer().frame(height: 12)
         }
-        .background(Color(red: 0.051, green: 0.051, blue: 0.059))
+        .background(Theme.darkBg)
         .sheet(isPresented: $showSignIn) {
             SignInView()
         }

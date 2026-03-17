@@ -17,6 +17,9 @@ struct RecipeCardView: View {
     @State private var showAuthPrompt = false
     @State private var showCookingMode = false
     @State private var showAIReasoning = false
+    @State private var showCreateChallenge = false
+    @State private var isCreatingChallenge = false
+    @State private var challengeError: String?
     @State private var servingCount: Int = 2
     @AppStorage("hasSeenAuthPrompt") private var hasSeenAuthPrompt = false
 
@@ -31,6 +34,7 @@ struct RecipeCardView: View {
 
                     // TIER 2: The Essentials
                     descriptionSection
+                    dietaryBadges
                     quickStatsStrip
                     ingredientsSection
                     stepsSection
@@ -63,6 +67,9 @@ struct RecipeCardView: View {
         }
         .sheet(isPresented: $showAIReasoning) {
             AIReasoningView(recipe: recipe)
+        }
+        .sheet(isPresented: $showCreateChallenge) {
+            challengeConfirmationSheet
         }
     }
 
@@ -100,7 +107,7 @@ struct RecipeCardView: View {
                 // Dish name
                 Text(recipe.dishName)
                     .font(.system(size: 26, weight: .bold, design: .serif))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Theme.darkTextPrimary)
                     .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
 
                 Spacer()
@@ -109,7 +116,7 @@ struct RecipeCardView: View {
                 if let analysis = recipe.sceneAnalysis {
                     Text(approachShortLabel(analysis.approach))
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Theme.darkTextPrimary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(.ultraThinMaterial)
@@ -156,6 +163,40 @@ struct RecipeCardView: View {
             .padding(.horizontal, 20)
             .padding(.top, 20)
             .padding(.bottom, 8)
+    }
+
+    // MARK: - Dietary Badges
+
+    @ViewBuilder
+    private var dietaryBadges: some View {
+        let prefs = DietaryPreference.current()
+        if !prefs.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(prefs) { pref in
+                        HStack(spacing: 4) {
+                            Image(systemName: pref.icon)
+                                .font(.system(size: 10))
+                            Text(pref.displayName)
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(
+                            Capsule()
+                                .fill(Theme.primary.opacity(0.1))
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke(Theme.primary.opacity(0.3), lineWidth: 0.5)
+                        )
+                        .foregroundStyle(Theme.primary)
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+            .padding(.bottom, 4)
+        }
     }
 
     // MARK: - Tier 2: Quick Stats Strip
@@ -326,7 +367,7 @@ struct RecipeCardView: View {
                     } label: {
                         Image(systemName: "arrow.triangle.swap")
                             .font(.system(size: 14))
-                            .foregroundStyle(Theme.accent2.opacity(0.6))
+                            .foregroundStyle(Theme.culinary.opacity(0.6))
                             .rotationEffect(.degrees(isExpanded ? 180 : 0))
                     }
                 }
@@ -339,7 +380,7 @@ struct RecipeCardView: View {
                         HStack(spacing: 8) {
                             Text("or")
                                 .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(Theme.accent2.opacity(0.5))
+                                .foregroundStyle(Theme.culinary.opacity(0.5))
                             Text(sub)
                                 .font(.system(size: 14))
                                 .foregroundStyle(Theme.textTertiary)
@@ -364,7 +405,7 @@ struct RecipeCardView: View {
                     HStack(alignment: .top, spacing: 14) {
                         Text("\(index + 1)")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Theme.darkTextPrimary)
                             .frame(width: 28, height: 28)
                             .background(Theme.primary)
                             .clipShape(Circle())
@@ -394,7 +435,7 @@ struct RecipeCardView: View {
             if let analysis = recipe.sceneAnalysis, !analysis.detectedItems.isEmpty {
                 detailRow(
                     icon: "eye",
-                    iconColor: Theme.accent1,
+                    iconColor: Theme.visual,
                     title: "How AI read your photo",
                     sectionKey: "scene"
                 ) {
@@ -403,10 +444,10 @@ struct RecipeCardView: View {
                             ForEach(analysis.detectedItems, id: \.self) { item in
                                 Text(item)
                                     .font(.system(size: 13))
-                                    .foregroundStyle(Theme.accent1)
+                                    .foregroundStyle(Theme.visual)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 5)
-                                    .background(Theme.accent1.opacity(0.08))
+                                    .background(Theme.visual.opacity(0.08))
                                     .clipShape(RoundedRectangle(cornerRadius: 10))
                             }
                         }
@@ -435,7 +476,7 @@ struct RecipeCardView: View {
                                 Text("See the full story")
                                     .font(.system(size: 13, weight: .medium))
                             }
-                            .foregroundStyle(Theme.accent1)
+                            .foregroundStyle(Theme.visual)
                         }
                     }
                 }
@@ -456,7 +497,7 @@ struct RecipeCardView: View {
                             HStack(alignment: .top, spacing: 10) {
                                 Text(item.visual)
                                     .font(.system(size: 14))
-                                    .foregroundStyle(Theme.accent1)
+                                    .foregroundStyle(Theme.visual)
                                     .frame(maxWidth: .infinity, alignment: .leading)
 
                                 Image(systemName: "arrow.right")
@@ -465,7 +506,7 @@ struct RecipeCardView: View {
 
                                 Text(item.culinary)
                                     .font(.system(size: 14))
-                                    .foregroundStyle(Theme.accent2)
+                                    .foregroundStyle(Theme.culinary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
 
@@ -526,7 +567,7 @@ struct RecipeCardView: View {
 
                 detailRow(
                     icon: "flame",
-                    iconColor: Theme.accent2,
+                    iconColor: Theme.culinary,
                     title: "Methods & techniques",
                     sectionKey: "techniques"
                 ) {
@@ -626,6 +667,12 @@ struct RecipeCardView: View {
                 } label: {
                     Label("Reimagine", systemImage: "arrow.trianglehead.2.clockwise")
                 }
+                Divider()
+                Button {
+                    throwTheGauntlet()
+                } label: {
+                    Label("Throw the Gauntlet", systemImage: "flag.checkered")
+                }
             } label: {
                 Image(systemName: "square.and.arrow.up")
                     .font(.system(size: 16, weight: .semibold))
@@ -646,7 +693,7 @@ struct RecipeCardView: View {
                     Text("Cook")
                         .font(.system(size: 15, weight: .semibold))
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(Theme.darkTextPrimary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
                 .background(Theme.primary)
@@ -663,7 +710,7 @@ struct RecipeCardView: View {
                     Text(isSaved ? "Saved" : "Save")
                         .font(.system(size: 15, weight: .semibold))
                 }
-                .foregroundStyle(isSaved ? .white : Theme.textPrimary)
+                .foregroundStyle(isSaved ? Theme.darkTextPrimary : Theme.textPrimary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
                 .background(isSaved ? Theme.primary : Theme.buttonBg)
@@ -716,9 +763,9 @@ struct RecipeCardView: View {
 
     private func approachColor(_ approach: String) -> Color {
         switch approach {
-        case "ingredient-driven": return Theme.accent2
+        case "ingredient-driven": return Theme.culinary
         case "hybrid": return Theme.primary
-        default: return Theme.accent1
+        default: return Theme.visual
         }
     }
 
@@ -770,6 +817,93 @@ struct RecipeCardView: View {
                 "inspirationImageData": recipe.inspirationImageData
             ]
         )
+    }
+
+    private func throwTheGauntlet() {
+        guard AuthManager.shared.isAuthenticated else {
+            showAuthPrompt = true
+            return
+        }
+        if !isSaved {
+            saveRecipe()
+        }
+        showCreateChallenge = true
+    }
+
+    private var challengeConfirmationSheet: some View {
+        NavigationStack {
+            ZStack {
+                Theme.darkBg.ignoresSafeArea()
+
+                VStack(spacing: 24) {
+                    Image(systemName: "flag.checkered")
+                        .font(.system(size: 48))
+                        .foregroundStyle(Theme.gold)
+
+                    Text("Throw the Gauntlet")
+                        .font(.system(size: 22, weight: .bold, design: .serif))
+                        .foregroundStyle(Theme.darkTextPrimary)
+
+                    Text("Challenge the community to cook **\(recipe.dishName)** and photograph their real-world attempt.")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.darkTextSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+
+                    if let challengeError {
+                        Text(challengeError)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.red)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+                    }
+
+                    Button {
+                        Task {
+                            isCreatingChallenge = true
+                            challengeError = nil
+                            do {
+                                _ = try await ChallengeService.shared.createChallenge(recipe: recipe)
+                                HapticManager.success()
+                                showCreateChallenge = false
+                            } catch {
+                                challengeError = error.localizedDescription
+                                HapticManager.error()
+                            }
+                            isCreatingChallenge = false
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            if isCreatingChallenge {
+                                ProgressView().tint(Theme.darkBg)
+                            }
+                            Text(isCreatingChallenge ? "Publishing..." : "Publish Challenge")
+                                .font(.system(size: 16, weight: .bold))
+                        }
+                        .foregroundStyle(Theme.darkBg)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Theme.gold)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                    .disabled(isCreatingChallenge)
+                    .padding(.horizontal, 16)
+
+                    Spacer()
+                }
+                .padding(.top, 40)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Theme.darkBg, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { showCreateChallenge = false }
+                        .foregroundStyle(Theme.gold)
+                }
+            }
+            .presentationDetents([.medium])
+        }
     }
 
     private func renderExportImage() {

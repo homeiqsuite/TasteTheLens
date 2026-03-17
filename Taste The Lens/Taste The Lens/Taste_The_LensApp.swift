@@ -9,7 +9,6 @@ struct Taste_The_LensApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .preferredColorScheme(.dark)
                 .task {
                     await AuthManager.shared.restoreSession()
                     // On authenticated launch, claim any unowned local recipes and sync
@@ -29,6 +28,12 @@ struct Taste_The_LensApp: App {
                         case .recipe(let id):
                             deepLinkedRecipeID = id
                             showDeepLinkedRecipe = true
+                        case .challenge:
+                            // Handled via ChallengeFeedView
+                            break
+                        case .tastingMenu:
+                            // Handled via TastingMenuListView
+                            break
                         }
                     }
                 }
@@ -60,12 +65,12 @@ struct DeepLinkedRecipeView: View {
                 VStack(spacing: 16) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 40))
-                        .foregroundStyle(.white.opacity(0.3))
+                        .foregroundStyle(Theme.darkTextHint)
                     Text("Recipe not found")
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(Theme.darkTextTertiary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(red: 0.051, green: 0.051, blue: 0.059))
+                .background(Theme.darkBg)
             }
         }
     }

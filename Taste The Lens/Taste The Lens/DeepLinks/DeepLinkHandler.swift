@@ -2,6 +2,8 @@ import Foundation
 
 enum DeepLink {
     case recipe(UUID)
+    case challenge(String)
+    case tastingMenu(String)
 }
 
 struct DeepLinkHandler {
@@ -24,7 +26,31 @@ struct DeepLinkHandler {
             }
         }
 
+        // tastethelens://challenge/{uuid}
+        if url.host == "challenge" {
+            if let idString = pathComponents.first {
+                return .challenge(idString)
+            }
+        }
+
+        // tastethelens://menu/{inviteCode}
+        if url.host == "menu" {
+            if let code = pathComponents.first {
+                return .tastingMenu(code)
+            }
+        }
+
         return nil
+    }
+
+    /// Generate a shareable URL for a challenge
+    static func url(forChallenge id: String) -> URL? {
+        URL(string: "tastethelens://challenge/\(id)")
+    }
+
+    /// Generate a shareable URL for a tasting menu invite
+    static func url(forMenuInvite code: String) -> URL? {
+        URL(string: "tastethelens://menu/\(code)")
     }
 
     /// Generate a shareable URL for a recipe

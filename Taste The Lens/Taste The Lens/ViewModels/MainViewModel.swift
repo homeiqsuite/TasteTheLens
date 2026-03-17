@@ -6,15 +6,18 @@ private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: 
 
 @Observable @MainActor
 final class MainViewModel {
-    var currentScreen: AppScreen = .camera
+    var currentScreen: AppScreen = .dashboard
     var capturedImage: UIImage?
     var pipeline = ImageAnalysisPipeline()
     var showSavedRecipes = false
     var showSettings = false
     var showPaywall = false
+    var showChallengeFeed = false
+    var showTastingMenus = false
     var excludedDishNames: [String] = []
     var errorMessage: String?
     var showError = false
+    var pendingMenuCourse: (menuId: String, courseOrder: Int)?
 
     private var processingTask: Task<Void, Never>?
 
@@ -38,7 +41,7 @@ final class MainViewModel {
     func startProcessing(modelContext: ModelContext, reduceMotion: Bool) {
         guard let image = capturedImage else {
             logger.error("startProcessing called but capturedImage is nil")
-            currentScreen = .camera
+            currentScreen = .dashboard
             return
         }
 
@@ -49,9 +52,29 @@ final class MainViewModel {
             logger.info("Pipeline finished — state: \(String(describing: self.pipeline.state))")
 
             if pipeline.state == .complete {
-                logger.info("Transitioning to recipe card")
-                withAnimation(reduceMotion ? .easeInOut(duration: 0.3) : .spring(response: 0.6, dampingFraction: 0.8)) {
-                    currentScreen = .recipeCard
+                // If there's a pending menu course, auto-add the recipe to the menu
+                if let pending = pendingMenuCourse, let recipe = pipeline.completedRecipe {
+                    logger.info("Adding recipe to menu \(pending.menuId) course \(pending.courseOrder)")
+                    do {
+                        try await TastingMenuService.shared.addCourse(
+                            menuId: pending.menuId,
+                            courseOrder: pending.courseOrder,
+                            recipeId: recipe.id.uuidString
+                        )
+                        HapticManager.success()
+                    } catch {
+                        logger.error("Failed to add course to menu: \(error)")
+                    }
+                    pendingMenuCourse = nil
+                    withAnimation(reduceMotion ? .easeInOut(duration: 0.3) : .spring(response: 0.6, dampingFraction: 0.8)) {
+                        currentScreen = .dashboard
+                    }
+                    showTastingMenus = true
+                } else {
+                    logger.info("Transitioning to recipe card")
+                    withAnimation(reduceMotion ? .easeInOut(duration: 0.3) : .spring(response: 0.6, dampingFraction: 0.8)) {
+                        currentScreen = .recipeCard
+                    }
                 }
             } else if case .rejected(let reason) = pipeline.state {
                 logger.info("Image rejected — \(reason)")
@@ -67,6 +90,7 @@ final class MainViewModel {
         processingTask?.cancel()
         processingTask = nil
         pipeline = ImageAnalysisPipeline()
+        pendingMenuCourse = nil
         currentScreen = .camera
         logger.info("Processing cancelled by user")
     }
@@ -91,10 +115,23 @@ final class MainViewModel {
 
     // MARK: - Navigation
 
-    func resetToCamera() {
+    func navigateToCamera() {
+        currentScreen = .camera
+    }
+
+    func handleAddMenuCourse(_ notification: Notification) {
+        guard let menuId = notification.userInfo?["menuId"] as? String,
+              let courseOrder = notification.userInfo?["courseOrder"] as? Int else { return }
+        pendingMenuCourse = (menuId: menuId, courseOrder: courseOrder)
+        // Dismiss tasting menus sheet and navigate to camera
+        showTastingMenus = false
+        currentScreen = .camera
+    }
+
+    func resetToDashboard() {
         processingTask?.cancel()
         processingTask = nil
-        currentScreen = .camera
+        currentScreen = .dashboard
         capturedImage = nil
         excludedDishNames = []
         pipeline = ImageAnalysisPipeline()
@@ -108,7 +145,7 @@ final class MainViewModel {
         Task {
             try? await Task.sleep(for: .seconds(3))
             withAnimation { showError = false }
-            currentScreen = .camera
+            currentScreen = .dashboard
         }
     }
 }

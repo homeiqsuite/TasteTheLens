@@ -189,4 +189,56 @@ final class SyncManager {
             logger.info("Claimed \(unownedRecipes.count) local recipes for user \(userId)")
         }
     }
+
+    // MARK: - Dietary Preferences Sync
+
+    func syncDietaryPreferences() async {
+        guard let userId = AuthManager.shared.currentUser?.id.uuidString else {
+            logger.warning("Cannot sync dietary preferences — not authenticated")
+            return
+        }
+
+        let prefs = DietaryPreference.current().map(\.rawValue)
+        do {
+            try await supabase
+                .from("users")
+                .update(["dietary_preferences": prefs])
+                .eq("id", value: userId)
+                .execute()
+            logger.info("Dietary preferences synced to server")
+        } catch {
+            logger.error("Failed to sync dietary preferences: \(error)")
+        }
+    }
+
+    func pullDietaryPreferences() async {
+        guard let userId = AuthManager.shared.currentUser?.id.uuidString else { return }
+
+        do {
+            let response: [DietaryPrefsRow] = try await supabase
+                .from("users")
+                .select("dietary_preferences")
+                .eq("id", value: userId)
+                .execute()
+                .value
+
+            if let row = response.first, !row.dietaryPreferences.isEmpty {
+                let prefs = row.dietaryPreferences.compactMap { DietaryPreference(rawValue: $0) }
+                if !prefs.isEmpty {
+                    DietaryPreference.save(prefs)
+                    logger.info("Pulled dietary preferences from server: \(prefs.map(\.displayName))")
+                }
+            }
+        } catch {
+            logger.error("Failed to pull dietary preferences: \(error)")
+        }
+    }
+}
+
+private struct DietaryPrefsRow: Codable {
+    let dietaryPreferences: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case dietaryPreferences = "dietary_preferences"
+    }
 }

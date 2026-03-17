@@ -45,7 +45,11 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
     // MARK: - System Prompt
 
     var systemPrompt: String {
-        return personalityPreamble + "\n\n" + sharedSceneAnalysis + "\n\n" + personalityGuidelines + "\n\n" + sharedResponseFormat
+        var prompt = personalityPreamble + "\n\n" + sharedSceneAnalysis + "\n\n" + personalityGuidelines + "\n\n" + sharedResponseFormat
+        if let dietary = DietaryPreference.promptConstraint() {
+            prompt += "\n\n" + dietary
+        }
+        return prompt
     }
 
     // MARK: - Personality-Specific Preamble

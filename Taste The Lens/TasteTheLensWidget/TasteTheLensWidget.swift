@@ -46,8 +46,8 @@ struct LastRecipeProvider: TimelineProvider {
 struct LastRecipeWidgetView: View {
     let entry: LastRecipeEntry
 
-    private let gold = Color(red: 0.788, green: 0.659, blue: 0.298)
-    private let bg = Color(red: 0.051, green: 0.051, blue: 0.059)
+    private let gold = Theme.gold
+    private let bg = Theme.darkBg
 
     var body: some View {
         ZStack {
@@ -70,7 +70,7 @@ struct LastRecipeWidgetView: View {
                 if let createdAt = entry.createdAt {
                     Text(createdAt, style: .relative)
                         .font(.system(size: 10))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .foregroundStyle(Theme.darkTextTertiary)
                 }
 
                 Spacer(minLength: 0)
@@ -87,7 +87,7 @@ struct TasteTheLensWidget: Widget {
         StaticConfiguration(kind: kind, provider: LastRecipeProvider()) { entry in
             LastRecipeWidgetView(entry: entry)
                 .containerBackground(for: .widget) {
-                    Color(red: 0.051, green: 0.051, blue: 0.059)
+                    Theme.darkBg
                 }
         }
         .configurationDisplayName("Last Recipe")
@@ -101,7 +101,7 @@ struct TasteTheLensWidget: Widget {
 struct GenerationLiveActivityView: View {
     let context: ActivityViewContext<GenerationActivityAttributes>
 
-    private let gold = Color(red: 0.788, green: 0.659, blue: 0.298)
+    private let gold = Theme.gold
 
     var body: some View {
         HStack(spacing: 12) {
@@ -112,11 +112,11 @@ struct GenerationLiveActivityView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Taste The Lens")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Theme.darkTextPrimary)
 
                 Text(context.state.statusMessage)
                     .font(.system(size: 13))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(Theme.darkTextSecondary)
 
                 ProgressView(value: context.state.progress)
                     .tint(gold)
@@ -147,33 +147,33 @@ struct GenerationActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: GenerationActivityAttributes.self) { context in
             GenerationLiveActivityView(context: context)
-                .activityBackgroundTint(Color(red: 0.051, green: 0.051, blue: 0.059))
+                .activityBackgroundTint(Theme.darkBg)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     Image(systemName: "fork.knife")
-                        .foregroundStyle(Color(red: 0.788, green: 0.659, blue: 0.298))
+                        .foregroundStyle(Theme.gold)
                 }
                 DynamicIslandExpandedRegion(.center) {
                     Text(context.state.statusMessage)
                         .font(.system(size: 13))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Theme.darkTextPrimary)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     Text(context.state.phase)
                         .font(.system(size: 11, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(Theme.darkTextSecondary)
                 }
             } compactLeading: {
                 Image(systemName: "fork.knife")
-                    .foregroundStyle(Color(red: 0.788, green: 0.659, blue: 0.298))
+                    .foregroundStyle(Theme.gold)
             } compactTrailing: {
                 ProgressView(value: context.state.progress)
-                    .tint(Color(red: 0.788, green: 0.659, blue: 0.298))
+                    .tint(Theme.gold)
                     .frame(width: 36)
             } minimal: {
                 Image(systemName: "fork.knife")
-                    .foregroundStyle(Color(red: 0.788, green: 0.659, blue: 0.298))
+                    .foregroundStyle(Theme.gold)
             }
         }
     }

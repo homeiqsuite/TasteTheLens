@@ -9,8 +9,8 @@ struct ProfileView: View {
     @State private var showSignOut = false
 
     private let authManager = AuthManager.shared
-    private let bg = Color(red: 0.051, green: 0.051, blue: 0.059)
-    private let gold = Color(red: 0.788, green: 0.659, blue: 0.298)
+    private let bg = Theme.darkBg
+    private let gold = Theme.gold
 
     var body: some View {
         NavigationStack {
@@ -29,15 +29,15 @@ struct ProfileView: View {
 
                         Text(authManager.displayName)
                             .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Theme.darkTextPrimary)
 
                         Text(authManager.email)
                             .font(.system(size: 14))
-                            .foregroundStyle(.white.opacity(0.4))
+                            .foregroundStyle(Theme.darkTextTertiary)
 
                         Text("Member since \(authManager.memberSinceDate.formatted(.dateTime.month(.wide).year()))")
                             .font(.system(size: 12))
-                            .foregroundStyle(.white.opacity(0.3))
+                            .foregroundStyle(Theme.darkTextHint)
                     }
                     .padding(.top, 24)
 
@@ -53,12 +53,12 @@ struct ProfileView: View {
                                     .font(.system(size: 15))
                                 Spacer()
                             }
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(Theme.darkTextSecondary)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 13)
                         }
 
-                        Divider().background(Color.white.opacity(0.08)).padding(.leading, 50)
+                        Divider().background(Theme.darkStroke).padding(.leading, 50)
 
                         Button {
                             showDeleteConfirmation = true
@@ -77,11 +77,11 @@ struct ProfileView: View {
                     }
                     .background(
                         RoundedRectangle(cornerRadius: 14)
-                            .fill(Color.white.opacity(0.05))
+                            .fill(Theme.darkSurface)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                            .stroke(Theme.darkStroke, lineWidth: 0.5)
                     )
                     .padding(.horizontal, 16)
                 }

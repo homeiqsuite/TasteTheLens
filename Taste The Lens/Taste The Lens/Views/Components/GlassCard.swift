@@ -10,12 +10,12 @@ struct GlassCard: ViewModifier {
             .padding(.vertical, 20)
             .background(
                 RoundedRectangle(cornerRadius: cornerRadius)
-                    .fill(Color.white.opacity(opacity))
+                    .fill(Theme.glassCardFill)
                     .overlay(
                         RoundedRectangle(cornerRadius: cornerRadius)
-                            .stroke(Color.white.opacity(0.15), lineWidth: 0.5)
+                            .stroke(Color.white.opacity(0.05), lineWidth: 1)
                     )
-                    .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+                    .shadow(color: .black.opacity(0.4), radius: 15, x: 0, y: 10)
             )
     }
 }

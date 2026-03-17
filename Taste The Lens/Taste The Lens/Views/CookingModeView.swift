@@ -29,8 +29,8 @@ struct CookingModeView: View {
     @State private var voiceEnabled = false
     @State private var speechManager = SpeechManager()
 
-    private let gold = Color(red: 0.788, green: 0.659, blue: 0.298)
-    private let bg = Color(red: 0.051, green: 0.051, blue: 0.059)
+    private let gold = Theme.gold
+    private let bg = Theme.darkBg
 
     private var allSteps: [(String, String)] {
         var steps: [(String, String)] = []
@@ -56,7 +56,7 @@ struct CookingModeView: View {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(Theme.darkTextSecondary)
                             .frame(width: 44, height: 44)
                     }
 
@@ -73,7 +73,7 @@ struct CookingModeView: View {
                     } label: {
                         Image(systemName: voiceEnabled ? "speaker.wave.2.fill" : "speaker.slash")
                             .font(.system(size: 18))
-                            .foregroundStyle(voiceEnabled ? gold : .white.opacity(0.5))
+                            .foregroundStyle(voiceEnabled ? gold : Theme.darkTextTertiary)
                             .frame(width: 44, height: 44)
                     }
                 }
@@ -83,7 +83,7 @@ struct CookingModeView: View {
 
                 if allSteps.isEmpty {
                     Text("No steps available")
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(Theme.darkTextTertiary)
                 } else {
                     VStack(spacing: 24) {
                         // Phase label
@@ -95,12 +95,12 @@ struct CookingModeView: View {
                         // Step counter
                         Text("Step \(currentStep + 1) of \(allSteps.count)")
                             .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(Theme.darkTextTertiary)
 
                         // Step text
                         Text(allSteps[currentStep].1)
                             .font(.system(size: 24, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.9))
+                            .foregroundStyle(Theme.darkTextSecondary)
                             .lineSpacing(6)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 32)
@@ -114,7 +114,7 @@ struct CookingModeView: View {
                         HStack(spacing: 6) {
                             ForEach(0..<allSteps.count, id: \.self) { index in
                                 Circle()
-                                    .fill(index == currentStep ? gold : .white.opacity(0.2))
+                                    .fill(index == currentStep ? gold : Theme.darkTextHint)
                                     .frame(width: index == currentStep ? 8 : 6, height: index == currentStep ? 8 : 6)
                             }
                         }
@@ -130,9 +130,9 @@ struct CookingModeView: View {
                     } label: {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(currentStep > 0 ? .white : .white.opacity(0.2))
+                            .foregroundStyle(currentStep > 0 ? Theme.darkTextPrimary : Theme.darkTextHint)
                             .frame(width: 64, height: 64)
-                            .background(Color.white.opacity(currentStep > 0 ? 0.1 : 0.05))
+                            .background(currentStep > 0 ? Theme.darkStroke : Theme.darkSurface)
                             .clipShape(Circle())
                     }
                     .disabled(currentStep <= 0)

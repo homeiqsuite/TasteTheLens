@@ -40,7 +40,7 @@ struct ProcessingView: View {
                         } label: {
                             Image(systemName: "xmark")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.7))
+                                .foregroundStyle(Theme.darkTextSecondary)
                                 .frame(width: 44, height: 44)
                                 .background(Color.black.opacity(0.3))
                                 .clipShape(Circle())
@@ -101,7 +101,7 @@ struct ProcessingView: View {
 struct ProgressStepsView: View {
     let state: PipelineState
 
-    private let gold = Color(red: 0.788, green: 0.659, blue: 0.298)
+    private let gold = Theme.gold
 
     private var currentStep: Int {
         switch state {
@@ -128,7 +128,7 @@ struct ProgressStepsView: View {
                 if index < steps.count - 1 {
                     Spacer()
                     Rectangle()
-                        .fill(index < currentStep ? gold.opacity(0.4) : Color.white.opacity(0.1))
+                        .fill(index < currentStep ? gold.opacity(0.4) : Theme.darkStroke)
                         .frame(height: 1)
                     Spacer()
                 }
@@ -146,7 +146,7 @@ struct ProgressStepsView: View {
             PulsingDot()
         } else {
             Circle()
-                .fill(Color.white.opacity(0.15))
+                .fill(Theme.darkTextHint)
                 .frame(width: 10, height: 10)
         }
     }
@@ -155,9 +155,9 @@ struct ProgressStepsView: View {
         if index < currentStep {
             return gold.opacity(0.8)
         } else if index == currentStep {
-            return .white.opacity(0.9)
+            return Theme.darkTextSecondary
         } else {
-            return .white.opacity(0.3)
+            return Theme.darkTextHint
         }
     }
 }
@@ -190,23 +190,23 @@ struct TimeoutWarningView: View {
                     VStack(spacing: 8) {
                         Text("Still working. You can cancel and try again.")
                             .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.6))
+                            .foregroundStyle(Theme.darkTextSecondary)
                         Button {
                             onCancel?()
                         } label: {
                             Text("Cancel")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(Theme.darkTextPrimary)
                                 .padding(.horizontal, 24)
                                 .padding(.vertical, 8)
-                                .background(Color.white.opacity(0.15))
+                                .background(Theme.darkTextHint)
                                 .clipShape(Capsule())
                         }
                     }
                 } else if elapsed >= 45 {
                     Text("Taking longer than usual...")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(Theme.darkTextTertiary)
                 }
             }
         }
