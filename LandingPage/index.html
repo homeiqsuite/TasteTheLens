@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Taste The Lens — Turn any photo into fine dining</title>
+    <meta name="description" content="The world's first visual gastronomy engine. Point at anything. We'll make it delicious. AI-powered culinary inspiration for creatives, chefs, and foodies.">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Taste The Lens — Turn any photo into fine dining">
+    <meta property="og:description" content="Point at anything. We'll make it delicious. AI-powered visual gastronomy.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://tastethelens.com">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Taste The Lens — Turn any photo into fine dining">
+    <meta name="twitter:description" content="The world's first visual gastronomy engine.">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Karla:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='none' stroke='%23C9A84C' stroke-width='4'/><circle cx='50' cy='50' r='28' fill='none' stroke='%23C9A84C' stroke-width='2'/><text x='50' y='58' text-anchor='middle' font-size='24' fill='%23C9A84C'>&#x2736;</text></svg>">
+
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Geometric Overlay (animated background) -->
+    <canvas id="geometric-overlay" aria-hidden="true"></canvas>
+
+    <!-- Navigation -->
+    <nav class="nav" id="nav">
+        <div class="nav-inner">
+            <a href="#" class="nav-brand">Taste The Lens</a>
+            <a href="#waitlist" class="nav-cta">Join Waitlist</a>
+        </div>
+    </nav>
+
+    <!-- ========== HERO ========== -->
+    <section class="hero" id="hero">
+        <div class="hero-content">
+            <h1 class="hero-title" data-animate="fade-scale">TASTE THE LENS</h1>
+            <p class="hero-tagline" data-animate="fade-up" data-delay="400">The world's first visual gastronomy engine.</p>
+            <p class="hero-sub" data-animate="fade-up" data-delay="800">Point at anything. We'll make it delicious.</p>
+            <a href="#waitlist" class="hero-cta" data-animate="fade-up" data-delay="1200">
+                Join the Waitlist
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+        </div>
+        <div class="scroll-hint" data-animate="fade-up" data-delay="1600" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12l7 7 7-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+    </section>
+
+    <!-- ========== HOOK ========== -->
+    <section class="section hook" id="hook">
+        <div class="container">
+            <div class="hook-grid">
+                <div class="glass-card hook-card" data-animate="slide-up" data-accent="cyan">
+                    <div class="hook-accent"></div>
+                    <p class="hook-question">What does a sunset taste like?</p>
+                    <p class="hook-hint">Saffron bisque with turmeric foam and charred peach</p>
+                </div>
+                <div class="glass-card hook-card" data-animate="slide-up" data-delay="100" data-accent="coral">
+                    <div class="hook-accent"></div>
+                    <p class="hook-question">How would you plate a vintage poster?</p>
+                    <p class="hook-hint">Beetroot carpaccio with edible ink and micro herbs</p>
+                </div>
+                <div class="glass-card hook-card" data-animate="slide-up" data-delay="200" data-accent="gold">
+                    <div class="hook-accent"></div>
+                    <p class="hook-question">Turn a neon sign into a five-course meal.</p>
+                    <p class="hook-hint">Electric yuzu gel, smoked paprika crust, raspberry coulis</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== HOW IT WORKS ========== -->
+    <section class="section how-it-works" id="how-it-works">
+        <div class="container">
+            <h2 class="section-label" data-animate="slide-up">HOW IT WORKS</h2>
+            <div class="steps">
+                <div class="step" data-animate="slide-up">
+                    <div class="step-icon step-icon--cyan">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" stroke="currentColor" stroke-width="1.5"/></svg>
+                    </div>
+                    <h3 class="step-title" style="color: var(--cyan)">SNAP</h3>
+                    <p class="step-desc">Photograph anything around you — art, architecture, nature, objects.</p>
+                </div>
+                <div class="step-arrow" data-animate="fade" aria-hidden="true">
+                    <svg width="40" height="24" viewBox="0 0 40 24" fill="none"><path d="M0 12h36M30 6l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                <div class="step" data-animate="slide-up" data-delay="150">
+                    <div class="step-icon step-icon--gold">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <h3 class="step-title" style="color: var(--gold)">TRANSLATE</h3>
+                    <p class="step-desc">AI extracts colors, textures, and mood into culinary elements.</p>
+                </div>
+                <div class="step-arrow" data-animate="fade" aria-hidden="true">
+                    <svg width="40" height="24" viewBox="0 0 40 24" fill="none"><path d="M0 12h36M30 6l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                <div class="step" data-animate="slide-up" data-delay="300">
+                    <div class="step-icon step-icon--coral">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zM6 1v3M10 1v3M14 1v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <h3 class="step-title" style="color: var(--coral)">TASTE</h3>
+                    <p class="step-desc">Receive a complete haute cuisine recipe with AI food photography.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== TRANSLATION MATRIX ========== -->
+    <section class="section matrix-section" id="matrix">
+        <div class="container">
+            <h2 class="section-label" data-animate="slide-up">THE TRANSLATION MATRIX</h2>
+            <p class="section-subtitle" data-animate="slide-up" data-delay="100">See exactly how AI maps visual elements to culinary concepts.</p>
+            <div class="glass-card matrix-card" data-animate="slide-up" data-delay="200">
+                <div class="matrix-header">
+                    <span class="matrix-col-label" style="color: var(--cyan)">VISUAL ELEMENT</span>
+                    <span class="matrix-col-label" style="color: var(--coral)">CULINARY TRANSLATION</span>
+                </div>
+                <div class="matrix-row" data-animate="matrix-row">
+                    <div class="matrix-visual">
+                        <span class="matrix-swatch" style="background: linear-gradient(135deg, #D4A574, #E8C547)"></span>
+                        Golden hour sky gradient
+                    </div>
+                    <div class="matrix-arrow" aria-hidden="true">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <div class="matrix-culinary">Saffron-infused bisque with turmeric foam</div>
+                </div>
+                <div class="matrix-divider"></div>
+                <div class="matrix-row" data-animate="matrix-row" data-delay="200">
+                    <div class="matrix-visual">
+                        <span class="matrix-swatch" style="background: linear-gradient(135deg, #8B6F5E, #A0522D)"></span>
+                        Weathered brick texture
+                    </div>
+                    <div class="matrix-arrow" aria-hidden="true">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <div class="matrix-culinary">Smoked paprika crust, charred sourdough</div>
+                </div>
+                <div class="matrix-divider"></div>
+                <div class="matrix-row" data-animate="matrix-row" data-delay="400">
+                    <div class="matrix-visual">
+                        <span class="matrix-swatch" style="background: linear-gradient(135deg, #FF1493, #FF69B4)"></span>
+                        Neon pink signage
+                    </div>
+                    <div class="matrix-arrow" aria-hidden="true">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <div class="matrix-culinary">Pickled beet gel, raspberry coulis</div>
+                </div>
+                <div class="matrix-divider"></div>
+                <div class="matrix-row" data-animate="matrix-row" data-delay="600">
+                    <div class="matrix-visual">
+                        <span class="matrix-swatch" style="background: linear-gradient(135deg, #2F4F4F, #556B2F)"></span>
+                        Moss on stone wall
+                    </div>
+                    <div class="matrix-arrow" aria-hidden="true">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <div class="matrix-culinary">Matcha-dusted goat cheese, herb oil</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== FEATURES ========== -->
+    <section class="section features-section" id="features">
+        <div class="container">
+            <h2 class="section-label" data-animate="slide-up">FEATURES</h2>
+            <div class="features-grid">
+                <div class="glass-card feature-card" data-animate="slide-up">
+                    <div class="feature-icon" style="color: var(--cyan)">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" stroke="currentColor" stroke-width="1.5"/></svg>
+                    </div>
+                    <h3 class="feature-title">Snap to Plate</h3>
+                    <p class="feature-desc">Point your camera at anything. AI instantly generates a bespoke dish from its visual profile.</p>
+                </div>
+                <div class="glass-card feature-card" data-animate="slide-up" data-delay="100">
+                    <div class="feature-icon" style="color: var(--gold)">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <h3 class="feature-title">Translation Matrix</h3>
+                    <p class="feature-desc">See exactly how AI maps colors and textures to ingredients and techniques.</p>
+                </div>
+                <div class="glass-card feature-card" data-animate="slide-up" data-delay="200">
+                    <div class="feature-icon" style="color: var(--coral)">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="14,2 14,8 20,8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><line x1="16" y1="13" x2="8" y2="13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="16" y1="17" x2="8" y2="17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                    </div>
+                    <h3 class="feature-title">Pro-Level Recipes</h3>
+                    <p class="feature-desc">Complete with components, techniques, and plating instructions.</p>
+                </div>
+                <div class="glass-card feature-card" data-animate="slide-up" data-delay="100">
+                    <div class="feature-icon" style="color: var(--gold)">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M8 21h8M12 15v6M17.5 10.5c0 4.14-2.5 6.5-5.5 6.5s-5.5-2.36-5.5-6.5C6.5 6 8 2 12 2s5.5 4 5.5 8.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <h3 class="feature-title">Sommelier Pairings</h3>
+                    <p class="feature-desc">Wine, cocktail, and non-alcoholic pairings for every dish.</p>
+                </div>
+                <div class="glass-card feature-card" data-animate="slide-up" data-delay="200">
+                    <div class="feature-icon" style="color: var(--cyan)">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <h3 class="feature-title">Social Export</h3>
+                    <p class="feature-desc">One-tap side-by-side export designed for Instagram, TikTok, and Pinterest.</p>
+                </div>
+                <div class="glass-card feature-card" data-animate="slide-up" data-delay="300">
+                    <div class="feature-icon" style="color: var(--coral)">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/></svg>
+                    </div>
+                    <h3 class="feature-title">Scene Intelligence</h3>
+                    <p class="feature-desc">AI detects context, identifies food, and reads the mood of your scene.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== PRICING ========== -->
+    <section class="section pricing-section" id="pricing">
+        <div class="container">
+            <h2 class="section-label" data-animate="slide-up">PRICING</h2>
+            <p class="section-subtitle" data-animate="slide-up" data-delay="100">Start free. Upgrade when you're hooked.</p>
+            <div class="pricing-grid">
+                <div class="glass-card pricing-card" data-animate="slide-up">
+                    <h3 class="pricing-tier">Free</h3>
+                    <div class="pricing-price">$0<span class="pricing-period">/mo</span></div>
+                    <p class="pricing-best">5 tastings per month</p>
+                    <ul class="pricing-features">
+                        <li class="pricing-feature pricing-feature--included">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            Full recipe generation
+                        </li>
+                        <li class="pricing-feature pricing-feature--included">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            AI food photography
+                        </li>
+                        <li class="pricing-feature pricing-feature--included">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            Translation matrix
+                        </li>
+                        <li class="pricing-feature pricing-feature--excluded">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            Watermark on exports
+                        </li>
+                    </ul>
+                    <a href="#waitlist" class="pricing-cta pricing-cta--secondary">Get Started</a>
+                </div>
+                <div class="glass-card pricing-card pricing-card--featured" data-animate="slide-up" data-delay="150">
+                    <div class="pricing-badge">Best Value</div>
+                    <h3 class="pricing-tier">Pro</h3>
+                    <div class="pricing-price">$9.99<span class="pricing-period">/mo</span></div>
+                    <p class="pricing-best">Unlimited tastings</p>
+                    <ul class="pricing-features">
+                        <li class="pricing-feature pricing-feature--included">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            Everything in Free
+                        </li>
+                        <li class="pricing-feature pricing-feature--included">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            Advanced techniques
+                        </li>
+                        <li class="pricing-feature pricing-feature--included">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            High-res exports
+                        </li>
+                        <li class="pricing-feature pricing-feature--included">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            No watermark
+                        </li>
+                    </ul>
+                    <a href="#waitlist" class="pricing-cta pricing-cta--primary">Join Waitlist</a>
+                </div>
+                <div class="glass-card pricing-card" data-animate="slide-up" data-delay="300">
+                    <div class="pricing-badge pricing-badge--muted">Coming Soon</div>
+                    <h3 class="pricing-tier">B2B</h3>
+                    <div class="pricing-price">$49.99<span class="pricing-period">/mo</span></div>
+                    <p class="pricing-best">For restaurants & agencies</p>
+                    <ul class="pricing-features">
+                        <li class="pricing-feature pricing-feature--included">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            Everything in Pro
+                        </li>
+                        <li class="pricing-feature pricing-feature--included">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            Commercial rights
+                        </li>
+                        <li class="pricing-feature pricing-feature--included">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            API access
+                        </li>
+                        <li class="pricing-feature pricing-feature--included">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            Custom training
+                        </li>
+                    </ul>
+                    <a href="#waitlist" class="pricing-cta pricing-cta--secondary">Get Notified</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== WAITLIST CTA ========== -->
+    <section class="section waitlist-section" id="waitlist">
+        <div class="container">
+            <div class="glass-card waitlist-card" data-animate="slide-up">
+                <h2 class="waitlist-title">Capture the world.<br>Taste the masterpiece.</h2>
+                <p class="waitlist-subtitle">Be first to experience visual gastronomy. Join the waitlist for early access.</p>
+                <form id="waitlist-form" class="waitlist-form" novalidate>
+                    <div class="waitlist-input-group">
+                        <input
+                            type="email"
+                            id="waitlist-email"
+                            class="waitlist-input"
+                            placeholder="Enter your email"
+                            required
+                            autocomplete="email"
+                            aria-label="Email address"
+                        >
+                        <button type="submit" id="waitlist-submit" class="waitlist-button">
+                            <span class="waitlist-button-text">Join the Waitlist</span>
+                            <span class="waitlist-button-spinner" aria-hidden="true"></span>
+                            <span class="waitlist-button-check" aria-hidden="true">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </span>
+                        </button>
+                    </div>
+                    <p id="waitlist-message" class="waitlist-message" role="status" aria-live="polite"></p>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== FOOTER ========== -->
+    <footer class="footer">
+        <div class="container footer-inner">
+            <p class="footer-brand">Taste The Lens</p>
+            <p class="footer-copy">&copy; 2026 Taste The Lens. All rights reserved.</p>
+            <div class="footer-links">
+                <a href="https://tastethelens.com/privacy" class="footer-link">Privacy</a>
+                <a href="https://tastethelens.com/terms" class="footer-link">Terms</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="script.js"></script>
+</body>
+</html>

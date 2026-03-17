@@ -1,6 +1,8 @@
 import Foundation
 import UIKit
 import SwiftData
+import ActivityKit
+import WidgetKit
 import os
 
 private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "Pipeline")
@@ -31,17 +33,21 @@ enum PipelineState: Equatable {
 }
 
 @Observable
-final class ImageAnalysisPipeline {
+final class ImageAnalysisPipeline: Identifiable {
+    let id = UUID()
     var state: PipelineState = .idle
     var processingStatus: String = ""
     var completedRecipe: Recipe?
     var extractedColors: [String] = []
+    var startTime: Date?
 
     private let geminiClient = GeminiAPIClient()
     private let falClient = FalAPIClient()
 
-    func process(image: UIImage, modelContext: ModelContext) async {
-        logger.info("Pipeline started")
+    func process(image: UIImage, modelContext: ModelContext, excluding: [String] = []) async {
+        logger.info("Pipeline started — excluding: \(excluding)")
+        startTime = Date()
+        await LiveActivityManager.shared.startGeneration()
 
         guard let inspirationData = image.jpegData(compressionQuality: 0.9) else {
             logger.error("Failed to convert image to JPEG data")
@@ -54,9 +60,13 @@ final class ImageAnalysisPipeline {
             // Step 0: Content screening
             state = .screeningImage
             processingStatus = "Checking image..."
+            await LiveActivityManager.shared.updatePhase("Screening", progress: 0.1, status: "Checking image...")
             logger.info("Screening image for content safety...")
 
-            let screening = try await geminiClient.screenImage(image)
+            let screening = try await withExponentialBackoff {
+                try await geminiClient.screenImage(image)
+            }
+            try Task.checkCancellation()
             if !screening.safe {
                 logger.info("Image rejected: \(screening.reason)")
                 state = .rejected(screening.reason)
@@ -67,9 +77,20 @@ final class ImageAnalysisPipeline {
             // Step 1: Gemini analysis
             state = .analyzingImage
             processingStatus = "Extracting palette..."
-            logger.info("Calling Gemini API...")
+            await LiveActivityManager.shared.updatePhase("Analyzing", progress: 0.35, status: "Extracting palette...")
+            let chef = ChefPersonality.current
+            logger.info("Calling Gemini API with chef: \(chef.displayName)...")
 
-            let (recipeResponse, rawJSON) = try await geminiClient.analyzeImage(image)
+            var prompt = chef.systemPrompt
+            if !excluding.isEmpty {
+                let excludeList = excluding.joined(separator: ", ")
+                prompt += "\n\nIMPORTANT: Generate a completely different dish. Do NOT repeat any of these previously generated dishes: \(excludeList). Create something entirely new and distinct."
+            }
+
+            let (recipeResponse, rawJSON) = try await withExponentialBackoff {
+                try await geminiClient.analyzeImage(image, systemPrompt: prompt)
+            }
+            try Task.checkCancellation()
             logger.info("Gemini response received — dish: \(recipeResponse.dishName)")
             logger.debug("Image gen prompt: \(recipeResponse.imageGenerationPrompt.prefix(100))...")
 
@@ -77,15 +98,17 @@ final class ImageAnalysisPipeline {
             processingStatus = "Translating emotion..."
 
             // Step 2: fal.ai image generation
+            try Task.checkCancellation()
             state = .generatingImage
             processingStatus = "Plating concept..."
+            await LiveActivityManager.shared.updatePhase("Generating", progress: 0.65, status: "Plating concept...")
             logger.info("Calling fal.ai API...")
 
             let enhancedPrompt = recipeResponse.imageGenerationPrompt
                 + " Professional editorial food photography, Michelin star presentation, warm inviting lighting, shallow depth of field, 85mm lens, appetizing and delicious."
-            let (generatedImageData, imageURL) = try await falClient.generateImage(
-                prompt: enhancedPrompt
-            )
+            let (generatedImageData, imageURL) = try await withExponentialBackoff {
+                try await falClient.generateImage(prompt: enhancedPrompt)
+            }
             logger.info("fal.ai response received — image: \(generatedImageData.count) bytes, URL: \(imageURL)")
 
             // Step 3: Create Recipe
@@ -102,16 +125,40 @@ final class ImageAnalysisPipeline {
                 platingSteps: recipeResponse.platingSteps,
                 sommelierPairing: recipeResponse.sommelierPairing,
                 sceneAnalysis: recipeResponse.sceneAnalysis,
-                claudeRawResponse: rawJSON
+                claudeRawResponse: rawJSON,
+                chefPersonality: chef.rawValue,
+                baseServings: recipeResponse.baseServings ?? 2
             )
 
             completedRecipe = recipe
             state = .complete
+            UsageTracker.shared.incrementUsage()
+            updateWidgetData(recipe: recipe)
+            await LiveActivityManager.shared.endGeneration(dishName: recipe.dishName)
             logger.info("Pipeline complete — recipe ready")
 
+        } catch is CancellationError {
+            logger.info("Pipeline cancelled")
+            await LiveActivityManager.shared.cancelGeneration()
         } catch {
             logger.error("Pipeline failed: \(error)")
             state = .failed(error.localizedDescription)
+            await LiveActivityManager.shared.endGeneration(dishName: nil)
         }
+    }
+
+    // MARK: - Widget Data
+
+    private func updateWidgetData(recipe: Recipe) {
+        guard let defaults = UserDefaults(suiteName: "group.com.eightgates.TasteTheLens") else { return }
+        defaults.set(recipe.dishName, forKey: "lastRecipeDishName")
+        defaults.set(recipe.createdAt.timeIntervalSince1970, forKey: "lastRecipeCreatedAt")
+        // Store a small thumbnail for the widget
+        if let imageData = recipe.generatedDishImageData,
+           let image = UIImage(data: imageData),
+           let thumbnail = image.resizedForAPIUpload(maxDimension: 200).jpegData(compressionQuality: 0.6) {
+            defaults.set(thumbnail, forKey: "lastRecipeThumbnail")
+        }
+        WidgetCenter.shared.reloadAllTimelines()
     }
 }

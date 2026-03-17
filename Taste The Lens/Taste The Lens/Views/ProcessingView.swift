@@ -3,6 +3,7 @@ import SwiftUI
 struct ProcessingView: View {
     let capturedImage: UIImage
     @Bindable var pipeline: ImageAnalysisPipeline
+    var onCancel: (() -> Void)?
 
     // Colors extracted from the source image by the API
     private var displayColors: [String] {
@@ -32,6 +33,29 @@ struct ProcessingView: View {
 
                 // Content overlay
                 VStack {
+                    // Cancel button (top-left)
+                    HStack {
+                        Button {
+                            onCancel?()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.7))
+                                .frame(width: 44, height: 44)
+                                .background(Color.black.opacity(0.3))
+                                .clipShape(Circle())
+                        }
+                        .padding(.leading, 16)
+                        .padding(.top, 8)
+                        Spacer()
+                    }
+
+                    Spacer()
+
+                    // Progress steps
+                    ProgressStepsView(state: pipeline.state)
+                        .padding(.horizontal, 40)
+
                     Spacer()
 
                     // Color swatches pinned to right (shown once extracted from API)
@@ -46,9 +70,15 @@ struct ProcessingView: View {
 
                     Spacer()
 
-                    // Status text
-                    StatusText(status: pipeline.processingStatus)
-                        .padding(.bottom, 60)
+                    // Status text + timeout warning
+                    VStack(spacing: 12) {
+                        StatusText(status: pipeline.processingStatus)
+
+                        if let startTime = pipeline.startTime {
+                            TimeoutWarningView(startTime: startTime, onCancel: onCancel)
+                        }
+                    }
+                    .padding(.bottom, 60)
                 }
                 .frame(width: geo.size.width, height: geo.size.height)
 
@@ -63,6 +93,123 @@ struct ProcessingView: View {
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 0.5), value: pipeline.state)
         .animation(.easeInOut(duration: 0.4), value: pipeline.extractedColors)
+    }
+}
+
+// MARK: - Progress Steps
+
+struct ProgressStepsView: View {
+    let state: PipelineState
+
+    private let gold = Color(red: 0.788, green: 0.659, blue: 0.298)
+
+    private var currentStep: Int {
+        switch state {
+        case .screeningImage: return 0
+        case .analyzingImage: return 1
+        case .generatingImage: return 2
+        case .complete: return 3
+        default: return -1
+        }
+    }
+
+    private let steps = ["Screening", "Analyzing", "Generating"]
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(steps.enumerated()), id: \.offset) { index, label in
+                HStack(spacing: 6) {
+                    stepIndicator(for: index)
+                    Text(label)
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundStyle(textColor(for: index))
+                }
+
+                if index < steps.count - 1 {
+                    Spacer()
+                    Rectangle()
+                        .fill(index < currentStep ? gold.opacity(0.4) : Color.white.opacity(0.1))
+                        .frame(height: 1)
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func stepIndicator(for index: Int) -> some View {
+        if index < currentStep {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 14))
+                .foregroundStyle(gold)
+        } else if index == currentStep {
+            PulsingDot()
+        } else {
+            Circle()
+                .fill(Color.white.opacity(0.15))
+                .frame(width: 10, height: 10)
+        }
+    }
+
+    private func textColor(for index: Int) -> Color {
+        if index < currentStep {
+            return gold.opacity(0.8)
+        } else if index == currentStep {
+            return .white.opacity(0.9)
+        } else {
+            return .white.opacity(0.3)
+        }
+    }
+}
+
+struct PulsingDot: View {
+    @State private var isPulsing = false
+
+    var body: some View {
+        Circle()
+            .fill(Color.white)
+            .frame(width: 10, height: 10)
+            .scaleEffect(isPulsing ? 1.3 : 1.0)
+            .opacity(isPulsing ? 0.6 : 1.0)
+            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isPulsing)
+            .onAppear { isPulsing = true }
+    }
+}
+
+// MARK: - Timeout Warning
+
+struct TimeoutWarningView: View {
+    let startTime: Date
+    var onCancel: (() -> Void)?
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            let elapsed = Int(timeline.date.timeIntervalSince(startTime))
+            Group {
+                if elapsed >= 90 {
+                    VStack(spacing: 8) {
+                        Text("Still working. You can cancel and try again.")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.6))
+                        Button {
+                            onCancel?()
+                        } label: {
+                            Text("Cancel")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 24)
+                                .padding(.vertical, 8)
+                                .background(Color.white.opacity(0.15))
+                                .clipShape(Capsule())
+                        }
+                    }
+                } else if elapsed >= 45 {
+                    Text("Taking longer than usual...")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+            }
+        }
     }
 }
 
@@ -85,8 +232,9 @@ struct ProcessingView: View {
         let p = ImageAnalysisPipeline()
         p.processingStatus = "Extracting palette..."
         p.state = .analyzingImage
+        p.startTime = Date()
         return p
     }()
 
-    ProcessingView(capturedImage: sampleImage, pipeline: pipeline)
+    ProcessingView(capturedImage: sampleImage, pipeline: pipeline, onCancel: {})
 }

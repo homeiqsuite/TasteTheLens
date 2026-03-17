@@ -19,6 +19,15 @@ final class Recipe {
     var createdAt: Date
     var claudeRawResponse: String
 
+    // Beta: sync & auth fields
+    var remoteId: String?
+    var syncStatus: String = "local"
+    var isDeleted: Bool = false
+    var updatedAt: Date = Date()
+    var userId: String?
+    var chefPersonality: String?
+    var baseServings: Int = 2
+
     init(
         id: UUID = UUID(),
         dishName: String,
@@ -33,7 +42,9 @@ final class Recipe {
         platingSteps: [String],
         sommelierPairing: SommelierPairing,
         sceneAnalysis: SceneAnalysis? = nil,
-        claudeRawResponse: String
+        claudeRawResponse: String,
+        chefPersonality: String? = nil,
+        baseServings: Int = 2
     ) {
         self.id = id
         self.dishName = dishName
@@ -49,7 +60,10 @@ final class Recipe {
         self.sommelierPairing = sommelierPairing
         self.sceneAnalysis = sceneAnalysis
         self.createdAt = Date()
+        self.updatedAt = Date()
         self.claudeRawResponse = claudeRawResponse
+        self.chefPersonality = chefPersonality
+        self.baseServings = baseServings
     }
 }
 
@@ -58,10 +72,16 @@ struct TranslationItem: Codable, Hashable {
     var culinary: String
 }
 
+struct IngredientSubstitution: Codable, Hashable {
+    var original: String
+    var substitutes: [String]
+}
+
 struct RecipeComponent: Codable, Hashable {
     var name: String
     var ingredients: [String]
     var method: String
+    var substitutions: [IngredientSubstitution]?
 }
 
 struct SommelierPairing: Codable, Hashable {
@@ -76,10 +96,40 @@ struct SceneAnalysis: Codable, Hashable {
     var setting: String
     var approach: String  // "ingredient-driven", "visual-translation", "hybrid"
 
-    enum CodingKeys: String, CodingKey {
-        case detectedItems = "detected_items"
-        case detectedText = "detected_text"
-        case setting
-        case approach
+    private enum CodingKeys: String, CodingKey {
+        case detectedItems, detectedText, setting, approach
+        // Snake-case variants returned by the LLM API
+        case detected_items, detected_text
+    }
+
+    init(detectedItems: [String], detectedText: [String], setting: String, approach: String) {
+        self.detectedItems = detectedItems
+        self.detectedText = detectedText
+        self.setting = setting
+        self.approach = approach
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let items = try? container.decode([String].self, forKey: .detectedItems) {
+            self.detectedItems = items
+        } else {
+            self.detectedItems = try container.decode([String].self, forKey: .detected_items)
+        }
+        if let text = try? container.decode([String].self, forKey: .detectedText) {
+            self.detectedText = text
+        } else {
+            self.detectedText = try container.decode([String].self, forKey: .detected_text)
+        }
+        self.setting = try container.decode(String.self, forKey: .setting)
+        self.approach = try container.decode(String.self, forKey: .approach)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(detectedItems, forKey: .detectedItems)
+        try container.encode(detectedText, forKey: .detectedText)
+        try container.encode(setting, forKey: .setting)
+        try container.encode(approach, forKey: .approach)
     }
 }

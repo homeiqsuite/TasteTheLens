@@ -1,0 +1,213 @@
+import UIKit
+
+struct PDFExporter {
+    static func generatePDF(for recipe: Recipe) -> Data {
+        let pageRect = CGRect(x: 0, y: 0, width: 612, height: 792) // Letter size
+        let margin: CGFloat = 50
+        let contentWidth = pageRect.width - margin * 2
+
+        let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
+
+        return renderer.pdfData { context in
+            var y: CGFloat = 0
+
+            func ensureSpace(_ needed: CGFloat) {
+                if y + needed > pageRect.height - margin {
+                    context.beginPage()
+                    y = margin
+                }
+            }
+
+            func drawText(_ text: String, font: UIFont, color: UIColor = .darkText, maxWidth: CGFloat = contentWidth) -> CGFloat {
+                let paragraphStyle = NSMutableParagraphStyle()
+                paragraphStyle.lineSpacing = 4
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: font,
+                    .foregroundColor: color,
+                    .paragraphStyle: paragraphStyle
+                ]
+                let attrString = NSAttributedString(string: text, attributes: attrs)
+                let rect = attrString.boundingRect(
+                    with: CGSize(width: maxWidth, height: .greatestFiniteMagnitude),
+                    options: [.usesLineFragmentOrigin, .usesFontLeading],
+                    context: nil
+                )
+                attrString.draw(in: CGRect(x: margin, y: y, width: maxWidth, height: rect.height))
+                return rect.height
+            }
+
+            // Page 1
+            context.beginPage()
+            y = margin
+
+            // Dish name
+            let titleFont = UIFont(name: "Georgia-Bold", size: 24) ?? UIFont.boldSystemFont(ofSize: 24)
+            let titleHeight = drawText(recipe.dishName, font: titleFont, color: UIColor(red: 0.788, green: 0.659, blue: 0.298, alpha: 1))
+            y += titleHeight + 12
+
+            // Description
+            let bodyFont = UIFont.systemFont(ofSize: 12)
+            let descHeight = drawText(recipe.recipeDescription, font: bodyFont, color: .darkGray)
+            y += descHeight + 16
+
+            // Dish image
+            if let imageData = recipe.generatedDishImageData, let image = UIImage(data: imageData) {
+                let imageHeight: CGFloat = 200
+                ensureSpace(imageHeight + 20)
+                let imageRect = CGRect(x: margin, y: y, width: contentWidth, height: imageHeight)
+                let path = UIBezierPath(roundedRect: imageRect, cornerRadius: 8)
+                path.addClip()
+                // Scale to fill
+                let scale = max(contentWidth / image.size.width, imageHeight / image.size.height)
+                let scaledW = image.size.width * scale
+                let scaledH = image.size.height * scale
+                let drawRect = CGRect(
+                    x: imageRect.midX - scaledW / 2,
+                    y: imageRect.midY - scaledH / 2,
+                    width: scaledW,
+                    height: scaledH
+                )
+                image.draw(in: drawRect)
+                // Reset clipping
+                context.cgContext.resetClip()
+                y += imageHeight + 20
+            }
+
+            // Color palette dots
+            if !recipe.colorPalette.isEmpty {
+                ensureSpace(30)
+                let dotSize: CGFloat = 16
+                let dotSpacing: CGFloat = 8
+                var dotX = margin
+                for hex in recipe.colorPalette {
+                    let color = UIColor(hex: hex)
+                    color.setFill()
+                    UIBezierPath(ovalIn: CGRect(x: dotX, y: y, width: dotSize, height: dotSize)).fill()
+                    dotX += dotSize + dotSpacing
+                }
+                y += dotSize + 20
+            }
+
+            // Servings
+            let servingsFont = UIFont.systemFont(ofSize: 11, weight: .medium)
+            let servingsHeight = drawText("Serves \(recipe.baseServings)", font: servingsFont, color: .gray)
+            y += servingsHeight + 20
+
+            // Section helper
+            func drawSection(_ title: String) {
+                ensureSpace(30)
+                let sectionFont = UIFont.systemFont(ofSize: 14, weight: .bold)
+                let h = drawText(title.uppercased(), font: sectionFont, color: UIColor(red: 0.788, green: 0.659, blue: 0.298, alpha: 1))
+                y += h + 4
+                // Underline
+                UIColor(red: 0.788, green: 0.659, blue: 0.298, alpha: 0.3).setStroke()
+                let line = UIBezierPath()
+                line.move(to: CGPoint(x: margin, y: y))
+                line.addLine(to: CGPoint(x: margin + contentWidth, y: y))
+                line.lineWidth = 0.5
+                line.stroke()
+                y += 12
+            }
+
+            // Translation Matrix
+            if !recipe.translationMatrix.isEmpty {
+                drawSection("Translation Matrix")
+                let smallFont = UIFont.systemFont(ofSize: 11)
+                for item in recipe.translationMatrix {
+                    ensureSpace(30)
+                    let h = drawText("\(item.visual)  →  \(item.culinary)", font: smallFont)
+                    y += h + 6
+                }
+                y += 10
+            }
+
+            // Components
+            drawSection("Components")
+            let ingredientFont = UIFont.systemFont(ofSize: 11)
+            let methodFont = UIFont.italicSystemFont(ofSize: 11)
+            let componentNameFont = UIFont.systemFont(ofSize: 12, weight: .semibold)
+
+            for component in recipe.components {
+                ensureSpace(40)
+                let nameH = drawText(component.name, font: componentNameFont)
+                y += nameH + 4
+
+                for ingredient in component.ingredients {
+                    ensureSpace(20)
+                    let h = drawText("• \(ingredient)", font: ingredientFont)
+                    y += h + 2
+                }
+                y += 4
+
+                ensureSpace(30)
+                let methodH = drawText(component.method, font: methodFont, color: .darkGray)
+                y += methodH + 12
+            }
+
+            // Cooking Instructions
+            if !recipe.cookingInstructions.isEmpty {
+                drawSection("Cooking Instructions")
+                for (i, step) in recipe.cookingInstructions.enumerated() {
+                    ensureSpace(30)
+                    let h = drawText("\(i + 1). \(step)", font: bodyFont)
+                    y += h + 6
+                }
+                y += 10
+            }
+
+            // Plating
+            if !recipe.platingSteps.isEmpty {
+                drawSection("Plating")
+                for (i, step) in recipe.platingSteps.enumerated() {
+                    ensureSpace(30)
+                    let h = drawText("\(i + 1). \(step)", font: bodyFont)
+                    y += h + 6
+                }
+                y += 10
+            }
+
+            // Pairings
+            drawSection("Pairings")
+            ensureSpace(60)
+            let pairingFont = UIFont.systemFont(ofSize: 11)
+            var h = drawText("Wine: \(recipe.sommelierPairing.wine)", font: pairingFont)
+            y += h + 4
+            h = drawText("Cocktail: \(recipe.sommelierPairing.cocktail)", font: pairingFont)
+            y += h + 4
+            h = drawText("Non-Alcoholic: \(recipe.sommelierPairing.nonalcoholic)", font: pairingFont)
+            y += h + 20
+
+            // Footer
+            ensureSpace(30)
+            let footerFont = UIFont.systemFont(ofSize: 9, weight: .light)
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateStyle = .medium
+            let footerText = "Created with Taste The Lens • \(dateFormatter.string(from: recipe.createdAt))"
+            let footerAttrs: [NSAttributedString.Key: Any] = [
+                .font: footerFont,
+                .foregroundColor: UIColor.lightGray
+            ]
+            let footerStr = NSAttributedString(string: footerText, attributes: footerAttrs)
+            footerStr.draw(at: CGPoint(x: margin, y: pageRect.height - margin + 10))
+        }
+    }
+}
+
+// UIColor hex helper for PDF rendering
+private extension UIColor {
+    convenience init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let r, g, b: CGFloat
+        switch hex.count {
+        case 6:
+            r = CGFloat((int >> 16) & 0xFF) / 255
+            g = CGFloat((int >> 8) & 0xFF) / 255
+            b = CGFloat(int & 0xFF) / 255
+        default:
+            r = 0; g = 0; b = 0
+        }
+        self.init(red: r, green: g, blue: b, alpha: 1.0)
+    }
+}

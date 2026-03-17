@@ -8,5 +8,22 @@
 	<string>$(GEMINI_API_KEY)</string>
 	<key>FAL_API_KEY</key>
 	<string>$(FAL_API_KEY)</string>
+	<key>SUPABASE_URL</key>
+	<string>$(SUPABASE_URL)</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>$(SUPABASE_ANON_KEY)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>TasteTheLens needs camera access to photograph scenes and generate inspired recipes.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.eightgates.Taste-The-Lens</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>tastethelens</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

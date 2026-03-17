@@ -30,4 +30,24 @@ enum AppConfig {
         }
         fatalError("FAL_API_KEY not set. Add it to Secrets.xcconfig or scheme environment variables.")
     }
+
+    static var supabaseURL: String {
+        if let url = ProcessInfo.processInfo.environment["SUPABASE_URL"], !url.isEmpty {
+            return url
+        }
+        if let url = Bundle.main.infoDictionary?["SUPABASE_URL"] as? String, !url.isEmpty {
+            return url
+        }
+        fatalError("SUPABASE_URL not set. Add it to Secrets.xcconfig or scheme environment variables.")
+    }
+
+    static var supabaseAnonKey: String {
+        if let key = ProcessInfo.processInfo.environment["SUPABASE_ANON_KEY"], !key.isEmpty {
+            return key
+        }
+        if let key = Bundle.main.infoDictionary?["SUPABASE_ANON_KEY"] as? String, !key.isEmpty {
+            return key
+        }
+        fatalError("SUPABASE_ANON_KEY not set. Add it to Secrets.xcconfig or scheme environment variables.")
+    }
 }

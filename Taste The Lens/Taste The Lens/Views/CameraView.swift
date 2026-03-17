@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 import os
 
 private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "CameraView")
@@ -6,6 +7,7 @@ private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: 
 struct CameraView: View {
     @State var cameraManager = CameraManager()
     @State private var isPulsing = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
     var onPhotoCaptured: (UIImage) -> Void
 
     var body: some View {
@@ -34,9 +36,30 @@ struct CameraView: View {
 
                 Spacer().frame(height: 24)
 
-                ShutterButton {
-                    capturePhoto()
+                HStack {
+                    // Photo library picker
+                    PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                        Image(systemName: "photo.on.rectangle")
+                            .font(.system(size: 22, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .frame(width: 50, height: 50)
+                            .background(Color.black.opacity(0.3))
+                            .clipShape(Circle())
+                    }
+
+                    Spacer()
+
+                    ShutterButton {
+                        capturePhoto()
+                    }
+
+                    Spacer()
+
+                    // Invisible spacer to balance the layout
+                    Color.clear
+                        .frame(width: 50, height: 50)
                 }
+                .padding(.horizontal, 32)
 
                 Spacer().frame(height: 40)
             }
@@ -50,6 +73,20 @@ struct CameraView: View {
         }
         .onAppear { isPulsing = true }
         .onDisappear { cameraManager.stopSession() }
+        .onChange(of: selectedPhotoItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                if let data = try? await newItem.loadTransferable(type: Data.self),
+                   let image = UIImage(data: data) {
+                    logger.info("Photo picked from library: \(image.size.width)x\(image.size.height)")
+                    cameraManager.stopSession()
+                    onPhotoCaptured(image)
+                } else {
+                    logger.error("Failed to load image from PhotosPicker")
+                }
+                selectedPhotoItem = nil
+            }
+        }
     }
 
     private var permissionDeniedView: some View {

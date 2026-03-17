@@ -37,14 +37,11 @@ struct SideBySideExportView: View {
                 // Right: generated dish
                 if let imageData = recipe.generatedDishImageData,
                    let uiImage = UIImage(data: imageData) {
-                    Color.clear
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
                         .frame(width: photoWidth, height: photoHeight)
-                        .overlay {
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        }
-                        .clipped()
+                        .background(bg)
                 } else {
                     bg.frame(width: photoWidth, height: photoHeight)
                 }
