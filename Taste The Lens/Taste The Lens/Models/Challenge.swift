@@ -29,7 +29,7 @@ struct ChallengeDTO: Codable, Identifiable {
     let inspirationImagePath: String?
     let dishImagePath: String?
     let createdAt: String
-    let endsAt: String
+    let endsAt: String?
     let status: String
 
     enum CodingKeys: String, CodingKey {

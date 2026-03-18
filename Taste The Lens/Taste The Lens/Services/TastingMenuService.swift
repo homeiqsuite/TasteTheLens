@@ -187,6 +187,22 @@ final class TastingMenuService {
         logger.info("Added course \(courseOrder) to menu \(menuId)")
     }
 
+    // MARK: - Delete
+
+    func deleteMenu(id: String) async throws {
+        guard let userId = AuthManager.shared.currentUser?.id.uuidString else {
+            throw TastingMenuError.notAuthenticated
+        }
+
+        // Delete courses, participants, then the menu itself
+        try await supabase.from("menu_courses").delete().eq("menu_id", value: id).execute()
+        try await supabase.from("menu_participants").delete().eq("menu_id", value: id).execute()
+        try await supabase.from("tasting_menus").delete().eq("id", value: id).eq("creator_id", value: userId).execute()
+
+        myMenus.removeAll { $0.id == id }
+        logger.info("Deleted tasting menu \(id)")
+    }
+
     // MARK: - Publish
 
     func publishMenu(id: String) async throws {
@@ -206,8 +222,15 @@ final class TastingMenuService {
 
         let channel = supabase.channel("menu-\(id)")
 
-        let onChange = channel.postgresChange(
+        let onInsert = channel.postgresChange(
             InsertAction.self,
+            schema: "public",
+            table: "menu_courses",
+            filter: .eq("menu_id", value: id)
+        )
+
+        let onUpdate = channel.postgresChange(
+            UpdateAction.self,
             schema: "public",
             table: "menu_courses",
             filter: .eq("menu_id", value: id)
@@ -217,11 +240,21 @@ final class TastingMenuService {
             await channel.subscribe()
             logger.info("Subscribed to realtime for menu \(id)")
 
-            for await _ in onChange {
-                logger.info("Realtime: course update on menu \(id)")
-                // Observers should re-fetch courses when notified
-                NotificationCenter.default.post(name: .menuCourseUpdated, object: nil, userInfo: ["menuId": id])
-            }
+            async let inserts: Void = {
+                for await _ in onInsert {
+                    logger.info("Realtime: course inserted on menu \(id)")
+                    NotificationCenter.default.post(name: .menuCourseUpdated, object: nil, userInfo: ["menuId": id])
+                }
+            }()
+
+            async let updates: Void = {
+                for await _ in onUpdate {
+                    logger.info("Realtime: course updated on menu \(id)")
+                    NotificationCenter.default.post(name: .menuCourseUpdated, object: nil, userInfo: ["menuId": id])
+                }
+            }()
+
+            _ = await (inserts, updates)
         }
 
         channels[id] = channel

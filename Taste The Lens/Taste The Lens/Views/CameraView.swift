@@ -8,7 +8,9 @@ struct CameraView: View {
     @State var cameraManager = CameraManager()
     @State private var isPulsing = false
     @State private var selectedPhotoItem: PhotosPickerItem?
+    @AppStorage("selectedChef") private var selectedChef = "default"
     var onPhotoCaptured: (UIImage) -> Void
+    var onChefTapped: () -> Void
 
     var body: some View {
         ZStack {
@@ -55,9 +57,18 @@ struct CameraView: View {
 
                     Spacer()
 
-                    // Invisible spacer to balance the layout
-                    Color.clear
-                        .frame(width: 50, height: 50)
+                    // Chef picker
+                    Button {
+                        onChefTapped()
+                    } label: {
+                        let chef = ChefPersonality(rawValue: selectedChef) ?? .defaultChef
+                        Image(systemName: chef.icon)
+                            .font(.system(size: 22, weight: .medium))
+                            .foregroundStyle(Theme.darkTextSecondary)
+                            .frame(width: 50, height: 50)
+                            .background(Color.black.opacity(0.3))
+                            .clipShape(Circle())
+                    }
                 }
                 .padding(.horizontal, 32)
 

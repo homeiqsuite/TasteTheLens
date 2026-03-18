@@ -44,8 +44,8 @@ final class ImageAnalysisPipeline: Identifiable {
     private let geminiClient = GeminiAPIClient()
     private let falClient = FalAPIClient()
 
-    func process(image: UIImage, modelContext: ModelContext, excluding: [String] = []) async {
-        logger.info("Pipeline started — excluding: \(excluding)")
+    func process(image: UIImage, modelContext: ModelContext, excluding: [String] = [], budgetLimit: Double? = nil, courseType: String? = nil) async {
+        logger.info("Pipeline started — excluding: \(excluding), budget: \(budgetLimit?.description ?? "none"), courseType: \(courseType ?? "none")")
         startTime = Date()
         await LiveActivityManager.shared.startGeneration()
 
@@ -85,6 +85,15 @@ final class ImageAnalysisPipeline: Identifiable {
             if !excluding.isEmpty {
                 let excludeList = excluding.joined(separator: ", ")
                 prompt += "\n\nIMPORTANT: Generate a completely different dish. Do NOT repeat any of these previously generated dishes: \(excludeList). Create something entirely new and distinct."
+            }
+            if let budgetLimit {
+                let formatted = budgetLimit.truncatingRemainder(dividingBy: 1) == 0
+                    ? String(format: "$%.0f", budgetLimit)
+                    : String(format: "$%.2f", budgetLimit)
+                prompt += "\n\nBUDGET CONSTRAINT: The total cost of ALL ingredients combined must be under \(formatted). Choose affordable, budget-friendly ingredients. Prioritize pantry staples, in-season produce, and cost-effective proteins (chicken thighs, eggs, beans, lentils, ground meat). Avoid expensive ingredients like seafood, specialty cheeses, or premium cuts. The dish should taste great without breaking the bank."
+            }
+            if let courseType {
+                prompt += "\n\nCOURSE TYPE CONSTRAINT: Create this as a \(courseType). The dish format, portion size, presentation, and ingredient quantities should all match what you'd expect from a \(courseType). For example, appetizers should be small and shareable, desserts should be sweet, drinks should be beverages, etc."
             }
 
             let (recipeResponse, rawJSON) = try await withExponentialBackoff {
@@ -127,7 +136,9 @@ final class ImageAnalysisPipeline: Identifiable {
                 sceneAnalysis: recipeResponse.sceneAnalysis,
                 claudeRawResponse: rawJSON,
                 chefPersonality: chef.rawValue,
-                baseServings: recipeResponse.baseServings ?? 2
+                baseServings: recipeResponse.baseServings ?? 2,
+                estimatedCalories: recipeResponse.estimatedCalories,
+                nutrition: recipeResponse.nutrition
             )
 
             completedRecipe = recipe

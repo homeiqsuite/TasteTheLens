@@ -1,4 +1,5 @@
 import SwiftUI
+import Auth
 import os
 
 private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "TastingMenuList")
@@ -10,6 +11,8 @@ struct TastingMenuListView: View {
     @State private var inviteCode = ""
     @State private var joinError: String?
     @State private var isJoining = false
+    @State private var menuToDelete: TastingMenuDTO?
+    @State private var showDeleteConfirmation = false
 
     private let authManager = AuthManager.shared
     private let menuService = TastingMenuService.shared
@@ -86,6 +89,16 @@ struct TastingMenuListView: View {
                             menuCard(menu)
                         }
                         .buttonStyle(.plain)
+                        .contextMenu {
+                            if menu.creatorId == authManager.currentUser?.id.uuidString {
+                                Button(role: .destructive) {
+                                    menuToDelete = menu
+                                    showDeleteConfirmation = true
+                                } label: {
+                                    Label("Delete Menu", systemImage: "trash")
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -95,6 +108,17 @@ struct TastingMenuListView: View {
         }
         .refreshable {
             try? await menuService.fetchMyMenus()
+        }
+        .alert("Delete Menu", isPresented: $showDeleteConfirmation, presenting: menuToDelete) { menu in
+            Button("Delete", role: .destructive) {
+                Task {
+                    try? await menuService.deleteMenu(id: menu.id)
+                    HapticManager.success()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { menu in
+            Text("Are you sure you want to delete \"\(menu.theme)\"? This cannot be undone.")
         }
     }
 

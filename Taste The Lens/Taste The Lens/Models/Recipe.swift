@@ -27,6 +27,8 @@ final class Recipe {
     var userId: String?
     var chefPersonality: String?
     var baseServings: Int = 2
+    var estimatedCalories: Int?
+    var nutrition: NutritionInfo?
 
     init(
         id: UUID = UUID(),
@@ -44,7 +46,9 @@ final class Recipe {
         sceneAnalysis: SceneAnalysis? = nil,
         claudeRawResponse: String,
         chefPersonality: String? = nil,
-        baseServings: Int = 2
+        baseServings: Int = 2,
+        estimatedCalories: Int? = nil,
+        nutrition: NutritionInfo? = nil
     ) {
         self.id = id
         self.dishName = dishName
@@ -64,6 +68,8 @@ final class Recipe {
         self.claudeRawResponse = claudeRawResponse
         self.chefPersonality = chefPersonality
         self.baseServings = baseServings
+        self.estimatedCalories = estimatedCalories
+        self.nutrition = nutrition
     }
 }
 
@@ -82,6 +88,15 @@ struct RecipeComponent: Codable, Hashable {
     var ingredients: [String]
     var method: String
     var substitutions: [IngredientSubstitution]?
+}
+
+struct NutritionInfo: Codable, Hashable {
+    var calories: Int
+    var protein: Int
+    var carbs: Int
+    var fat: Int
+    var fiber: Int
+    var sugar: Int
 }
 
 struct SommelierPairing: Codable, Hashable {

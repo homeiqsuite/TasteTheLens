@@ -305,17 +305,12 @@ struct TastingMenuDetailView: View {
 
     private func addCourse(_ course: MenuCourseDTO) {
         guard authManager.isAuthenticated else { return }
-        // Set pending menu course context on the shared MainViewModel
-        // The camera flow will pick this up after recipe generation
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let rootVC = windowScene.windows.first?.rootViewController {
-            // Post notification to set pending course and navigate to camera
-            NotificationCenter.default.post(
-                name: .addMenuCourse,
-                object: nil,
-                userInfo: ["menuId": menu.id, "courseOrder": course.courseOrder]
-            )
-        }
+        // Post notification to set pending course and navigate to camera
+        NotificationCenter.default.post(
+            name: .addMenuCourse,
+            object: nil,
+            userInfo: ["menuId": menu.id, "courseOrder": course.courseOrder]
+        )
     }
 
     private func publishMenu() async {

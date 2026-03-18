@@ -14,6 +14,7 @@ enum AppScreen: Equatable {
 struct ContentView: View {
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @State private var showSplash = false
+    @State private var showChefOnboarding = false
     @State private var vm = MainViewModel()
     @Namespace private var heroNamespace
 
@@ -68,6 +69,15 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $showSplash) {
             SplashView(isPresented: $showSplash)
         }
+        .fullScreenCover(isPresented: $showChefOnboarding) {
+            ChefOnboardingView(isPresented: $showChefOnboarding)
+        }
+        .onChange(of: showSplash) { _, newValue in
+            if !newValue && !hasSeenOnboarding {
+                showChefOnboarding = true
+                hasSeenOnboarding = true
+            }
+        }
         .sheet(isPresented: $vm.showSavedRecipes) {
             SavedRecipesView()
         }
@@ -87,7 +97,6 @@ struct ContentView: View {
             logger.info("ContentView appeared — hasSeenOnboarding: \(hasSeenOnboarding)")
             if !hasSeenOnboarding {
                 showSplash = true
-                hasSeenOnboarding = true
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .reimagineRecipe)) { notification in
@@ -100,13 +109,18 @@ struct ContentView: View {
 
     // MARK: - Screens
 
+    @State private var showBudgetPicker = false
+    @State private var showChefPicker = false
+
     private var cameraScreen: some View {
         ZStack {
             CameraView { image in
                 vm.handlePhotoCaptured(image)
+            } onChefTapped: {
+                showChefPicker = true
             }
 
-            // Top bar: back to dashboard (left)
+            // Top bar: back to dashboard (left), budget (right)
             VStack {
                 HStack {
                     Button {
@@ -125,9 +139,120 @@ struct ContentView: View {
                     .padding(.top, 8)
 
                     Spacer()
+
+                    Button {
+                        showBudgetPicker = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "dollarsign.circle")
+                                .font(.system(size: 14, weight: .medium))
+                            if let budget = vm.budgetLimit {
+                                Text(String(format: "$%.0f", budget))
+                                    .font(.system(size: 14, weight: .semibold))
+                            } else {
+                                Text("Budget")
+                                    .font(.system(size: 14, weight: .medium))
+                            }
+                        }
+                        .foregroundStyle(vm.budgetLimit != nil ? Theme.gold : Theme.darkTextSecondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.black.opacity(0.3))
+                        .clipShape(Capsule())
+                    }
+                    .padding(.trailing, 16)
+                    .padding(.top, 8)
                 }
                 Spacer()
             }
+        }
+        .sheet(isPresented: $showBudgetPicker) {
+            cameraBudgetSheet
+        }
+        .sheet(isPresented: $showChefPicker) {
+            cameraChefSheet
+        }
+    }
+
+    private var cameraBudgetSheet: some View {
+        NavigationStack {
+            ZStack {
+                Theme.darkBg.ignoresSafeArea()
+
+                VStack(spacing: 20) {
+                    Text("Set a Budget")
+                        .font(.system(size: 22, weight: .bold, design: .serif))
+                        .foregroundStyle(Theme.darkTextPrimary)
+                        .padding(.top, 8)
+
+                    Text("Generate meals that cost less than your target.")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.darkTextSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 70), spacing: 10)], spacing: 10) {
+                        budgetOption(nil, label: "Any")
+                        budgetOption(10, label: "$10")
+                        budgetOption(15, label: "$15")
+                        budgetOption(20, label: "$20")
+                        budgetOption(25, label: "$25")
+                        budgetOption(30, label: "$30")
+                    }
+                    .padding(.horizontal, 24)
+
+                    Spacer()
+                }
+                .padding(.top, 24)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Theme.darkBg, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { showBudgetPicker = false }
+                        .foregroundStyle(Theme.gold)
+                }
+            }
+            .presentationDetents([.height(300)])
+        }
+    }
+
+    private var cameraChefSheet: some View {
+        NavigationStack {
+            ZStack {
+                Theme.darkBg.ignoresSafeArea()
+
+                ChefSelectionView()
+                    .padding(.horizontal, 20)
+                    .padding(.top, 24)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Theme.darkBg, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { showChefPicker = false }
+                        .foregroundStyle(Theme.gold)
+                }
+            }
+            .presentationDetents([.medium])
+        }
+    }
+
+    private func budgetOption(_ amount: Double?, label: String) -> some View {
+        let isSelected = vm.budgetLimit == amount
+        return Button {
+            vm.budgetLimit = amount
+            HapticManager.light()
+        } label: {
+            Text(label)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(isSelected ? Theme.darkBg : Theme.darkTextPrimary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .background(isSelected ? Theme.gold : Theme.darkStroke)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
         }
     }
 

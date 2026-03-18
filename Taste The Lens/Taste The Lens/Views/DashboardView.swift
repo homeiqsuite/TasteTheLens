@@ -10,6 +10,8 @@ struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var selectedRecipe: Recipe?
+    @State private var showChefPicker = false
+    @AppStorage("selectedChef") private var selectedChef = "default"
 
     private let authManager = AuthManager.shared
     private let challengeService = ChallengeService.shared
@@ -20,6 +22,7 @@ struct DashboardView: View {
             VStack(spacing: 24) {
                 greetingSection
                 heroCard
+                activeChefCard
                 challengesSection
                 tastingMenuCard
                 recentRecipesSection
@@ -38,6 +41,26 @@ struct DashboardView: View {
                                 .foregroundStyle(Theme.primary)
                         }
                     }
+            }
+        }
+        .sheet(isPresented: $showChefPicker) {
+            NavigationStack {
+                ZStack {
+                    Theme.darkBg.ignoresSafeArea()
+                    ChefSelectionView()
+                        .padding(.horizontal, 20)
+                        .padding(.top, 24)
+                }
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbarBackground(Theme.darkBg, for: .navigationBar)
+                .toolbarColorScheme(.dark, for: .navigationBar)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Done") { showChefPicker = false }
+                            .foregroundStyle(Theme.gold)
+                    }
+                }
+                .presentationDetents([.medium])
             }
         }
         .task {
@@ -179,6 +202,49 @@ struct DashboardView: View {
         .buttonStyle(PremiumCardButtonStyle())
     }
 
+    // MARK: - Active Chef
+
+    private var activeChefCard: some View {
+        let chef = ChefPersonality(rawValue: selectedChef) ?? .defaultChef
+
+        return Button {
+            HapticManager.light()
+            showChefPicker = true
+        } label: {
+            HStack(spacing: 14) {
+                Circle()
+                    .fill(Theme.gold.opacity(0.15))
+                    .frame(width: 44, height: 44)
+                    .overlay(
+                        Image(systemName: chef.icon)
+                            .font(.system(size: 18))
+                            .foregroundStyle(Theme.gold)
+                    )
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(chef.displayName)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                    Text(chef.subtitle)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+
+                Spacer()
+
+                Text("Switch")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.gold)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.textQuaternary)
+            }
+            .lightCard()
+        }
+        .buttonStyle(PremiumCardButtonStyle())
+    }
+
     // MARK: - Challenges
 
     private var challengesSection: some View {
@@ -250,27 +316,7 @@ struct DashboardView: View {
         Button {
             vm.showChallengeFeed = true
         } label: {
-            VStack(alignment: .leading, spacing: 10) {
-                Color.clear
-                    .frame(width: 160, height: 100)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Theme.gold.opacity(0.08))
-                            .overlay(
-                                Image(systemName: "flag.checkered")
-                                    .font(.system(size: 28))
-                                    .foregroundStyle(Theme.gold.opacity(0.25))
-                            )
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                Text(challenge.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.textPrimary)
-                    .lineLimit(2)
-                    .frame(width: 160, alignment: .leading)
-            }
-            .frame(width: 160)
+            ChallengePreviewThumbnail(challenge: challenge)
         }
         .buttonStyle(PremiumCardButtonStyle())
     }
@@ -498,5 +544,47 @@ struct PremiumCardButtonStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
             .opacity(configuration.isPressed ? 0.92 : 1.0)
             .animation(.easeOut(duration: 0.2), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Challenge Preview Thumbnail
+
+private struct ChallengePreviewThumbnail: View {
+    let challenge: ChallengeDTO
+    @State private var dishImage: UIImage?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Color.clear
+                .frame(width: 160, height: 100)
+                .overlay {
+                    if let image = dishImage {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Theme.gold.opacity(0.08))
+                            .overlay(
+                                Image(systemName: "flag.checkered")
+                                    .font(.system(size: 28))
+                                    .foregroundStyle(Theme.gold.opacity(0.25))
+                            )
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            Text(challenge.title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+                .lineLimit(2)
+                .frame(width: 160, alignment: .leading)
+        }
+        .frame(width: 160)
+        .task {
+            if let path = challenge.dishImagePath, !path.isEmpty {
+                dishImage = await ChallengeService.shared.loadImage(path: path)
+            }
+        }
     }
 }

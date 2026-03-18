@@ -5,6 +5,42 @@ extension Notification.Name {
     static let reimagineRecipe = Notification.Name("reimagineRecipe")
 }
 
+enum ReimagineCourseType: String, CaseIterable, Identifiable {
+    case appetizer
+    case dessert
+    case drink
+    case sideDish = "side dish"
+    case soup
+    case salad
+    case breakfast
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .appetizer: return "Appetizer"
+        case .dessert: return "Dessert"
+        case .drink: return "Drink"
+        case .sideDish: return "Side Dish"
+        case .soup: return "Soup"
+        case .salad: return "Salad"
+        case .breakfast: return "Breakfast"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .appetizer: return "fork.knife"
+        case .dessert: return "birthday.cake"
+        case .drink: return "wineglass"
+        case .sideDish: return "leaf"
+        case .soup: return "mug"
+        case .salad: return "carrot"
+        case .breakfast: return "sun.horizon"
+        }
+    }
+}
+
 struct RecipeCardView: View {
     let recipe: Recipe
     @Environment(\.modelContext) private var modelContext
@@ -21,6 +57,8 @@ struct RecipeCardView: View {
     @State private var isCreatingChallenge = false
     @State private var challengeError: String?
     @State private var servingCount: Int = 2
+    @State private var showBudgetInput = false
+    @State private var budgetAmount: Double = 15
     @AppStorage("hasSeenAuthPrompt") private var hasSeenAuthPrompt = false
 
     var body: some View {
@@ -38,6 +76,7 @@ struct RecipeCardView: View {
                     quickStatsStrip
                     ingredientsSection
                     stepsSection
+                    nutritionSection
 
                     // TIER 3: Deep Dive
                     moreDetailsSection
@@ -70,6 +109,9 @@ struct RecipeCardView: View {
         }
         .sheet(isPresented: $showCreateChallenge) {
             challengeConfirmationSheet
+        }
+        .sheet(isPresented: $showBudgetInput) {
+            budgetInputSheet
         }
     }
 
@@ -264,6 +306,21 @@ struct RecipeCardView: View {
                     .foregroundStyle(Theme.textTertiary)
             }
             .frame(maxWidth: .infinity)
+
+            // Estimated calories (from nutrition or standalone)
+            if let cals = recipe.nutrition?.calories ?? recipe.estimatedCalories {
+                dividerLine
+
+                VStack(spacing: 1) {
+                    Text("\(scaledNutrient(cals))")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(Theme.textPrimary)
+                    Text("cal")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+                .frame(maxWidth: .infinity)
+            }
         }
         .padding(.vertical, 14)
         .padding(.horizontal, 16)
@@ -424,6 +481,88 @@ struct RecipeCardView: View {
             .overlay(
                 VStack { Spacer(); Theme.divider.frame(height: 1) }
             )
+        }
+    }
+
+    // MARK: - Nutrition
+
+    @ViewBuilder
+    private var nutritionSection: some View {
+        if let nutrition = recipe.nutrition {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeader("Nutrition per Serving")
+
+                HStack(spacing: 0) {
+                    macroColumn(value: scaledNutrient(nutrition.protein), label: "Protein", unit: "g", color: Theme.visual)
+                    macroColumn(value: scaledNutrient(nutrition.carbs), label: "Carbs", unit: "g", color: Theme.primary)
+                    macroColumn(value: scaledNutrient(nutrition.fat), label: "Fat", unit: "g", color: Theme.culinary)
+                    macroColumn(value: scaledNutrient(nutrition.fiber), label: "Fiber", unit: "g", color: Theme.gold)
+                    macroColumn(value: scaledNutrient(nutrition.sugar), label: "Sugar", unit: "g", color: Theme.textTertiary)
+                }
+
+                // Macro ratio bar
+                let total = Double(nutrition.protein * 4 + nutrition.carbs * 4 + nutrition.fat * 9)
+                if total > 0 {
+                    GeometryReader { geo in
+                        HStack(spacing: 2) {
+                            let proteinFrac = Double(nutrition.protein * 4) / total
+                            let carbsFrac = Double(nutrition.carbs * 4) / total
+                            let fatFrac = Double(nutrition.fat * 9) / total
+
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Theme.visual)
+                                .frame(width: max(geo.size.width * proteinFrac - 2, 0))
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Theme.primary)
+                                .frame(width: max(geo.size.width * carbsFrac - 2, 0))
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Theme.culinary)
+                                .frame(width: max(geo.size.width * fatFrac - 2, 0))
+                        }
+                    }
+                    .frame(height: 6)
+
+                    HStack(spacing: 16) {
+                        macroLegend(color: Theme.visual, label: "Protein")
+                        macroLegend(color: Theme.primary, label: "Carbs")
+                        macroLegend(color: Theme.culinary, label: "Fat")
+                    }
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textTertiary)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .background(Theme.cardSurface)
+            .overlay(
+                VStack { Spacer(); Theme.divider.frame(height: 1) }
+            )
+        }
+    }
+
+    private func macroColumn(value: Int, label: String, unit: String, color: Color) -> some View {
+        VStack(spacing: 2) {
+            HStack(spacing: 1) {
+                Text("\(value)")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(Theme.textPrimary)
+                Text(unit)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            Text(label)
+                .font(.system(size: 11))
+                .foregroundStyle(color)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func macroLegend(color: Color, label: String) -> some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(color)
+                .frame(width: 6, height: 6)
+            Text(label)
         }
     }
 
@@ -662,10 +801,29 @@ struct RecipeCardView: View {
                 } label: {
                     Label("Share PDF", systemImage: "doc")
                 }
-                Button {
-                    reimagineRecipe()
+                Divider()
+                Menu {
+                    Button {
+                        reimagineRecipe()
+                    } label: {
+                        Label("Something New", systemImage: "sparkles")
+                    }
+                    Divider()
+                    ForEach(ReimagineCourseType.allCases) { course in
+                        Button {
+                            reimagineRecipe(as: course.rawValue)
+                        } label: {
+                            Label(course.label, systemImage: course.icon)
+                        }
+                    }
+                    Divider()
+                    Button {
+                        showBudgetInput = true
+                    } label: {
+                        Label("On a Budget", systemImage: "dollarsign.circle")
+                    }
                 } label: {
-                    Label("Reimagine", systemImage: "arrow.trianglehead.2.clockwise")
+                    Label("Reimagine As...", systemImage: "arrow.trianglehead.2.clockwise")
                 }
                 Divider()
                 Button {
@@ -745,6 +903,11 @@ struct RecipeCardView: View {
         return parsed.scaled(from: recipe.baseServings, to: servingCount)
     }
 
+    private func scaledNutrient(_ baseValue: Int) -> Int {
+        guard recipe.baseServings > 0 else { return baseValue }
+        return Int(Double(baseValue) * Double(servingCount) / Double(recipe.baseServings))
+    }
+
     private func approachLabel(_ approach: String) -> String {
         switch approach {
         case "ingredient-driven": return "Built from real ingredients"
@@ -804,18 +967,25 @@ struct RecipeCardView: View {
         }
     }
 
-    private func reimagineRecipe() {
+    private func reimagineRecipe(as courseType: String? = nil, budgetLimit: Double? = nil) {
         guard UsageTracker.shared.canGenerate else {
             NotificationCenter.default.post(name: .reimagineRecipe, object: nil, userInfo: ["showPaywall": true])
             return
         }
+        var userInfo: [String: Any] = [
+            "excludeDishName": recipe.dishName,
+            "inspirationImageData": recipe.inspirationImageData
+        ]
+        if let courseType {
+            userInfo["courseType"] = courseType
+        }
+        if let budgetLimit {
+            userInfo["budgetLimit"] = budgetLimit
+        }
         NotificationCenter.default.post(
             name: .reimagineRecipe,
             object: nil,
-            userInfo: [
-                "excludeDishName": recipe.dishName,
-                "inspirationImageData": recipe.inspirationImageData
-            ]
+            userInfo: userInfo
         )
     }
 
@@ -899,6 +1069,78 @@ struct RecipeCardView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { showCreateChallenge = false }
+                        .foregroundStyle(Theme.gold)
+                }
+            }
+            .presentationDetents([.medium])
+        }
+    }
+
+    private var budgetInputSheet: some View {
+        NavigationStack {
+            ZStack {
+                Theme.darkBg.ignoresSafeArea()
+
+                VStack(spacing: 24) {
+                    Image(systemName: "dollarsign.circle")
+                        .font(.system(size: 48))
+                        .foregroundStyle(Theme.gold)
+
+                    Text("Budget Reimagine")
+                        .font(.system(size: 22, weight: .bold, design: .serif))
+                        .foregroundStyle(Theme.darkTextPrimary)
+
+                    Text("Generate a new version of this dish that costs less than your budget.")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.darkTextSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+
+                    VStack(spacing: 12) {
+                        Text(String(format: "$%.0f", budgetAmount))
+                            .font(.system(size: 40, weight: .bold, design: .rounded))
+                            .foregroundStyle(Theme.gold)
+
+                        Slider(value: $budgetAmount, in: 5...50, step: 5)
+                            .tint(Theme.gold)
+                            .padding(.horizontal, 32)
+
+                        HStack {
+                            Text("$5")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.darkTextSecondary)
+                            Spacer()
+                            Text("$50")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.darkTextSecondary)
+                        }
+                        .padding(.horizontal, 36)
+                    }
+
+                    Button {
+                        showBudgetInput = false
+                        reimagineRecipe(budgetLimit: budgetAmount)
+                    } label: {
+                        Text("Reimagine Under \(String(format: "$%.0f", budgetAmount))")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(Theme.darkBg)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Theme.gold)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                    .padding(.horizontal, 16)
+
+                    Spacer()
+                }
+                .padding(.top, 40)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Theme.darkBg, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { showBudgetInput = false }
                         .foregroundStyle(Theme.gold)
                 }
             }

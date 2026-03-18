@@ -15,6 +15,8 @@ final class MainViewModel {
     var showChallengeFeed = false
     var showTastingMenus = false
     var excludedDishNames: [String] = []
+    var budgetLimit: Double?
+    var courseType: String?
     var errorMessage: String?
     var showError = false
     var pendingMenuCourse: (menuId: String, courseOrder: Int)?
@@ -28,6 +30,7 @@ final class MainViewModel {
             logger.info("Photo received — transitioning to processing")
             capturedImage = image
             excludedDishNames = []
+            courseType = nil
             pipeline = ImageAnalysisPipeline()
             currentScreen = .processing
         } else {
@@ -47,7 +50,7 @@ final class MainViewModel {
 
         processingTask = Task {
             logger.info("Processing task started")
-            await pipeline.process(image: image, modelContext: modelContext, excluding: excludedDishNames)
+            await pipeline.process(image: image, modelContext: modelContext, excluding: excludedDishNames, budgetLimit: budgetLimit, courseType: courseType)
 
             logger.info("Pipeline finished — state: \(String(describing: self.pipeline.state))")
 
@@ -109,6 +112,10 @@ final class MainViewModel {
 
         excludedDishNames.append(dishName)
         capturedImage = image
+        courseType = notification.userInfo?["courseType"] as? String
+        if let budget = notification.userInfo?["budgetLimit"] as? Double {
+            budgetLimit = budget
+        }
         pipeline = ImageAnalysisPipeline()
         currentScreen = .processing
     }
@@ -134,6 +141,8 @@ final class MainViewModel {
         currentScreen = .dashboard
         capturedImage = nil
         excludedDishNames = []
+        budgetLimit = nil
+        courseType = nil
         pipeline = ImageAnalysisPipeline()
     }
 

@@ -16,6 +16,8 @@ struct ClaudeRecipeResponse: Codable, Sendable {
     let platingSteps: [String]
     let sommelierPairing: SommelierPairing
     let baseServings: Int?
+    let estimatedCalories: Int?
+    let nutrition: NutritionInfo?
 
     enum CodingKeys: String, CodingKey {
         case dishName = "dish_name"
@@ -29,6 +31,8 @@ struct ClaudeRecipeResponse: Codable, Sendable {
         case platingSteps = "plating_steps"
         case sommelierPairing = "sommelier_pairing"
         case baseServings = "base_servings"
+        case estimatedCalories = "estimated_calories"
+        case nutrition
     }
 }
 

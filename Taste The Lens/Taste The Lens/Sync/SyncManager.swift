@@ -20,7 +20,7 @@ final class SyncManager {
     /// Upload a local recipe to Supabase (images → storage, metadata → recipes table).
     @MainActor
     func syncRecipe(_ recipe: Recipe) async {
-        guard let userId = AuthManager.shared.currentUser?.id.uuidString else {
+        guard let userId = AuthManager.shared.currentUser?.id.uuidString.lowercased() else {
             logger.warning("Cannot sync — not authenticated")
             return
         }

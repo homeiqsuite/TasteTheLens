@@ -19,7 +19,7 @@ final class ChallengeService {
     // MARK: - Create Challenge
 
     func createChallenge(recipe: Recipe) async throws -> ChallengeDTO {
-        guard let userId = AuthManager.shared.currentUser?.id.uuidString else {
+        guard let userId = AuthManager.shared.currentUser?.id.uuidString.lowercased() else {
             throw ChallengeError.notAuthenticated
         }
 
@@ -46,6 +46,8 @@ final class ChallengeService {
             dishPath = path
         }
 
+        let endsAt = ISO8601DateFormatter().string(from: Calendar.current.date(byAdding: .day, value: 7, to: Date())!)
+
         let challenge: ChallengeDTO = try await supabase
             .from("challenges")
             .insert([
@@ -54,7 +56,9 @@ final class ChallengeService {
                 "title": recipe.dishName,
                 "description": recipe.recipeDescription,
                 "inspiration_image_path": inspirationPath ?? "",
-                "dish_image_path": dishPath ?? ""
+                "dish_image_path": dishPath ?? "",
+                "status": "active",
+                "ends_at": endsAt
             ])
             .select()
             .single()
@@ -116,7 +120,7 @@ final class ChallengeService {
     // MARK: - Submit Attempt
 
     func submitAttempt(challengeId: String, photoData: Data, caption: String?) async throws {
-        guard let userId = AuthManager.shared.currentUser?.id.uuidString else {
+        guard let userId = AuthManager.shared.currentUser?.id.uuidString.lowercased() else {
             throw ChallengeError.notAuthenticated
         }
 

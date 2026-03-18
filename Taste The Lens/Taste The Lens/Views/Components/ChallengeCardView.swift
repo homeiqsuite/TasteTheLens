@@ -72,7 +72,8 @@ struct ChallengeCardView: View {
     private var timeRemaining: String {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let endsAt = formatter.date(from: challenge.endsAt) else { return "—" }
+        guard let endsAtString = challenge.endsAt,
+              let endsAt = formatter.date(from: endsAtString) else { return "—" }
 
         let interval = endsAt.timeIntervalSince(Date())
         if interval <= 0 { return "Ended" }
