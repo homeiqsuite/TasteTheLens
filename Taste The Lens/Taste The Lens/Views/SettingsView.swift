@@ -32,26 +32,26 @@ struct SettingsView: View {
                     DietaryPreferenceSection()
                         .padding(.horizontal, 16)
 
-                    // Subscription Section
-                    settingsSection("Subscription") {
+                    // Subscription & Credits Section
+                    settingsSection("Plan & Credits") {
                         VStack(spacing: 0) {
+                            // Tier badge
                             HStack(spacing: 12) {
-                                Image(systemName: StoreManager.shared.isPro ? "crown.fill" : "sparkles")
+                                Image(systemName: EntitlementManager.shared.isSubscriber ? "crown.fill" : "sparkles")
                                     .font(.system(size: 15))
                                     .foregroundStyle(Theme.primary)
                                     .frame(width: 24)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(StoreManager.shared.isPro ? "Pro Member" : "Free Plan")
+                                    Text(StoreManager.shared.currentTier.displayName)
                                         .font(.system(size: 15, weight: .medium))
                                         .foregroundStyle(Theme.textPrimary)
-                                    if !StoreManager.shared.isPro {
-                                        Text("\(UsageTracker.shared.usageCount)/\(UsageTracker.shared.usageLimit) tastings used this month")
-                                            .font(.system(size: 12))
-                                            .foregroundStyle(Theme.textTertiary)
-                                    }
+
+                                    Text(UsageTracker.shared.creditBalanceDescription)
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(Theme.textTertiary)
                                 }
                                 Spacer()
-                                if !StoreManager.shared.isPro {
+                                if !EntitlementManager.shared.isSubscriber {
                                     Button { showPaywall = true } label: {
                                         Text("Upgrade")
                                             .font(.system(size: 13, weight: .semibold))
@@ -67,7 +67,29 @@ struct SettingsView: View {
                             }
                             .padding(14)
 
-                            if StoreManager.shared.isPro {
+                            // Credit refresh countdown for subscribers
+                            if let daysLeft = UsageTracker.shared.daysUntilCreditRefresh {
+                                settingsDivider
+                                HStack(spacing: 12) {
+                                    Image(systemName: "clock.arrow.circlepath")
+                                        .font(.system(size: 15))
+                                        .foregroundStyle(Theme.textTertiary)
+                                        .frame(width: 24)
+                                    Text("Credits refresh in \(daysLeft) days")
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(Theme.textTertiary)
+                                    Spacer()
+                                }
+                                .padding(14)
+                            }
+
+                            // Buy more credits button
+                            settingsDivider
+                            settingsButton("Buy More Credits", icon: "plus.circle", color: Theme.primary) {
+                                showPaywall = true
+                            }
+
+                            if EntitlementManager.shared.isSubscriber {
                                 settingsDivider
                                 settingsButton("Manage Subscription", icon: "creditcard", color: Theme.textPrimary) {
                                     if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
@@ -127,7 +149,7 @@ struct SettingsView: View {
                 ProfileView()
             }
             .sheet(isPresented: $showPaywall) {
-                PaywallView()
+                PaywallView(context: EntitlementManager.shared.isSubscriber ? .topUp : .outOfGenerations)
             }
         }
     }

@@ -12,6 +12,7 @@ final class MainViewModel {
     var showSavedRecipes = false
     var showSettings = false
     var showPaywall = false
+    var paywallContext: PaywallContext = .outOfGenerations
     var showChallengeFeed = false
     var showTastingMenus = false
     var excludedDishNames: [String] = []
@@ -35,6 +36,7 @@ final class MainViewModel {
             currentScreen = .processing
         } else {
             logger.info("Usage limit reached — showing paywall")
+            paywallContext = .outOfGenerations
             showPaywall = true
         }
     }
@@ -50,6 +52,17 @@ final class MainViewModel {
 
         processingTask = Task {
             logger.info("Processing task started")
+
+            // Request background execution time so the pipeline can finish if the app is backgrounded
+            var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
+            backgroundTaskID = UIApplication.shared.beginBackgroundTask(withName: "RecipeGeneration") {
+                logger.info("Background time expired — cancelling pipeline")
+                self.processingTask?.cancel()
+                UIApplication.shared.endBackgroundTask(backgroundTaskID)
+                backgroundTaskID = .invalid
+            }
+            logger.info("Background task started — id: \(backgroundTaskID.rawValue)")
+
             await pipeline.process(image: image, modelContext: modelContext, excluding: excludedDishNames, budgetLimit: budgetLimit, courseType: courseType)
 
             logger.info("Pipeline finished — state: \(String(describing: self.pipeline.state))")
@@ -86,6 +99,13 @@ final class MainViewModel {
                 logger.error("Pipeline failed — showing error: \(message)")
                 showTemporaryError(message)
             }
+
+            // End the background task now that the pipeline is done
+            if backgroundTaskID != .invalid {
+                logger.info("Ending background task — id: \(backgroundTaskID.rawValue)")
+                UIApplication.shared.endBackgroundTask(backgroundTaskID)
+                backgroundTaskID = .invalid
+            }
         }
     }
 
@@ -102,6 +122,8 @@ final class MainViewModel {
 
     func handleReimaginNotification(_ notification: Notification) {
         if let showPaywallFlag = notification.userInfo?["showPaywall"] as? Bool, showPaywallFlag {
+            let contextRaw = notification.userInfo?["paywallContext"] as? String
+            paywallContext = contextRaw == "reimagination" ? .featureGated(.reimagination) : .outOfGenerations
             showPaywall = true
             return
         }

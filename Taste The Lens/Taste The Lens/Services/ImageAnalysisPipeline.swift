@@ -39,10 +39,25 @@ final class ImageAnalysisPipeline: Identifiable {
     var processingStatus: String = ""
     var completedRecipe: Recipe?
     var extractedColors: [String] = []
+    var partialDishName: String?
+    var partialIngredients: [String] = []
     var startTime: Date?
 
     private let geminiClient = GeminiAPIClient()
-    private let falClient = FalAPIClient()
+
+    var imageGenModelName: String { imageGenModel.displayName }
+
+    private let imageGenModel: ImageGenerationModel
+    private let imageGenClient: ImageGenerationProviding
+
+    init(imageGenModel: ImageGenerationModel? = nil) {
+        let model = imageGenModel ?? {
+            let raw = UserDefaults.standard.string(forKey: "debug_imageGenModel") ?? ImageGenerationModel.imagen4.rawValue
+            return ImageGenerationModel(rawValue: raw) ?? .imagen4
+        }()
+        self.imageGenModel = model
+        self.imageGenClient = ImageGenerationFactory.client(for: model)
+    }
 
     func process(image: UIImage, modelContext: ModelContext, excluding: [String] = [], budgetLimit: Double? = nil, courseType: String? = nil) async {
         logger.info("Pipeline started — excluding: \(excluding), budget: \(budgetLimit?.description ?? "none"), courseType: \(courseType ?? "none")")
@@ -104,21 +119,23 @@ final class ImageAnalysisPipeline: Identifiable {
             logger.debug("Image gen prompt: \(recipeResponse.imageGenerationPrompt.prefix(100))...")
 
             extractedColors = recipeResponse.colorPalette ?? []
+            partialDishName = recipeResponse.dishName
+            partialIngredients = recipeResponse.components.flatMap { $0.ingredients }
             processingStatus = "Translating emotion..."
 
-            // Step 2: fal.ai image generation
+            // Step 2: Image generation
             try Task.checkCancellation()
             state = .generatingImage
             processingStatus = "Plating concept..."
             await LiveActivityManager.shared.updatePhase("Generating", progress: 0.65, status: "Plating concept...")
-            logger.info("Calling fal.ai API...")
+            logger.info("Generating image with \(self.imageGenModel.displayName)...")
 
             let enhancedPrompt = recipeResponse.imageGenerationPrompt
                 + " Professional editorial food photography, Michelin star presentation, warm inviting lighting, shallow depth of field, 85mm lens, appetizing and delicious."
             let (generatedImageData, imageURL) = try await withExponentialBackoff {
-                try await falClient.generateImage(prompt: enhancedPrompt)
+                try await imageGenClient.generateImage(prompt: enhancedPrompt)
             }
-            logger.info("fal.ai response received — image: \(generatedImageData.count) bytes, URL: \(imageURL)")
+            logger.info("\(self.imageGenModel.displayName) response — image: \(generatedImageData.count) bytes, URL: \(imageURL)")
 
             // Step 3: Create Recipe
             let recipe = Recipe(
@@ -144,6 +161,7 @@ final class ImageAnalysisPipeline: Identifiable {
             completedRecipe = recipe
             state = .complete
             UsageTracker.shared.incrementUsage()
+            await CommunityImpactService.shared.recordGeneration()
             updateWidgetData(recipe: recipe)
             await LiveActivityManager.shared.endGeneration(dishName: recipe.dishName)
             logger.info("Pipeline complete — recipe ready")

@@ -59,6 +59,7 @@ struct RecipeCardView: View {
     @State private var servingCount: Int = 2
     @State private var showBudgetInput = false
     @State private var budgetAmount: Double = 15
+    @State private var showSaveLimitAlert = false
     @AppStorage("hasSeenAuthPrompt") private var hasSeenAuthPrompt = false
 
     var body: some View {
@@ -112,6 +113,11 @@ struct RecipeCardView: View {
         }
         .sheet(isPresented: $showBudgetInput) {
             budgetInputSheet
+        }
+        .alert("Save Limit Reached", isPresented: $showSaveLimitAlert) {
+            Button("Not Now", role: .cancel) {}
+        } message: {
+            Text("Free accounts can save up to 10 recipes. Subscribe to Chef's Table for unlimited saves.")
         }
     }
 
@@ -955,6 +961,16 @@ struct RecipeCardView: View {
 
     private func saveRecipe() {
         guard !isSaved else { return }
+
+        // Enforce save limit for non-subscribers
+        if EntitlementManager.shared.requiresUpgrade(for: .unlimitedSaves) {
+            let count = (try? modelContext.fetchCount(FetchDescriptor<Recipe>())) ?? 0
+            if count >= 10 {
+                showSaveLimitAlert = true
+                return
+            }
+        }
+
         modelContext.insert(recipe)
         try? modelContext.save()
         isSaved = true
@@ -968,6 +984,15 @@ struct RecipeCardView: View {
     }
 
     private func reimagineRecipe(as courseType: String? = nil, budgetLimit: Double? = nil) {
+        // Check reimagination feature access (subscriber only)
+        guard EntitlementManager.shared.hasAccess(to: .reimagination) else {
+            NotificationCenter.default.post(name: .reimagineRecipe, object: nil, userInfo: [
+                "showPaywall": true,
+                "paywallContext": "reimagination"
+            ])
+            return
+        }
+        // Check credit/generation availability
         guard UsageTracker.shared.canGenerate else {
             NotificationCenter.default.post(name: .reimagineRecipe, object: nil, userInfo: ["showPaywall": true])
             return

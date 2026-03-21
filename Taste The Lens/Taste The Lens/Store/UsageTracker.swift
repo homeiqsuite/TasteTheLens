@@ -15,6 +15,7 @@ final class UsageTracker {
 
     private init() {
         resetIfNewMonth()
+        resetSubscriptionCreditsIfNeeded()
     }
 
     // MARK: - Guest Usage (local)
@@ -40,24 +41,80 @@ final class UsageTracker {
         }
     }
 
+    // MARK: - Credit Pools
+
+    /// Credits purchased via credit packs — never expire
+    private(set) var purchasedCredits: Int = UserDefaults.standard.integer(forKey: "purchasedCredits") {
+        didSet { UserDefaults.standard.set(purchasedCredits, forKey: "purchasedCredits") }
+    }
+
+    /// Current month's subscription credits
+    private(set) var subscriptionCredits: Int = UserDefaults.standard.integer(forKey: "subscriptionCredits") {
+        didSet { UserDefaults.standard.set(subscriptionCredits, forKey: "subscriptionCredits") }
+    }
+
+    /// Unused subscription credits rolled over from last month (max 1 month)
+    private(set) var rolledOverCredits: Int = UserDefaults.standard.integer(forKey: "rolledOverCredits") {
+        didSet { UserDefaults.standard.set(rolledOverCredits, forKey: "rolledOverCredits") }
+    }
+
+    private var subscriptionCreditResetDate: Date? {
+        get {
+            let interval = UserDefaults.standard.double(forKey: "subscriptionCreditResetDate")
+            return interval == 0 ? nil : Date(timeIntervalSince1970: interval)
+        }
+        set {
+            if let date = newValue {
+                UserDefaults.standard.set(date.timeIntervalSince1970, forKey: "subscriptionCreditResetDate")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "subscriptionCreditResetDate")
+            }
+        }
+    }
+
+    /// Total credits available across all pools
+    var totalAvailableCredits: Int {
+        purchasedCredits + subscriptionCredits + rolledOverCredits
+    }
+
+    /// Days until subscription credits refresh
+    var daysUntilCreditRefresh: Int? {
+        guard EntitlementManager.shared.isSubscriber,
+              let resetDate = subscriptionCreditResetDate else { return nil }
+        return max(0, Calendar.current.dateComponents([.day], from: Date(), to: resetDate).day ?? 0)
+    }
+
     // MARK: - Public API
 
     var isPro: Bool {
-        StoreManager.shared.isPro
+        EntitlementManager.shared.isSubscriber
     }
 
     var canGenerate: Bool {
-        if isPro { return true }
-        return remainingGenerations > 0
+        // Don't block users before subscription status is confirmed
+        if !StoreManager.shared.hasCheckedStatus { return true }
+
+        if EntitlementManager.shared.isSubscriber {
+            return totalAvailableCredits > 0
+        }
+
+        // Free tier: check free gens remaining OR purchased credits
+        return remainingFreeGenerations > 0 || purchasedCredits > 0
     }
 
-    var remainingGenerations: Int {
-        if isPro { return .max }
-        // Use server-side count if authenticated and cached
+    var remainingFreeGenerations: Int {
+        if EntitlementManager.shared.isSubscriber { return 0 } // Subscribers use credits
         if AuthManager.shared.isAuthenticated, let serverCount = cachedServerCount {
             return max(0, Self.freeLimit - serverCount)
         }
         return max(0, Self.freeLimit - guestUsageCount)
+    }
+
+    var remainingGenerations: Int {
+        if EntitlementManager.shared.isSubscriber {
+            return totalAvailableCredits
+        }
+        return remainingFreeGenerations + purchasedCredits
     }
 
     var usageCount: Int {
@@ -69,6 +126,119 @@ final class UsageTracker {
 
     var usageLimit: Int {
         Self.freeLimit
+    }
+
+    /// Display-friendly credit balance string
+    var creditBalanceDescription: String {
+        if EntitlementManager.shared.isSubscriber {
+            var parts: [String] = []
+            if rolledOverCredits > 0 { parts.append("\(rolledOverCredits) rollover") }
+            if subscriptionCredits > 0 { parts.append("\(subscriptionCredits) monthly") }
+            if purchasedCredits > 0 { parts.append("\(purchasedCredits) purchased") }
+            return parts.joined(separator: " + ")
+        } else if purchasedCredits > 0 {
+            return "\(purchasedCredits) purchased credits"
+        } else {
+            return "\(remainingFreeGenerations) of \(Self.freeLimit) free tastings"
+        }
+    }
+
+    // MARK: - Credit Operations
+
+    /// Add purchased credits (from credit pack purchase)
+    func addPurchasedCredits(_ count: Int) {
+        purchasedCredits += count
+        logger.info("Added \(count) purchased credits — total: \(self.purchasedCredits)")
+
+        if AuthManager.shared.isAuthenticated {
+            Task {
+                do {
+                    guard let userId = AuthManager.shared.currentUser?.id.uuidString else { return }
+                    let params: [String: String] = [
+                        "user_id_param": userId,
+                        "credit_count": String(count)
+                    ]
+                    try await SupabaseManager.shared.client
+                        .rpc("add_purchased_credits", params: params)
+                        .execute()
+                    logger.info("Remote purchased credits updated")
+                } catch {
+                    logger.warning("Remote credit update failed: \(error)")
+                }
+            }
+        }
+    }
+
+    /// Refresh subscription credits for a new billing period
+    func refreshSubscriptionCredits(tier: SubscriptionTier) {
+        // Roll over unused current credits (max 1 month)
+        rolledOverCredits = subscriptionCredits
+        subscriptionCredits = tier.monthlyCredits
+
+        // Set next reset date
+        let nextMonth = Calendar.current.date(byAdding: .month, value: 1, to: Date())!
+        subscriptionCreditResetDate = Calendar.current.startOfDay(
+            for: Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: nextMonth))!
+        )
+
+        logger.info("Subscription credits refreshed: \(tier.monthlyCredits) new, \(self.rolledOverCredits) rolled over")
+    }
+
+    /// Clear subscription credits (when subscription lapses)
+    func clearSubscriptionCredits() {
+        subscriptionCredits = 0
+        rolledOverCredits = 0
+        subscriptionCreditResetDate = nil
+        logger.info("Subscription credits cleared")
+    }
+
+    // MARK: - Usage Increment
+
+    /// Deduct one credit/generation. Order: free gens → rollover → subscription → purchased
+    func incrementUsage() {
+        if EntitlementManager.shared.isSubscriber {
+            deductSubscriberCredit()
+        } else if remainingFreeGenerations > 0 {
+            deductFreeGeneration()
+        } else if purchasedCredits > 0 {
+            purchasedCredits -= 1
+            logger.info("Deducted 1 purchased credit — remaining: \(self.purchasedCredits)")
+        }
+    }
+
+    private func deductSubscriberCredit() {
+        if rolledOverCredits > 0 {
+            rolledOverCredits -= 1
+            logger.info("Deducted 1 rollover credit — remaining: \(self.rolledOverCredits)")
+        } else if subscriptionCredits > 0 {
+            subscriptionCredits -= 1
+            logger.info("Deducted 1 subscription credit — remaining: \(self.subscriptionCredits)")
+        } else if purchasedCredits > 0 {
+            purchasedCredits -= 1
+            logger.info("Deducted 1 purchased credit — remaining: \(self.purchasedCredits)")
+        }
+    }
+
+    private func deductFreeGeneration() {
+        guestUsageCount += 1
+        if let cached = cachedServerCount {
+            cachedServerCount = cached + 1
+        }
+        logger.info("Free generation used — \(self.usageCount)/\(Self.freeLimit)")
+
+        if AuthManager.shared.isAuthenticated {
+            Task {
+                do {
+                    guard let userId = AuthManager.shared.currentUser?.id.uuidString else { return }
+                    try await SupabaseManager.shared.client
+                        .rpc("increment_usage", params: ["user_id_param": userId])
+                        .execute()
+                    logger.info("Remote usage updated successfully")
+                } catch {
+                    logger.warning("Remote usage update failed: \(error)")
+                }
+            }
+        }
     }
 
     // MARK: - Server Sync
@@ -93,30 +263,33 @@ final class UsageTracker {
             }
         } catch {
             logger.warning("Failed to sync usage from server: \(error)")
-            // Fall back to local count
         }
     }
 
-    func incrementUsage() {
-        guestUsageCount += 1
-        if let cached = cachedServerCount {
-            cachedServerCount = cached + 1
-        }
-        logger.info("Usage incremented to \(self.usageCount)/\(Self.freeLimit)")
+    /// Sync credit balances from server
+    func syncCreditsFromServer() async {
+        guard AuthManager.shared.isAuthenticated,
+              let userId = AuthManager.shared.currentUser?.id.uuidString else { return }
 
-        // Also update remote usage if authenticated (server is authoritative)
-        if AuthManager.shared.isAuthenticated {
-            Task {
-                do {
-                    guard let userId = AuthManager.shared.currentUser?.id.uuidString else { return }
-                    try await SupabaseManager.shared.client
-                        .rpc("increment_usage", params: ["user_id_param": userId])
-                        .execute()
-                    logger.info("Remote usage updated successfully")
-                } catch {
-                    logger.warning("Remote usage update failed: \(error)")
-                }
+        do {
+            struct CreditResponse: Decodable {
+                let purchased_credits: Int
+                let subscription_credits: Int
+                let rollover_credits: Int
             }
+
+            let response = try await SupabaseManager.shared.client
+                .rpc("get_credits", params: ["user_id_param": userId])
+                .execute()
+
+            if let credits = try? JSONDecoder().decode(CreditResponse.self, from: response.data) {
+                purchasedCredits = credits.purchased_credits
+                subscriptionCredits = credits.subscription_credits
+                rolledOverCredits = credits.rollover_credits
+                logger.info("Credits synced — purchased: \(credits.purchased_credits), sub: \(credits.subscription_credits), rollover: \(credits.rollover_credits)")
+            }
+        } catch {
+            logger.warning("Failed to sync credits from server: \(error)")
         }
     }
 
@@ -129,6 +302,18 @@ final class UsageTracker {
             let nextMonth = Calendar.current.date(byAdding: .month, value: 1, to: Date())!
             guestUsageResetDate = Calendar.current.startOfDay(for: Calendar.current.date(from: Calendar.current.dateComponents([.year, .month], from: nextMonth))!)
             logger.info("Monthly usage reset")
+        }
+    }
+
+    private func resetSubscriptionCreditsIfNeeded() {
+        guard let resetDate = subscriptionCreditResetDate,
+              Date() >= resetDate else { return }
+
+        let tier = StoreManager.shared.currentTier
+        if tier != .free {
+            refreshSubscriptionCredits(tier: tier)
+        } else {
+            clearSubscriptionCredits()
         }
     }
 }

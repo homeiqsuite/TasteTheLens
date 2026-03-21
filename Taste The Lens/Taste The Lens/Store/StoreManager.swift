@@ -10,11 +10,37 @@ final class StoreManager {
     static let shared = StoreManager()
 
     private(set) var products: [Product] = []
-    private(set) var isPro = false
+    private(set) var currentTier: SubscriptionTier = .free
     private(set) var isLoading = false
+    private(set) var hasCheckedStatus = false
 
-    static let monthlyProductId = "com.tastethelens.pro.monthly"
-    static let annualProductId = "com.tastethelens.pro.annual"
+    // MARK: - Product IDs
+
+    // Legacy (kept for migration)
+    static let legacyMonthlyId = "com.tastethelens.pro.monthly"
+    static let legacyAnnualId = "com.tastethelens.pro.annual"
+
+    // Credit packs (consumable)
+    static let starterPackId = "com.tastethelens.credits.starter"   // 10 credits, $1.99
+    static let classicPackId = "com.tastethelens.credits.classic"   // 50 credits, $8.99
+    static let pantryPackId  = "com.tastethelens.credits.pantry"    // 100 credits, $14.99
+
+    // Subscriptions (auto-renewable)
+    static let chefsTableMonthlyId = "com.tastethelens.chefstable.monthly"  // $9.99/mo
+    static let atelierMonthlyId    = "com.tastethelens.atelier.monthly"     // $49.99/mo
+
+    /// Maps credit pack product IDs to credit amounts
+    static let creditPackAmounts: [String: Int] = [
+        starterPackId: 10,
+        classicPackId: 50,
+        pantryPackId: 100
+    ]
+
+    private static let allProductIds: Set<String> = [
+        legacyMonthlyId, legacyAnnualId,
+        starterPackId, classicPackId, pantryPackId,
+        chefsTableMonthlyId, atelierMonthlyId
+    ]
 
     private var updateListenerTask: Task<Void, Never>?
 
@@ -28,6 +54,46 @@ final class StoreManager {
         updateListenerTask?.cancel()
     }
 
+    // MARK: - Backward Compatibility
+
+    /// Backward-compatible pro check — true if user has any subscription
+    var isPro: Bool {
+        currentTier != .free
+    }
+
+    // MARK: - Product Accessors
+
+    var creditProducts: [Product] {
+        products.filter { Self.creditPackAmounts.keys.contains($0.id) }
+            .sorted { $0.price < $1.price }
+    }
+
+    var subscriptionProducts: [Product] {
+        let subIds: Set<String> = [
+            Self.chefsTableMonthlyId, Self.atelierMonthlyId,
+            Self.legacyMonthlyId, Self.legacyAnnualId
+        ]
+        return products.filter { subIds.contains($0.id) }
+    }
+
+    var chefsTableProduct: Product? {
+        products.first { $0.id == Self.chefsTableMonthlyId }
+    }
+
+    var atelierProduct: Product? {
+        products.first { $0.id == Self.atelierMonthlyId }
+    }
+
+    // Legacy accessors (for existing code that may reference these)
+    var monthlyProduct: Product? {
+        products.first { $0.id == Self.chefsTableMonthlyId }
+            ?? products.first { $0.id == Self.legacyMonthlyId }
+    }
+
+    var annualProduct: Product? {
+        products.first { $0.id == Self.legacyAnnualId }
+    }
+
     // MARK: - Load Products
 
     func loadProducts() async {
@@ -35,10 +101,7 @@ final class StoreManager {
         defer { isLoading = false }
 
         do {
-            products = try await Product.products(for: [
-                Self.monthlyProductId,
-                Self.annualProductId
-            ])
+            products = try await Product.products(for: Self.allProductIds)
             logger.info("Loaded \(self.products.count) products")
         } catch {
             logger.error("Failed to load products: \(error)")
@@ -53,18 +116,36 @@ final class StoreManager {
         switch result {
         case .success(let verification):
             let transaction = try checkVerified(verification)
-            await updateSubscriptionStatus()
-            await transaction.finish()
 
-            // Update Supabase tier
-            if AuthManager.shared.isAuthenticated,
-               let userId = AuthManager.shared.currentUser?.id.uuidString {
-                try? await SupabaseManager.shared.client.from("users")
-                    .update(["subscription_tier": "pro"])
-                    .eq("id", value: userId)
-                    .execute()
+            if let creditCount = Self.creditPackAmounts[product.id] {
+                // Consumable credit pack
+                UsageTracker.shared.addPurchasedCredits(creditCount)
+                logger.info("Credit pack purchased: \(creditCount) credits from \(product.id)")
+            } else {
+                // Subscription
+                await updateSubscriptionStatus()
+
+                // Update Supabase tier
+                if AuthManager.shared.isAuthenticated,
+                   let userId = AuthManager.shared.currentUser?.id.uuidString {
+                    let tierValue = tierForProductId(product.id).rawValue
+                    try? await SupabaseManager.shared.client.from("users")
+                        .update(["subscription_tier": tierValue])
+                        .eq("id", value: userId)
+                        .execute()
+                }
+
+                // Refresh subscription credits
+                let tier = tierForProductId(product.id)
+                if tier != .free {
+                    UsageTracker.shared.refreshSubscriptionCredits(tier: tier)
+                }
             }
 
+            // Donate a meal for every purchase
+            await CommunityImpactService.shared.recordPurchaseDonation()
+
+            await transaction.finish()
             logger.info("Purchase successful: \(product.id)")
             return true
 
@@ -90,25 +171,37 @@ final class StoreManager {
     // MARK: - Subscription Status
 
     func updateSubscriptionStatus() async {
-        var hasStoreKitPro = false
+        var detectedTier: SubscriptionTier = .free
 
         for await result in Transaction.currentEntitlements {
             if case .verified(let transaction) = result {
-                if transaction.productID == Self.monthlyProductId ||
-                   transaction.productID == Self.annualProductId {
-                    hasStoreKitPro = true
+                let tier = tierForProductId(transaction.productID)
+                if tier > detectedTier {
+                    detectedTier = tier
                 }
             }
         }
 
-        let hasSupabasePro = await checkSupabaseProStatus()
-        isPro = hasStoreKitPro || hasSupabasePro
-        logger.info("Subscription status: isPro=\(self.isPro) (StoreKit=\(hasStoreKitPro), Supabase=\(hasSupabasePro))")
+        // Also check Supabase
+        let supabaseTier = await checkSupabaseTier()
+        if supabaseTier > detectedTier {
+            detectedTier = supabaseTier
+        }
+
+        currentTier = detectedTier
+        hasCheckedStatus = true
+
+        // Clear subscription credits if tier dropped to free
+        if detectedTier == .free {
+            UsageTracker.shared.clearSubscriptionCredits()
+        }
+
+        logger.info("Subscription status: tier=\(detectedTier.displayName)")
     }
 
-    private func checkSupabaseProStatus() async -> Bool {
+    private func checkSupabaseTier() async -> SubscriptionTier {
         guard AuthManager.shared.isAuthenticated,
-              let userId = AuthManager.shared.currentUser?.id.uuidString else { return false }
+              let userId = AuthManager.shared.currentUser?.id.uuidString else { return .free }
 
         do {
             struct UserTier: Decodable { let subscription_tier: String? }
@@ -119,10 +212,28 @@ final class StoreManager {
                 .single()
                 .execute()
             let user = try JSONDecoder().decode(UserTier.self, from: response.data)
-            return user.subscription_tier == "pro"
+
+            switch user.subscription_tier {
+            case "pro", "chefsTable": return .chefsTable
+            case "atelier": return .atelier
+            default: return .free
+            }
         } catch {
-            logger.warning("Failed to check Supabase pro status: \(error)")
-            return false
+            logger.warning("Failed to check Supabase tier: \(error)")
+            return .free
+        }
+    }
+
+    // MARK: - Tier Mapping
+
+    private func tierForProductId(_ productId: String) -> SubscriptionTier {
+        switch productId {
+        case Self.chefsTableMonthlyId, Self.legacyMonthlyId, Self.legacyAnnualId:
+            return .chefsTable
+        case Self.atelierMonthlyId:
+            return .atelier
+        default:
+            return .free
         }
     }
 
@@ -148,16 +259,6 @@ final class StoreManager {
         case .verified(let safe):
             return safe
         }
-    }
-
-    // MARK: - Helpers
-
-    var monthlyProduct: Product? {
-        products.first { $0.id == Self.monthlyProductId }
-    }
-
-    var annualProduct: Product? {
-        products.first { $0.id == Self.annualProductId }
     }
 }
 

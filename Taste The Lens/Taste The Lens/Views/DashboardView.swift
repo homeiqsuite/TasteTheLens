@@ -16,15 +16,21 @@ struct DashboardView: View {
     private let authManager = AuthManager.shared
     private let challengeService = ChallengeService.shared
     private let menuService = TastingMenuService.shared
+    private let impactService = CommunityImpactService.shared
 
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
                 greetingSection
                 heroCard
+                communityImpactCard
                 activeChefCard
-                challengesSection
-                tastingMenuCard
+                if EntitlementManager.shared.hasAccess(to: .fullChallenges) {
+                    challengesSection
+                }
+                if EntitlementManager.shared.hasAccess(to: .fullTastingMenus) {
+                    tastingMenuCard
+                }
                 recentRecipesSection
             }
             .padding(.horizontal, 20)
@@ -69,10 +75,14 @@ struct DashboardView: View {
     }
 
     private func loadDashboardData() async {
-        try? await challengeService.fetchChallenges(filter: .trending)
-        if authManager.isAuthenticated {
-            try? await menuService.fetchMyMenus()
-        }
+        async let statsTask: () = impactService.fetchStats()
+        async let challengesTask: () = { try? await challengeService.fetchChallenges(filter: .trending) }()
+        async let menusTask: () = {
+            if authManager.isAuthenticated {
+                try? await menuService.fetchMyMenus()
+            }
+        }()
+        _ = await (statsTask, challengesTask, menusTask)
     }
 
     // MARK: - Greeting
@@ -243,6 +253,97 @@ struct DashboardView: View {
             .lightCard()
         }
         .buttonStyle(PremiumCardButtonStyle())
+    }
+
+    // MARK: - Community Impact
+
+    private var communityImpactCard: some View {
+        VStack(spacing: 16) {
+            HStack(spacing: 12) {
+                Circle()
+                    .fill(Color(red: 0.78, green: 0.42, blue: 0.31).opacity(0.15))
+                    .frame(width: 44, height: 44)
+                    .overlay(
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 18))
+                            .foregroundStyle(Color(red: 0.78, green: 0.42, blue: 0.31))
+                    )
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Community Impact")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                    Text("Every recipe helps feed someone")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+
+                Spacer()
+            }
+
+            HStack(spacing: 0) {
+                // Meals Donated
+                VStack(spacing: 6) {
+                    Text(impactService.isLoaded ? "\(impactService.totalMealsDonated)" : "—")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color(red: 0.78, green: 0.42, blue: 0.31))
+                        .contentTransition(.numericText())
+                    Text("Meals Donated")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                        .textCase(.uppercase)
+                        .tracking(0.5)
+                }
+                .frame(maxWidth: .infinity)
+
+                // Divider
+                Rectangle()
+                    .fill(Theme.cardBorder)
+                    .frame(width: 1, height: 36)
+
+                // Recipes Created
+                VStack(spacing: 6) {
+                    Text(impactService.isLoaded ? "\(impactService.totalGenerations)" : "—")
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundStyle(Theme.gold)
+                        .contentTransition(.numericText())
+                    Text("Recipes Created")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.textTertiary)
+                        .textCase(.uppercase)
+                        .tracking(0.5)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .padding(.vertical, 4)
+
+            // Progress to next meal
+            if impactService.isLoaded {
+                let progress = Double(impactService.totalGenerations % 25) / 25.0
+                let remaining = 25 - (impactService.totalGenerations % 25)
+
+                VStack(spacing: 8) {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Theme.cardBorder)
+                                .frame(height: 6)
+
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color(red: 0.78, green: 0.42, blue: 0.31))
+                                .frame(width: geo.size.width * progress, height: 6)
+                                .animation(.easeOut(duration: 0.6), value: progress)
+                        }
+                    }
+                    .frame(height: 6)
+
+                    Text("\(remaining) more recipe\(remaining == 1 ? "" : "s") until the next meal donation")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Theme.textQuaternary)
+                }
+            }
+        }
+        .lightCard()
     }
 
     // MARK: - Challenges

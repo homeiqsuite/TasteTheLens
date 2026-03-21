@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ChefSelectionView: View {
     @AppStorage("selectedChef") private var selectedChef = "default"
+    @State private var showPaywall = false
 
     private let gold = Theme.gold
 
@@ -21,15 +22,30 @@ struct ChefSelectionView: View {
                 }
             }
         }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView(context: .featureGated(.chefPersonalities))
+        }
+        .onAppear {
+            // Reset to default if user lost subscription and had a premium chef selected
+            if EntitlementManager.shared.requiresUpgrade(for: .chefPersonalities) && selectedChef != "default" {
+                selectedChef = "default"
+            }
+        }
     }
 
     private func chefCard(_ chef: ChefPersonality) -> some View {
         let isSelected = selectedChef == chef.rawValue
+        let isLocked = chef != .defaultChef && EntitlementManager.shared.requiresUpgrade(for: .chefPersonalities)
 
         return Button {
-            let generator = UIImpactFeedbackGenerator(style: .light)
-            generator.impactOccurred()
-            selectedChef = chef.rawValue
+            if isLocked {
+                HapticManager.light()
+                showPaywall = true
+            } else {
+                let generator = UIImpactFeedbackGenerator(style: .light)
+                generator.impactOccurred()
+                selectedChef = chef.rawValue
+            }
         } label: {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
@@ -40,6 +56,13 @@ struct ChefSelectionView: View {
                     Text(chef.displayName)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(isSelected ? Theme.textPrimary : Theme.textPrimary)
+
+                    if isLocked {
+                        Spacer()
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.textTertiary)
+                    }
                 }
 
                 Text(chef.subtitle)
@@ -62,6 +85,7 @@ struct ChefSelectionView: View {
                 RoundedRectangle(cornerRadius: 14)
                     .stroke(isSelected ? gold : Theme.cardBorder, lineWidth: isSelected ? 1.5 : 0.5)
             )
+            .opacity(isLocked ? 0.7 : 1.0)
         }
         .buttonStyle(.plain)
     }

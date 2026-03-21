@@ -259,6 +259,46 @@ function initSmoothScroll() {
     });
 }
 
+// --- Community Impact Counter ---
+async function initImpactCounter() {
+    if (!supabaseClient) return;
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('community_stats')
+            .select('total_generations, total_meals_donated')
+            .eq('id', 1)
+            .single();
+
+        if (error || !data) return;
+
+        const mealsEl = document.getElementById('meals-counter');
+        const recipesEl = document.getElementById('recipes-counter');
+        const progressWrap = document.getElementById('impact-progress-wrap');
+        const progressBar = document.getElementById('impact-progress-bar');
+        const progressText = document.getElementById('impact-progress-text');
+
+        if (mealsEl) mealsEl.textContent = data.total_meals_donated.toLocaleString();
+        if (recipesEl) recipesEl.textContent = data.total_generations.toLocaleString();
+
+        // Progress toward next milestone
+        if (progressWrap && progressBar && progressText) {
+            const progress = (data.total_generations % 25) / 25;
+            const remaining = 25 - (data.total_generations % 25);
+            progressWrap.style.display = 'block';
+            // Delay to trigger CSS transition
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    progressBar.style.width = (progress * 100) + '%';
+                });
+            });
+            progressText.textContent = remaining + ' more recipe' + (remaining === 1 ? '' : 's') + ' until the next meal donation';
+        }
+    } catch (err) {
+        // Silently fail — counter just shows placeholder
+    }
+}
+
 // --- Initialize Everything ---
 document.addEventListener('DOMContentLoaded', () => {
     initSupabase();
@@ -268,4 +308,5 @@ document.addEventListener('DOMContentLoaded', () => {
     initWaitlistForm();
     initNavScroll();
     initSmoothScroll();
+    initImpactCounter();
 });

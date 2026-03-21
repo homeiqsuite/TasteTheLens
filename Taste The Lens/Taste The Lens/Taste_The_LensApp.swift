@@ -13,8 +13,11 @@ struct Taste_The_LensApp: App {
                     await AuthManager.shared.restoreSession()
                     // On authenticated launch, claim any unowned local recipes and sync
                     if AuthManager.shared.isAuthenticated {
-                        // Sync server-side usage limits
+                        // Re-check subscription status now that auth is ready
+                        await StoreManager.shared.updateSubscriptionStatus()
+                        // Sync server-side usage and credits
                         await UsageTracker.shared.syncUsageFromServer()
+                        await UsageTracker.shared.syncCreditsFromServer()
                         // Claim any unowned local recipes and sync
                         if let container = try? ModelContainer(for: Recipe.self) {
                             let context = ModelContext(container)

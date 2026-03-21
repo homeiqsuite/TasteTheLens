@@ -13,8 +13,10 @@ enum AppScreen: Equatable {
 
 struct ContentView: View {
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
+    @AppStorage("debug_processingStyle") private var processingStyleRaw = ProcessingStyle.classic.rawValue
     @State private var showSplash = false
     @State private var showChefOnboarding = false
+    @State private var showDebugMenu = false
     @State private var vm = MainViewModel()
     @Namespace private var heroNamespace
 
@@ -64,6 +66,12 @@ struct ContentView: View {
                 errorToast(message: message)
             }
         }
+        .onTapGesture(count: 3) {
+            showDebugMenu = true
+        }
+        .sheet(isPresented: $showDebugMenu) {
+            DebugMenuView()
+        }
         .animation(reduceMotion ? .easeInOut(duration: 0.3) : .spring(response: 0.6, dampingFraction: 0.85), value: vm.currentScreen)
         .preferredColorScheme(vm.currentScreen == .dashboard ? .light : .dark)
         .fullScreenCover(isPresented: $showSplash) {
@@ -85,7 +93,7 @@ struct ContentView: View {
             SettingsView()
         }
         .sheet(isPresented: $vm.showPaywall) {
-            PaywallView()
+            PaywallView(context: vm.paywallContext)
         }
         .sheet(isPresented: $vm.showChallengeFeed) {
             ChallengeFeedView()
@@ -139,6 +147,25 @@ struct ContentView: View {
                     .padding(.top, 8)
 
                     Spacer()
+
+                    // Credit balance pill
+                    Button {
+                        vm.paywallContext = .topUp
+                        vm.showPaywall = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "circle.grid.3x3.fill")
+                                .font(.system(size: 12))
+                            Text("\(UsageTracker.shared.remainingGenerations)")
+                                .font(.system(size: 14, weight: .semibold))
+                        }
+                        .foregroundStyle(UsageTracker.shared.remainingGenerations <= 2 ? Theme.culinary : Theme.darkTextSecondary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(Color.black.opacity(0.3))
+                        .clipShape(Capsule())
+                    }
+                    .padding(.top, 8)
 
                     Button {
                         showBudgetPicker = true
@@ -256,10 +283,23 @@ struct ContentView: View {
         }
     }
 
+    @ViewBuilder
     private func processingScreen(image: UIImage) -> some View {
-        ProcessingView(capturedImage: image, pipeline: vm.pipeline, onCancel: {
-            vm.cancelProcessing()
-        })
+        let style = ProcessingStyle(rawValue: processingStyleRaw) ?? .classic
+        Group {
+            switch style {
+            case .classic:
+                ProcessingView(capturedImage: image, pipeline: vm.pipeline, onCancel: { vm.cancelProcessing() })
+            case .miseEnPlace:
+                MiseEnPlaceProcessingView(capturedImage: image, pipeline: vm.pipeline, onCancel: { vm.cancelProcessing() })
+            case .colorToIngredient:
+                ColorToIngredientProcessingView(capturedImage: image, pipeline: vm.pipeline, onCancel: { vm.cancelProcessing() })
+            case .kitchenPass:
+                KitchenPassProcessingView(capturedImage: image, pipeline: vm.pipeline, onCancel: { vm.cancelProcessing() })
+            case .splitScreen:
+                SplitScreenProcessingView(capturedImage: image, pipeline: vm.pipeline, onCancel: { vm.cancelProcessing() })
+            }
+        }
         .task(id: vm.pipeline.id) {
             vm.startProcessing(modelContext: modelContext, reduceMotion: reduceMotion)
         }

@@ -89,7 +89,64 @@ struct GeometricOverlay: View {
     }
 }
 
-// Helper to convert hex string to Color
+// MARK: - Shared Processing Components
+
+struct ProcessingCancelButton: View {
+    var onCancel: (() -> Void)?
+
+    var body: some View {
+        Button {
+            onCancel?()
+        } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Theme.darkTextSecondary)
+                .frame(width: 44, height: 44)
+                .background(Color.black.opacity(0.3))
+                .clipShape(Circle())
+        }
+    }
+}
+
+// MARK: - Ken Burns Modifier
+
+struct KenBurnsModifier: ViewModifier {
+    @State private var phase = 0
+
+    private let keyframes: [(scale: CGFloat, x: CGFloat, y: CGFloat)] = [
+        (1.0, 0, 0),
+        (1.12, 20, -15),
+        (1.08, -15, 20),
+        (1.15, 10, 10),
+    ]
+
+    func body(content: Content) -> some View {
+        let current = keyframes[phase % keyframes.count]
+        content
+            .scaleEffect(current.scale)
+            .offset(x: current.x, y: current.y)
+            .onAppear {
+                advancePhase()
+            }
+    }
+
+    private func advancePhase() {
+        withAnimation(.easeInOut(duration: 8)) {
+            phase += 1
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
+            advancePhase()
+        }
+    }
+}
+
+extension View {
+    func kenBurns() -> some View {
+        modifier(KenBurnsModifier())
+    }
+}
+
+// MARK: - Helper to convert hex string to Color
 extension Color {
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))

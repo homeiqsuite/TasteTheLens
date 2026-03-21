@@ -47,6 +47,15 @@ struct SideBySideExportView: View {
                 }
             }
 
+            // Watermark overlay for non-subscribers
+            if EntitlementManager.shared.requiresUpgrade(for: .cleanExport) {
+                Text("TASTE THE LENS")
+                    .font(.system(size: 72, weight: .bold, design: .default))
+                    .foregroundStyle(.white.opacity(0.2))
+                    .rotationEffect(.degrees(-30))
+                    .allowsHitTesting(false)
+            }
+
             // Bottom bar
             HStack {
                 Text(recipe.dishName)
