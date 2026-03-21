@@ -639,155 +639,6 @@ img {
 }
 
 /* ============================================================
-   PRICING
-   ============================================================ */
-.pricing-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 24px;
-    align-items: start;
-}
-
-.pricing-card {
-    padding: 36px 28px;
-    text-align: center;
-    position: relative;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-    border: 2px solid rgba(0, 0, 0, 0.06);
-}
-
-.pricing-card:hover {
-    transform: translateY(-6px);
-    box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.06);
-}
-
-.pricing-card--featured {
-    border-color: var(--text-primary);
-    border-width: 3px;
-    box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.12);
-    background: #FFFFFF;
-}
-
-.pricing-badge {
-    display: inline-block;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.8px;
-    text-transform: uppercase;
-    color: #FFFFFF;
-    background: var(--terracotta);
-    padding: 6px 18px;
-    border-radius: 100px;
-    margin-bottom: 16px;
-    transform: rotate(-2deg);
-}
-
-.pricing-badge--muted {
-    background: rgba(0, 0, 0, 0.06);
-    color: var(--text-muted);
-}
-
-.pricing-tier {
-    font-family: var(--font-serif);
-    font-size: 28px;
-    font-weight: 900;
-    color: var(--text-primary);
-    margin-bottom: 8px;
-}
-
-.pricing-price {
-    font-family: var(--font-sans);
-    font-size: 42px;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin-bottom: 4px;
-}
-
-.pricing-period {
-    font-size: 16px;
-    font-weight: 400;
-    color: var(--text-muted);
-}
-
-.pricing-best {
-    font-size: 14px;
-    color: var(--text-muted);
-    margin-bottom: 28px;
-}
-
-.pricing-features {
-    list-style: none;
-    text-align: left;
-    margin-bottom: 32px;
-}
-
-.pricing-feature {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 15px;
-    padding: 7px 0;
-}
-
-.pricing-feature--included {
-    color: var(--text-secondary);
-}
-
-.pricing-feature--included svg {
-    color: var(--teal);
-    flex-shrink: 0;
-}
-
-.pricing-feature--excluded {
-    color: var(--text-dim);
-}
-
-.pricing-feature--excluded svg {
-    color: rgba(0, 0, 0, 0.15);
-    flex-shrink: 0;
-}
-
-.pricing-cta {
-    display: block;
-    width: 100%;
-    padding: 14px;
-    border-radius: 100px;
-    font-family: var(--font-sans);
-    font-size: 15px;
-    font-weight: 700;
-    text-align: center;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    transition: opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
-    cursor: pointer;
-}
-
-.pricing-cta:hover {
-    transform: scale(1.04);
-}
-
-.pricing-cta--primary {
-    background: var(--terracotta);
-    color: #FFFFFF;
-}
-
-.pricing-cta--primary:hover {
-    opacity: 0.9;
-    box-shadow: 0 4px 16px rgba(232, 93, 58, 0.35);
-}
-
-.pricing-cta--secondary {
-    background: var(--text-primary);
-    color: #FFFFFF;
-    border: 2px solid var(--text-primary);
-}
-
-.pricing-cta--secondary:hover {
-    background: #333333;
-    border-color: #333333;
-}
-
-/* ============================================================
    WAITLIST CTA
    ============================================================ */
 .waitlist-section {
@@ -1385,10 +1236,6 @@ img {
         grid-template-columns: repeat(2, 1fr);
     }
 
-    .pricing-grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
-
     .waitlist-input-group {
         flex-wrap: nowrap;
     }
@@ -1481,10 +1328,6 @@ img {
 
     .waitlist-card {
         padding: 36px 20px;
-    }
-
-    .pricing-card--featured {
-        order: -1;
     }
 
     .nav-inner {
