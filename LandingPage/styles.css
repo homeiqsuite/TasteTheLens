@@ -6,16 +6,17 @@
 
 /* --- Design Tokens --- */
 :root {
-    --bg: #FFF8E7;
-    --bg-alt: #FFE9A0;
+    --bg: #FFC72C;
+    --bg-alt: #FFD54F;
+    --bg-warm: #FFF4CC;
     --gold: #D4A43A;
     --gold-dim: #8B7228;
     --primary: #D4A43A;
     --teal: #2DB89B;
     --terracotta: #E85D3A;
     --card-bg: #FFFFFF;
-    --card-border: rgba(0, 0, 0, 0.08);
-    --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    --card-border: rgba(0, 0, 0, 0.06);
+    --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
     --text-primary: #1A1A1A;
     --text-secondary: #3D3D3D;
     --text-muted: #5A5A5A;
@@ -94,7 +95,7 @@ img {
 }
 
 .section--alt {
-    background: var(--bg-alt);
+    background: var(--bg-warm);
 }
 
 .section-label {
@@ -143,11 +144,12 @@ img {
     align-items: center;
     justify-content: space-between;
     padding: 14px 28px;
-    background: rgba(255, 248, 231, 0.95);
+    background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border: 2px solid rgba(212, 164, 58, 0.15);
+    border: 2px solid rgba(0, 0, 0, 0.08);
     border-radius: 100px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
 
 .nav-brand {
@@ -296,9 +298,9 @@ img {
     max-width: 460px;
     padding: 44px 36px;
     text-align: center;
-    border: 3px solid var(--terracotta);
+    border: 3px solid var(--text-primary);
     border-radius: var(--radius-playful);
-    box-shadow: 8px 8px 0 rgba(232, 93, 58, 0.15);
+    box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.12);
     background: #FFFFFF;
 }
 
@@ -443,11 +445,11 @@ img {
 }
 
 [data-accent="teal"] .hook-accent { background: var(--teal); }
-[data-accent="teal"] { border-color: rgba(45, 184, 155, 0.2); background: linear-gradient(135deg, #FFFFFF 60%, rgba(45, 184, 155, 0.06)); }
+[data-accent="teal"] { border-color: var(--teal); background: #FFFFFF; }
 [data-accent="terracotta"] .hook-accent { background: var(--terracotta); }
-[data-accent="terracotta"] { border-color: rgba(232, 93, 58, 0.2); background: linear-gradient(135deg, #FFFFFF 60%, rgba(232, 93, 58, 0.06)); }
+[data-accent="terracotta"] { border-color: var(--terracotta); background: #FFFFFF; }
 [data-accent="gold"] .hook-accent { background: var(--gold); }
-[data-accent="gold"] { border-color: rgba(212, 164, 58, 0.2); background: linear-gradient(135deg, #FFFFFF 60%, rgba(212, 164, 58, 0.06)); }
+[data-accent="gold"] { border-color: var(--gold); background: #FFFFFF; }
 
 .hook-question {
     font-family: var(--font-serif);
@@ -468,7 +470,7 @@ img {
    HOW IT WORKS
    ============================================================ */
 .how-it-works {
-    background: var(--bg-alt);
+    background: var(--bg-warm);
 }
 
 .steps {
@@ -595,7 +597,7 @@ img {
    FEATURES
    ============================================================ */
 .features-section {
-    background: var(--bg-alt);
+    background: var(--bg-warm);
     overflow: hidden;
 }
 
@@ -614,8 +616,8 @@ img {
 
 .feature-card:hover {
     transform: translateY(-6px) rotate(1deg);
-    border-color: rgba(212, 164, 58, 0.3);
-    box-shadow: 6px 6px 0 rgba(212, 164, 58, 0.12);
+    border-color: rgba(0, 0, 0, 0.15);
+    box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.08);
 }
 
 .feature-icon {
@@ -660,10 +662,10 @@ img {
 }
 
 .pricing-card--featured {
-    border-color: var(--gold);
+    border-color: var(--text-primary);
     border-width: 3px;
-    box-shadow: 6px 6px 0 rgba(212, 164, 58, 0.15);
-    background: linear-gradient(180deg, #FFFDF5 0%, #FFFFFF 100%);
+    box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.12);
+    background: #FFFFFF;
 }
 
 .pricing-badge {
@@ -775,14 +777,14 @@ img {
 }
 
 .pricing-cta--secondary {
-    background: var(--bg-alt);
-    color: var(--text-primary);
-    border: 2px solid rgba(0, 0, 0, 0.08);
+    background: var(--text-primary);
+    color: #FFFFFF;
+    border: 2px solid var(--text-primary);
 }
 
 .pricing-cta--secondary:hover {
-    background: rgba(212, 164, 58, 0.15);
-    border-color: var(--gold);
+    background: #333333;
+    border-color: #333333;
 }
 
 /* ============================================================
@@ -887,7 +889,7 @@ img {
     opacity: 0.92;
     transform: scale(1.05);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    background: #FFF8E7;
+    background: #FFF4CC;
 }
 
 .waitlist-button:disabled {
@@ -998,7 +1000,7 @@ img {
    HOW DONATIONS WORK
    ============================================================ */
 .donation-section {
-    background: var(--bg-alt);
+    background: var(--bg-warm);
 }
 
 .donation-grid {
@@ -1064,7 +1066,7 @@ img {
     justify-content: center;
     gap: 12px;
     padding: 14px 20px;
-    background: var(--bg);
+    background: var(--bg-warm);
     border-radius: 100px;
     border: 2px solid rgba(0, 0, 0, 0.06);
 }
@@ -1108,7 +1110,7 @@ img {
    COMMUNITY IMPACT (legacy styles)
    ============================================================ */
 .impact-section {
-    background: var(--bg-alt);
+    background: var(--bg-warm);
 }
 
 .impact-card {
@@ -1263,7 +1265,7 @@ img {
     font-weight: 900;
     letter-spacing: 0.15em;
     text-transform: uppercase;
-    color: var(--bg);
+    color: #FFFFFF;
     opacity: 0.6;
 }
 
@@ -1289,12 +1291,12 @@ img {
 .hero::before {
     content: '';
     position: absolute;
-    top: -100px;
-    right: -100px;
-    width: 300px;
-    height: 300px;
+    top: -80px;
+    right: -80px;
+    width: 280px;
+    height: 280px;
     border-radius: 50%;
-    background: rgba(212, 164, 58, 0.08);
+    background: rgba(255, 255, 255, 0.15);
     pointer-events: none;
 }
 
@@ -1306,7 +1308,7 @@ img {
     width: 200px;
     height: 200px;
     border-radius: 50%;
-    background: rgba(232, 93, 58, 0.06);
+    background: rgba(255, 255, 255, 0.1);
     pointer-events: none;
 }
 
