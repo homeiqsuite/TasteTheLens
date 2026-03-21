@@ -144,7 +144,7 @@ function initGeometricOverlay() {
             ctx.beginPath();
             ctx.moveTo(startX, startY);
             ctx.lineTo(endX, endY);
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)'; // Matches iOS .white.opacity(0.06)
+            ctx.strokeStyle = 'rgba(212, 164, 58, 0.04)'; // Warm gold tint matching iOS palette
             ctx.lineWidth = 0.5;
             ctx.stroke();
         }
@@ -209,15 +209,15 @@ function initHeroAnimation() {
     const tagline = document.querySelector('.hero-tagline');
     const sub = document.querySelector('.hero-sub');
     const cta = document.querySelector('.hero-cta');
+    const visual = document.querySelector('.hero-visual');
     const scrollHint = document.querySelector('.scroll-hint');
 
-    // Staggered entrance matching SplashView.swift:
-    // title: 0.8s ease-out
-    // tagline: 0.4s delay, 0.8s ease-out
+    // Staggered entrance
     if (title) setTimeout(() => title.classList.add('animate-in'), 100);
     if (tagline) setTimeout(() => tagline.classList.add('animate-in'), 500);
     if (sub) setTimeout(() => sub.classList.add('animate-in'), 900);
     if (cta) setTimeout(() => cta.classList.add('animate-in'), 1300);
+    if (visual) setTimeout(() => visual.classList.add('animate-in'), 300);
     if (scrollHint) setTimeout(() => scrollHint.classList.add('animate-in'), 1700);
 }
 
@@ -292,7 +292,7 @@ async function initImpactCounter() {
                     progressBar.style.width = (progress * 100) + '%';
                 });
             });
-            progressText.textContent = remaining + ' more recipe' + (remaining === 1 ? '' : 's') + ' until the next meal donation';
+            progressText.textContent = remaining + ' more recipe' + (remaining === 1 ? '' : 's') + ' until the next community milestone meal';
         }
     } catch (err) {
         // Silently fail — counter just shows placeholder

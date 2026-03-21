@@ -18,10 +18,10 @@
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Karla:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Source+Sans+3:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
 
     <!-- Favicon -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='none' stroke='%23C9A84C' stroke-width='4'/><circle cx='50' cy='50' r='28' fill='none' stroke='%23C9A84C' stroke-width='2'/><text x='50' y='58' text-anchor='middle' font-size='24' fill='%23C9A84C'>&#x2736;</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='none' stroke='%23B89530' stroke-width='4'/><circle cx='50' cy='50' r='28' fill='none' stroke='%23B89530' stroke-width='2'/><text x='50' y='58' text-anchor='middle' font-size='24' fill='%23B89530'>&#x2736;</text></svg>">
 
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -37,32 +37,70 @@
         </div>
     </nav>
 
-    <!-- ========== HERO ========== -->
+    <!-- ========== HERO — Mission-first: Donation Impact ========== -->
     <section class="hero" id="hero">
-        <div class="hero-content">
-            <h1 class="hero-title" data-animate="fade-scale">TASTE THE LENS</h1>
-            <p class="hero-tagline" data-animate="fade-up" data-delay="400">The world's first visual gastronomy engine.</p>
-            <p class="hero-sub" data-animate="fade-up" data-delay="800">Point at anything. We'll make it delicious.</p>
-            <a href="#waitlist" class="hero-cta" data-animate="fade-up" data-delay="1200">
-                Join the Waitlist
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </a>
+        <div class="container hero-split">
+            <div class="hero-text">
+                <div class="hero-ornament" data-animate="fade" aria-hidden="true">
+                    <svg width="44" height="44" viewBox="0 0 24 24" fill="none"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                <h1 class="hero-title" data-animate="fade-scale">Every recipe feeds someone in need</h1>
+                <p class="hero-tagline" data-animate="fade-up" data-delay="400">AI-powered visual gastronomy with a mission.</p>
+                <p class="hero-sub" data-animate="fade-up" data-delay="800">For every credit pack purchase, we donate a meal. For every 25 recipes created, we donate another.</p>
+                <a href="#waitlist" class="hero-cta" data-animate="fade-up" data-delay="1200">
+                    Join the Waitlist
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </a>
+            </div>
+            <div class="hero-visual" data-animate="fade-scale" data-delay="400">
+                <!-- Live impact stats card -->
+                <div class="hero-impact-card glass-card">
+                    <h2 class="hero-impact-heading">Community Impact</h2>
+                    <div class="hero-impact-stats">
+                        <div class="hero-impact-stat">
+                            <div class="impact-icon impact-icon--terracotta">
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </div>
+                            <span class="hero-impact-number hero-impact-number--terracotta" id="meals-counter">—</span>
+                            <span class="hero-impact-label">Meals Donated</span>
+                        </div>
+                        <div class="hero-impact-divider" aria-hidden="true"></div>
+                        <div class="hero-impact-stat">
+                            <div class="impact-icon impact-icon--gold">
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </div>
+                            <span class="hero-impact-number hero-impact-number--gold" id="recipes-counter">—</span>
+                            <span class="hero-impact-label">Recipes Created</span>
+                        </div>
+                    </div>
+                    <div class="hero-impact-progress" id="impact-progress-wrap" style="display: none">
+                        <div class="impact-progress-track">
+                            <div class="impact-progress-bar" id="impact-progress-bar"></div>
+                        </div>
+                        <p class="impact-progress-text" id="impact-progress-text"></p>
+                    </div>
+                    <p class="hero-impact-tagline">Every purchase donates instantly. Every 25 recipes donates again.</p>
+                    <a href="#how-donations-work" class="hero-impact-link">See how it works</a>
+                </div>
+            </div>
         </div>
         <div class="scroll-hint" data-animate="fade-up" data-delay="1600" aria-hidden="true">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12l7 7 7-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
     </section>
 
+    <div class="section-divider" aria-hidden="true"></div>
+
     <!-- ========== HOOK ========== -->
     <section class="section hook" id="hook">
         <div class="container">
             <div class="hook-grid">
-                <div class="glass-card hook-card" data-animate="slide-up" data-accent="cyan">
+                <div class="glass-card hook-card" data-animate="slide-up" data-accent="teal">
                     <div class="hook-accent"></div>
                     <p class="hook-question">What does a sunset taste like?</p>
                     <p class="hook-hint">Saffron bisque with turmeric foam and charred peach</p>
                 </div>
-                <div class="glass-card hook-card" data-animate="slide-up" data-delay="100" data-accent="coral">
+                <div class="glass-card hook-card" data-animate="slide-up" data-delay="100" data-accent="terracotta">
                     <div class="hook-accent"></div>
                     <p class="hook-question">How would you plate a vintage poster?</p>
                     <p class="hook-hint">Beetroot carpaccio with edible ink and micro herbs</p>
@@ -76,16 +114,18 @@
         </div>
     </section>
 
+    <div class="section-divider" aria-hidden="true"></div>
+
     <!-- ========== HOW IT WORKS ========== -->
     <section class="section how-it-works" id="how-it-works">
         <div class="container">
             <h2 class="section-label" data-animate="slide-up">HOW IT WORKS</h2>
             <div class="steps">
                 <div class="step" data-animate="slide-up">
-                    <div class="step-icon step-icon--cyan">
+                    <div class="step-icon step-icon--teal">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" stroke="currentColor" stroke-width="1.5"/></svg>
                     </div>
-                    <h3 class="step-title" style="color: var(--cyan)">SNAP</h3>
+                    <h3 class="step-title" style="color: var(--teal)">SNAP</h3>
                     <p class="step-desc">Photograph anything around you — art, architecture, nature, objects.</p>
                 </div>
                 <div class="step-arrow" data-animate="fade" aria-hidden="true">
@@ -102,15 +142,17 @@
                     <svg width="40" height="24" viewBox="0 0 40 24" fill="none"><path d="M0 12h36M30 6l6 6-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </div>
                 <div class="step" data-animate="slide-up" data-delay="300">
-                    <div class="step-icon step-icon--coral">
+                    <div class="step-icon step-icon--terracotta">
                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zM6 1v3M10 1v3M14 1v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </div>
-                    <h3 class="step-title" style="color: var(--coral)">TASTE</h3>
+                    <h3 class="step-title" style="color: var(--terracotta)">TASTE</h3>
                     <p class="step-desc">Receive a complete haute cuisine recipe with AI food photography.</p>
                 </div>
             </div>
         </div>
     </section>
+
+    <div class="section-divider" aria-hidden="true"></div>
 
     <!-- ========== TRANSLATION MATRIX ========== -->
     <section class="section matrix-section" id="matrix">
@@ -119,8 +161,8 @@
             <p class="section-subtitle" data-animate="slide-up" data-delay="100">See exactly how AI maps visual elements to culinary concepts.</p>
             <div class="glass-card matrix-card" data-animate="slide-up" data-delay="200">
                 <div class="matrix-header">
-                    <span class="matrix-col-label" style="color: var(--cyan)">VISUAL ELEMENT</span>
-                    <span class="matrix-col-label" style="color: var(--coral)">CULINARY TRANSLATION</span>
+                    <span class="matrix-col-label" style="color: var(--teal)">VISUAL ELEMENT</span>
+                    <span class="matrix-col-label" style="color: var(--terracotta)">CULINARY TRANSLATION</span>
                 </div>
                 <div class="matrix-row" data-animate="matrix-row">
                     <div class="matrix-visual">
@@ -169,13 +211,15 @@
         </div>
     </section>
 
+    <div class="section-divider" aria-hidden="true"></div>
+
     <!-- ========== FEATURES ========== -->
     <section class="section features-section" id="features">
         <div class="container">
             <h2 class="section-label" data-animate="slide-up">FEATURES</h2>
             <div class="features-grid">
                 <div class="glass-card feature-card" data-animate="slide-up">
-                    <div class="feature-icon" style="color: var(--cyan)">
+                    <div class="feature-icon" style="color: var(--teal)">
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" stroke="currentColor" stroke-width="1.5"/></svg>
                     </div>
                     <h3 class="feature-title">Snap to Plate</h3>
@@ -189,7 +233,7 @@
                     <p class="feature-desc">See exactly how AI maps colors and textures to ingredients and techniques.</p>
                 </div>
                 <div class="glass-card feature-card" data-animate="slide-up" data-delay="200">
-                    <div class="feature-icon" style="color: var(--coral)">
+                    <div class="feature-icon" style="color: var(--terracotta)">
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="14,2 14,8 20,8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><line x1="16" y1="13" x2="8" y2="13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><line x1="16" y1="17" x2="8" y2="17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
                     </div>
                     <h3 class="feature-title">Pro-Level Recipes</h3>
@@ -203,14 +247,14 @@
                     <p class="feature-desc">Wine, cocktail, and non-alcoholic pairings for every dish.</p>
                 </div>
                 <div class="glass-card feature-card" data-animate="slide-up" data-delay="200">
-                    <div class="feature-icon" style="color: var(--cyan)">
+                    <div class="feature-icon" style="color: var(--teal)">
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </div>
                     <h3 class="feature-title">Social Export</h3>
                     <p class="feature-desc">One-tap side-by-side export designed for Instagram, TikTok, and Pinterest.</p>
                 </div>
                 <div class="glass-card feature-card" data-animate="slide-up" data-delay="300">
-                    <div class="feature-icon" style="color: var(--coral)">
+                    <div class="feature-icon" style="color: var(--terracotta)">
                         <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/></svg>
                     </div>
                     <h3 class="feature-title">Scene Intelligence</h3>
@@ -219,6 +263,8 @@
             </div>
         </div>
     </section>
+
+    <div class="section-divider" aria-hidden="true"></div>
 
     <!-- ========== PRICING ========== -->
     <section class="section pricing-section" id="pricing">
@@ -304,39 +350,58 @@
         </div>
     </section>
 
-    <!-- ========== COMMUNITY IMPACT ========== -->
-    <section class="section impact-section" id="impact">
+    <!-- Brand Band -->
+    <div class="brand-band" aria-hidden="true">
+        <div class="brand-band-track">
+            <span class="brand-band-text">TASTE THE LENS</span><span class="brand-band-dot"></span>
+            <span class="brand-band-text">VISUAL GASTRONOMY</span><span class="brand-band-dot"></span>
+            <span class="brand-band-text">SNAP TRANSLATE TASTE</span><span class="brand-band-dot"></span>
+            <span class="brand-band-text">AI CULINARY ART</span><span class="brand-band-dot"></span>
+            <span class="brand-band-text">HAUTE CUISINE</span><span class="brand-band-dot"></span>
+            <span class="brand-band-text">TASTE THE LENS</span><span class="brand-band-dot"></span>
+            <span class="brand-band-text">VISUAL GASTRONOMY</span><span class="brand-band-dot"></span>
+            <span class="brand-band-text">SNAP TRANSLATE TASTE</span><span class="brand-band-dot"></span>
+            <span class="brand-band-text">AI CULINARY ART</span><span class="brand-band-dot"></span>
+            <span class="brand-band-text">HAUTE CUISINE</span><span class="brand-band-dot"></span>
+        </div>
+    </div>
+
+    <!-- ========== HOW DONATIONS WORK ========== -->
+    <section class="section donation-section" id="how-donations-work">
         <div class="container">
-            <h2 class="section-label" data-animate="slide-up">COMMUNITY IMPACT</h2>
-            <p class="section-subtitle" data-animate="slide-up" data-delay="100">Every recipe helps feed someone in need.</p>
-            <div class="glass-card impact-card" data-animate="slide-up" data-delay="200">
-                <div class="impact-stats">
-                    <div class="impact-stat">
-                        <div class="impact-icon impact-icon--coral">
-                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        </div>
-                        <span class="impact-number" id="meals-counter">—</span>
-                        <span class="impact-label">Meals Donated</span>
+            <h2 class="section-label" data-animate="slide-up">HOW DONATIONS WORK</h2>
+            <p class="section-subtitle" data-animate="slide-up" data-delay="100">Two ways every user helps feed someone in need.</p>
+            <div class="donation-grid">
+                <div class="glass-card donation-card" data-animate="slide-up" data-delay="200">
+                    <div class="donation-card-icon donation-card-icon--terracotta">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </div>
-                    <div class="impact-divider" aria-hidden="true"></div>
-                    <div class="impact-stat">
-                        <div class="impact-icon impact-icon--gold">
-                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        </div>
-                        <span class="impact-number" id="recipes-counter">—</span>
-                        <span class="impact-label">Recipes Created</span>
+                    <h3 class="donation-card-title">Buy a Credit Pack</h3>
+                    <p class="donation-card-desc">Every credit pack or subscription purchase instantly triggers a meal donation. No extra cost, no opt-in — it happens automatically.</p>
+                    <div class="donation-card-formula">
+                        <span class="formula-item">1 purchase</span>
+                        <svg class="formula-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <span class="formula-item formula-item--highlight">1 meal donated</span>
                     </div>
                 </div>
-                <div class="impact-progress-wrap" id="impact-progress-wrap" style="display: none">
-                    <div class="impact-progress-track">
-                        <div class="impact-progress-bar" id="impact-progress-bar"></div>
+                <div class="glass-card donation-card" data-animate="slide-up" data-delay="350">
+                    <div class="donation-card-icon donation-card-icon--gold">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </div>
-                    <p class="impact-progress-text" id="impact-progress-text"></p>
+                    <h3 class="donation-card-title">Create Recipes</h3>
+                    <p class="donation-card-desc">Every recipe our community creates counts toward a collective milestone. When we hit 25 recipes together, another meal is donated.</p>
+                    <div class="donation-card-formula">
+                        <span class="formula-item">25 recipes</span>
+                        <svg class="formula-arrow" width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <span class="formula-item formula-item--highlight">1 meal donated</span>
+                    </div>
                 </div>
-                <p class="impact-tagline">For every credit pack purchase, we donate a meal. Plus, for every 25 recipes our community creates, we donate another.</p>
             </div>
+            <p class="donation-footnote" data-animate="fade" data-delay="500">Both paths stack. A single user who buys a pack and creates recipes contributes through both channels simultaneously.</p>
         </div>
     </section>
+
+    <div class="section-divider" aria-hidden="true"></div>
 
     <!-- ========== WAITLIST CTA ========== -->
     <section class="section waitlist-section" id="waitlist">
