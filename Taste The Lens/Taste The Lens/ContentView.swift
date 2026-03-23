@@ -13,7 +13,7 @@ enum AppScreen: Equatable {
 
 struct ContentView: View {
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
-    @AppStorage("debug_processingStyle") private var processingStyleRaw = ProcessingStyle.classic.rawValue
+    @AppStorage("debug_processingStyle") private var processingStyleRaw = ProcessingStyle.kitchenPass.rawValue
     @State private var showSplash = false
     @State private var showChefOnboarding = false
     @State private var showDebugMenu = false
@@ -285,7 +285,7 @@ struct ContentView: View {
 
     @ViewBuilder
     private func processingScreen(image: UIImage) -> some View {
-        let style = ProcessingStyle(rawValue: processingStyleRaw) ?? .classic
+        let style = ProcessingStyle(rawValue: processingStyleRaw) ?? .kitchenPass
         Group {
             switch style {
             case .classic:

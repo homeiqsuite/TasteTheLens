@@ -144,7 +144,7 @@ function initGeometricOverlay() {
             ctx.beginPath();
             ctx.moveTo(startX, startY);
             ctx.lineTo(endX, endY);
-            ctx.strokeStyle = 'rgba(212, 164, 58, 0.04)'; // Warm gold tint matching iOS palette
+            ctx.strokeStyle = 'rgba(123, 63, 160, 0.06)'; // Purple tint matching logo palette
             ctx.lineWidth = 0.5;
             ctx.stroke();
         }

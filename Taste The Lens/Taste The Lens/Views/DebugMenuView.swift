@@ -5,7 +5,7 @@ private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: 
 
 struct DebugMenuView: View {
     @AppStorage("debug_imageGenModel") private var selectedModelRaw = ImageGenerationModel.imagen4.rawValue
-    @AppStorage("debug_processingStyle") private var selectedStyleRaw = ProcessingStyle.classic.rawValue
+    @AppStorage("debug_processingStyle") private var selectedStyleRaw = ProcessingStyle.kitchenPass.rawValue
     @Environment(\.dismiss) private var dismiss
 
     private var selectedModel: ImageGenerationModel {
@@ -14,7 +14,7 @@ struct DebugMenuView: View {
     }
 
     private var selectedStyle: ProcessingStyle {
-        get { ProcessingStyle(rawValue: selectedStyleRaw) ?? .classic }
+        get { ProcessingStyle(rawValue: selectedStyleRaw) ?? .kitchenPass }
         nonmutating set { selectedStyleRaw = newValue.rawValue }
     }
 
