@@ -292,11 +292,16 @@ struct TastingMenuDetailView: View {
 
     @MainActor
     private func loadData() async {
+        logger.info("loadData — fetching courses and participants for menu \(menu.id)")
         do {
             async let coursesResult = menuService.fetchCourses(menuId: menu.id)
             async let participantsResult = menuService.fetchParticipants(menuId: menu.id)
             courses = try await coursesResult
             participants = try await participantsResult
+            logger.info("loadData — got \(courses.count) courses, \(participants.count) participants")
+            for course in courses {
+                logger.info("  course[\(course.courseOrder)] type=\(course.courseType) recipeId=\(course.recipeId ?? "nil") participantId=\(course.participantId ?? "nil")")
+            }
         } catch {
             logger.error("Failed to load menu data: \(error)")
         }
@@ -304,8 +309,11 @@ struct TastingMenuDetailView: View {
     }
 
     private func addCourse(_ course: MenuCourseDTO) {
-        guard authManager.isAuthenticated else { return }
-        // Post notification to set pending course and navigate to camera
+        guard authManager.isAuthenticated else {
+            logger.warning("addCourse — user not authenticated, ignoring")
+            return
+        }
+        logger.info("addCourse — posting notification for menuId: \(menu.id), courseOrder: \(course.courseOrder), courseType: \(course.courseType)")
         NotificationCenter.default.post(
             name: .addMenuCourse,
             object: nil,
@@ -339,10 +347,16 @@ struct TastingMenuDetailView: View {
     }
 
     private func loadRecipe(id: String) {
-        guard let uuid = UUID(uuidString: id) else { return }
+        guard let uuid = UUID(uuidString: id) else {
+            logger.error("loadRecipe — invalid UUID string: \(id)")
+            return
+        }
         let descriptor = FetchDescriptor<Recipe>(predicate: #Predicate { $0.id == uuid })
         if let recipe = try? modelContext.fetch(descriptor).first {
+            logger.info("loadRecipe — found recipe '\(recipe.dishName)' for id \(id)")
             selectedRecipe = recipe
+        } else {
+            logger.error("loadRecipe — no recipe found in SwiftData for id \(id)")
         }
     }
 

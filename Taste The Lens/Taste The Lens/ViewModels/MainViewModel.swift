@@ -28,7 +28,7 @@ final class MainViewModel {
 
     func handlePhotoCaptured(_ image: UIImage) {
         if UsageTracker.shared.canGenerate {
-            logger.info("Photo received — transitioning to processing")
+            logger.info("Photo received — transitioning to processing. pendingMenuCourse: \(String(describing: self.pendingMenuCourse))")
             capturedImage = image
             excludedDishNames = []
             courseType = nil
@@ -68,16 +68,26 @@ final class MainViewModel {
             logger.info("Pipeline finished — state: \(String(describing: self.pipeline.state))")
 
             if pipeline.state == .complete {
+                logger.info("Pipeline complete — pendingMenuCourse: \(String(describing: self.pendingMenuCourse)), completedRecipe: \(self.pipeline.completedRecipe?.dishName ?? "nil")")
+
                 // If there's a pending menu course, auto-add the recipe to the menu
                 if let pending = pendingMenuCourse, let recipe = pipeline.completedRecipe {
-                    logger.info("Adding recipe to menu \(pending.menuId) course \(pending.courseOrder)")
+                    logger.info("Menu course flow — menuId: \(pending.menuId), courseOrder: \(pending.courseOrder), recipeId: \(recipe.id.uuidString), dishName: \(recipe.dishName)")
 
                     // Save recipe to SwiftData so it can be displayed in the menu
                     modelContext.insert(recipe)
-                    try? modelContext.save()
+                    do {
+                        try modelContext.save()
+                        logger.info("Recipe saved to SwiftData successfully")
+                    } catch {
+                        logger.error("Failed to save recipe to SwiftData: \(error)")
+                    }
 
+                    // Sync recipe to Supabase BEFORE linking to course (foreign key requires it)
                     if AuthManager.shared.isAuthenticated {
-                        Task { await SyncManager.shared.syncRecipe(recipe) }
+                        logger.info("Syncing recipe to Supabase before adding course...")
+                        await SyncManager.shared.syncRecipe(recipe)
+                        logger.info("Recipe sync complete")
                     }
 
                     do {
@@ -86,16 +96,24 @@ final class MainViewModel {
                             courseOrder: pending.courseOrder,
                             recipeId: recipe.id.uuidString
                         )
+                        logger.info("Course added to Supabase successfully")
                         HapticManager.success()
                     } catch {
                         logger.error("Failed to add course to menu: \(error)")
                     }
                     pendingMenuCourse = nil
+                    logger.info("Navigating back to dashboard and showing tasting menus sheet")
                     withAnimation(reduceMotion ? .easeInOut(duration: 0.3) : .spring(response: 0.6, dampingFraction: 0.8)) {
                         currentScreen = .dashboard
                     }
                     showTastingMenus = true
                 } else {
+                    if pendingMenuCourse != nil && pipeline.completedRecipe == nil {
+                        logger.error("pendingMenuCourse exists but completedRecipe is nil!")
+                    }
+                    if pendingMenuCourse == nil {
+                        logger.info("No pendingMenuCourse — normal recipe flow")
+                    }
                     logger.info("Transitioning to recipe card")
                     withAnimation(reduceMotion ? .easeInOut(duration: 0.3) : .spring(response: 0.6, dampingFraction: 0.8)) {
                         currentScreen = .recipeCard
@@ -159,11 +177,16 @@ final class MainViewModel {
 
     func handleAddMenuCourse(_ notification: Notification) {
         guard let menuId = notification.userInfo?["menuId"] as? String,
-              let courseOrder = notification.userInfo?["courseOrder"] as? Int else { return }
+              let courseOrder = notification.userInfo?["courseOrder"] as? Int else {
+            logger.error("handleAddMenuCourse — missing menuId or courseOrder in notification")
+            return
+        }
+        logger.info("handleAddMenuCourse — menuId: \(menuId), courseOrder: \(courseOrder)")
         pendingMenuCourse = (menuId: menuId, courseOrder: courseOrder)
         // Dismiss tasting menus sheet and navigate to camera
         showTastingMenus = false
         currentScreen = .camera
+        logger.info("handleAddMenuCourse — pendingMenuCourse set, navigating to camera")
     }
 
     func resetToDashboard() {

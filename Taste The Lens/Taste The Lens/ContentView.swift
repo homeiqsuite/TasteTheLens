@@ -14,8 +14,7 @@ enum AppScreen: Equatable {
 struct ContentView: View {
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @AppStorage("debug_processingStyle") private var processingStyleRaw = ProcessingStyle.kitchenPass.rawValue
-    @State private var showSplash = false
-    @State private var showChefOnboarding = false
+    @State private var showOnboarding = false
     @State private var showDebugMenu = false
     @State private var vm = MainViewModel()
     @Namespace private var heroNamespace
@@ -74,15 +73,11 @@ struct ContentView: View {
         }
         .animation(reduceMotion ? .easeInOut(duration: 0.3) : .spring(response: 0.6, dampingFraction: 0.85), value: vm.currentScreen)
         .preferredColorScheme(vm.currentScreen == .dashboard ? .light : .dark)
-        .fullScreenCover(isPresented: $showSplash) {
-            SplashView(isPresented: $showSplash)
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingView(isPresented: $showOnboarding)
         }
-        .fullScreenCover(isPresented: $showChefOnboarding) {
-            ChefOnboardingView(isPresented: $showChefOnboarding)
-        }
-        .onChange(of: showSplash) { _, newValue in
-            if !newValue && !hasSeenOnboarding {
-                showChefOnboarding = true
+        .onChange(of: showOnboarding) { _, newValue in
+            if !newValue {
                 hasSeenOnboarding = true
             }
         }
@@ -104,7 +99,7 @@ struct ContentView: View {
         .onAppear {
             logger.info("ContentView appeared — hasSeenOnboarding: \(hasSeenOnboarding)")
             if !hasSeenOnboarding {
-                showSplash = true
+                showOnboarding = true
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .reimagineRecipe)) { notification in

@@ -163,10 +163,13 @@ final class TastingMenuService {
 
     func addCourse(menuId: String, courseOrder: Int, recipeId: String) async throws {
         guard let userId = AuthManager.shared.currentUser?.id.uuidString else {
+            logger.error("addCourse — not authenticated")
             throw TastingMenuError.notAuthenticated
         }
 
-        try await supabase
+        logger.info("addCourse — menuId: \(menuId), courseOrder: \(courseOrder), recipeId: \(recipeId), userId: \(userId)")
+
+        let updateResult = try await supabase
             .from("menu_courses")
             .update([
                 "recipe_id": recipeId,
@@ -174,7 +177,10 @@ final class TastingMenuService {
             ])
             .eq("menu_id", value: menuId)
             .eq("course_order", value: courseOrder)
+            .select()
             .execute()
+
+        logger.info("addCourse — update response status: \(updateResult.status), data: \(String(data: updateResult.data, encoding: .utf8) ?? "nil")")
 
         // Update menu status if first course added
         try await supabase
@@ -184,7 +190,7 @@ final class TastingMenuService {
             .eq("status", value: "draft")
             .execute()
 
-        logger.info("Added course \(courseOrder) to menu \(menuId)")
+        logger.info("Added course \(courseOrder) to menu \(menuId) successfully")
     }
 
     // MARK: - Delete
