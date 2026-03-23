@@ -8,7 +8,7 @@
 :root {
     --bg: #0A0A12;
     --bg-alt: #13101E;
-    --bg-warm: #16122A;
+    --bg-warm: #1A1530;
     --gold: #E8A832;
     --gold-dim: #A07520;
     --primary: #E8A832;
@@ -17,8 +17,8 @@
     --magenta: #C73B8E;
     --teal: #9B5FC0;
     --terracotta: #C73B8E;
-    --card-bg: rgba(28, 22, 48, 0.9);
-    --card-border: rgba(123, 63, 160, 0.3);
+    --card-bg: rgba(35, 28, 58, 0.95);
+    --card-border: rgba(123, 63, 160, 0.35);
     --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     --text-primary: #F0ECF5;
     --text-secondary: #C8BFD6;
@@ -334,7 +334,7 @@ img {
     border: 2px solid rgba(123, 63, 160, 0.3);
     border-radius: var(--radius-playful);
     box-shadow: 0 8px 32px rgba(123, 63, 160, 0.15);
-    background: rgba(20, 16, 32, 0.85);
+    background: rgba(35, 28, 58, 0.95);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
 }
@@ -480,11 +480,11 @@ img {
 }
 
 [data-accent="teal"] .hook-accent { background: var(--teal); }
-[data-accent="teal"] { border-color: rgba(155, 95, 192, 0.4); background: rgba(28, 22, 48, 0.95); }
+[data-accent="teal"] { border-color: rgba(155, 95, 192, 0.4); background: rgba(35, 28, 58, 0.95); }
 [data-accent="terracotta"] .hook-accent { background: var(--terracotta); }
-[data-accent="terracotta"] { border-color: rgba(199, 59, 142, 0.4); background: rgba(28, 22, 48, 0.95); }
+[data-accent="terracotta"] { border-color: rgba(199, 59, 142, 0.4); background: rgba(35, 28, 58, 0.95); }
 [data-accent="gold"] .hook-accent { background: var(--gold); }
-[data-accent="gold"] { border-color: rgba(232, 168, 50, 0.4); background: rgba(28, 22, 48, 0.95); }
+[data-accent="gold"] { border-color: rgba(232, 168, 50, 0.4); background: rgba(35, 28, 58, 0.95); }
 
 .hook-question {
     font-family: var(--font-serif);

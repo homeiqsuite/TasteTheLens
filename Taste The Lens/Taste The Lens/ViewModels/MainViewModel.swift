@@ -71,6 +71,15 @@ final class MainViewModel {
                 // If there's a pending menu course, auto-add the recipe to the menu
                 if let pending = pendingMenuCourse, let recipe = pipeline.completedRecipe {
                     logger.info("Adding recipe to menu \(pending.menuId) course \(pending.courseOrder)")
+
+                    // Save recipe to SwiftData so it can be displayed in the menu
+                    modelContext.insert(recipe)
+                    try? modelContext.save()
+
+                    if AuthManager.shared.isAuthenticated {
+                        Task { await SyncManager.shared.syncRecipe(recipe) }
+                    }
+
                     do {
                         try await TastingMenuService.shared.addCourse(
                             menuId: pending.menuId,
