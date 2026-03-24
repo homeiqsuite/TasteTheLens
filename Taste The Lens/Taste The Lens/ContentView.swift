@@ -79,6 +79,10 @@ struct ContentView: View {
         .onChange(of: showOnboarding) { _, newValue in
             if !newValue {
                 hasSeenOnboarding = true
+                // After onboarding, take user straight to camera
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) {
+                    vm.currentScreen = .camera
+                }
             }
         }
         .sheet(isPresented: $vm.showSavedRecipes) {
@@ -94,7 +98,8 @@ struct ContentView: View {
             ChallengeFeedView()
         }
         .sheet(isPresented: $vm.showTastingMenus) {
-            TastingMenuListView()
+            TastingMenuListView(initialInviteCode: vm.deepLinkedInviteCode)
+                .onDisappear { vm.deepLinkedInviteCode = nil }
         }
         .onAppear {
             logger.info("ContentView appeared — hasSeenOnboarding: \(hasSeenOnboarding)")
@@ -107,6 +112,12 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .addMenuCourse)) { notification in
             vm.handleAddMenuCourse(notification)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .openTastingMenuInvite)) { notification in
+            if let code = notification.userInfo?["inviteCode"] as? String {
+                vm.deepLinkedInviteCode = code
+                vm.showTastingMenus = true
+            }
         }
     }
 

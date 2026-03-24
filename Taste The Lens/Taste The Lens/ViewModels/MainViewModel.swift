@@ -15,6 +15,7 @@ final class MainViewModel {
     var paywallContext: PaywallContext = .outOfGenerations
     var showChallengeFeed = false
     var showTastingMenus = false
+    var deepLinkedInviteCode: String?
     var excludedDishNames: [String] = []
     var budgetLimit: Double?
     var courseType: String?
@@ -53,15 +54,22 @@ final class MainViewModel {
         processingTask = Task {
             logger.info("Processing task started")
 
-            // Request background execution time so the pipeline can finish if the app is backgrounded
+            // Only request background execution time if the app actually goes to background
             var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
-            backgroundTaskID = UIApplication.shared.beginBackgroundTask(withName: "RecipeGeneration") {
-                logger.info("Background time expired — cancelling pipeline")
-                self.processingTask?.cancel()
-                UIApplication.shared.endBackgroundTask(backgroundTaskID)
-                backgroundTaskID = .invalid
+            let observer = NotificationCenter.default.addObserver(
+                forName: UIApplication.willResignActiveNotification,
+                object: nil,
+                queue: .main
+            ) { _ in
+                guard backgroundTaskID == .invalid else { return }
+                backgroundTaskID = UIApplication.shared.beginBackgroundTask(withName: "RecipeGeneration") {
+                    logger.info("Background time expired — cancelling pipeline")
+                    self.processingTask?.cancel()
+                    UIApplication.shared.endBackgroundTask(backgroundTaskID)
+                    backgroundTaskID = .invalid
+                }
+                logger.info("App backgrounded — started background task id: \(backgroundTaskID.rawValue)")
             }
-            logger.info("Background task started — id: \(backgroundTaskID.rawValue)")
 
             await pipeline.process(image: image, modelContext: modelContext, excluding: excludedDishNames, budgetLimit: budgetLimit, courseType: courseType)
 
@@ -87,14 +95,25 @@ final class MainViewModel {
                     if AuthManager.shared.isAuthenticated {
                         logger.info("Syncing recipe to Supabase before adding course...")
                         await SyncManager.shared.syncRecipe(recipe)
-                        logger.info("Recipe sync complete")
+                        logger.info("Recipe sync complete — remoteId: \(recipe.remoteId ?? "nil")")
+                    }
+
+                    // Use the Supabase remote ID (not local SwiftData ID) for the foreign key
+                    guard let remoteRecipeId = recipe.remoteId else {
+                        logger.error("Recipe has no remoteId after sync — cannot add to menu")
+                        pendingMenuCourse = nil
+                        withAnimation(reduceMotion ? .easeInOut(duration: 0.3) : .spring(response: 0.6, dampingFraction: 0.8)) {
+                            currentScreen = .dashboard
+                        }
+                        showTastingMenus = true
+                        return
                     }
 
                     do {
                         try await TastingMenuService.shared.addCourse(
                             menuId: pending.menuId,
                             courseOrder: pending.courseOrder,
-                            recipeId: recipe.id.uuidString
+                            recipeId: remoteRecipeId
                         )
                         logger.info("Course added to Supabase successfully")
                         HapticManager.success()
@@ -127,7 +146,8 @@ final class MainViewModel {
                 showTemporaryError(message)
             }
 
-            // End the background task now that the pipeline is done
+            // Clean up background task observer and end any active background task
+            NotificationCenter.default.removeObserver(observer)
             if backgroundTaskID != .invalid {
                 logger.info("Ending background task — id: \(backgroundTaskID.rawValue)")
                 UIApplication.shared.endBackgroundTask(backgroundTaskID)

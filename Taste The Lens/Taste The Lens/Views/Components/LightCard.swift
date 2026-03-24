@@ -34,8 +34,34 @@ private extension View {
     }
 }
 
+struct DarkCard: ViewModifier {
+    var cornerRadius: CGFloat = 16
+    var padding: Bool = true
+
+    func body(content: Content) -> some View {
+        content
+            .if(padding) { view in
+                view
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 16)
+            }
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(Theme.darkCardSurface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .stroke(Theme.darkCardBorder, lineWidth: 1)
+                    )
+            )
+    }
+}
+
 extension View {
     func lightCard(cornerRadius: CGFloat = 16, padding: Bool = true) -> some View {
         modifier(LightCard(cornerRadius: cornerRadius, padding: padding))
+    }
+
+    func darkCard(cornerRadius: CGFloat = 16, padding: Bool = true) -> some View {
+        modifier(DarkCard(cornerRadius: cornerRadius, padding: padding))
     }
 }

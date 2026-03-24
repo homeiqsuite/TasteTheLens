@@ -11,6 +11,7 @@ struct TastingMenuDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var courses: [MenuCourseDTO] = []
     @State private var participants: [MenuParticipantDTO] = []
+    @State private var remoteRecipes: [String: Recipe] = [:]
     @State private var isLoading = true
     @State private var isPublishing = false
     @State private var showShareSheet = false
@@ -181,12 +182,16 @@ struct TastingMenuDetailView: View {
     }
 
     private func filledCourseCard(_ course: MenuCourseDTO) -> some View {
-        Button {
-            loadRecipe(id: course.recipeId!)
+        let recipeId = course.recipeId!
+        let localRecipe = try? modelContext.fetch(FetchDescriptor<Recipe>(predicate: #Predicate { $0.remoteId == recipeId })).first
+        let recipe = localRecipe ?? remoteRecipes[recipeId]
+
+        return Button {
+            loadRecipe(id: recipeId)
         } label: {
             HStack(spacing: 14) {
                 // Recipe thumbnail
-                recipeThumb(recipeId: course.recipeId!)
+                recipeThumb(recipeId: recipeId)
                     .frame(width: 60, height: 60)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
 
@@ -195,7 +200,7 @@ struct TastingMenuDetailView: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Theme.gold.opacity(0.7))
 
-                    Text("Course \(course.courseOrder + 1)")
+                    Text(recipe?.dishName ?? "Course \(course.courseOrder + 1)")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.darkTextPrimary)
 
@@ -305,6 +310,16 @@ struct TastingMenuDetailView: View {
         } catch {
             logger.error("Failed to load menu data: \(error)")
         }
+
+        // Fetch remote recipes for courses not in local SwiftData
+        do {
+            let fetched = try await menuService.fetchMenuRecipes(menuId: menu.id)
+            remoteRecipes = fetched
+            logger.info("loadData — fetched \(fetched.count) remote recipes")
+        } catch {
+            logger.error("Failed to fetch remote recipes: \(error)")
+        }
+
         isLoading = false
     }
 
@@ -347,23 +362,26 @@ struct TastingMenuDetailView: View {
     }
 
     private func loadRecipe(id: String) {
-        guard let uuid = UUID(uuidString: id) else {
-            logger.error("loadRecipe — invalid UUID string: \(id)")
-            return
-        }
-        let descriptor = FetchDescriptor<Recipe>(predicate: #Predicate { $0.id == uuid })
+        // Look up by remoteId in local SwiftData first
+        let descriptor = FetchDescriptor<Recipe>(predicate: #Predicate { $0.remoteId == id })
         if let recipe = try? modelContext.fetch(descriptor).first {
-            logger.info("loadRecipe — found recipe '\(recipe.dishName)' for id \(id)")
+            logger.info("loadRecipe — found local recipe '\(recipe.dishName)' for remoteId \(id)")
+            selectedRecipe = recipe
+        } else if let recipe = remoteRecipes[id] {
+            // Fall back to remote recipe fetched from Supabase
+            logger.info("loadRecipe — using remote recipe '\(recipe.dishName)' for remoteId \(id)")
             selectedRecipe = recipe
         } else {
-            logger.error("loadRecipe — no recipe found in SwiftData for id \(id)")
+            logger.error("loadRecipe — no recipe found for remoteId \(id)")
         }
     }
 
     @ViewBuilder
     private func recipeThumb(recipeId: String) -> some View {
-        if let uuid = UUID(uuidString: recipeId),
-           let recipe = try? modelContext.fetch(FetchDescriptor<Recipe>(predicate: #Predicate { $0.id == uuid })).first,
+        let localRecipe = try? modelContext.fetch(FetchDescriptor<Recipe>(predicate: #Predicate { $0.remoteId == recipeId })).first
+        let recipe = localRecipe ?? remoteRecipes[recipeId]
+
+        if let recipe,
            let imageData = recipe.generatedDishImageData,
            let image = UIImage(data: imageData) {
             Color.clear

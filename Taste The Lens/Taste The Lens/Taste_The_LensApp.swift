@@ -34,9 +34,12 @@ struct Taste_The_LensApp: App {
                         case .challenge:
                             // Handled via ChallengeFeedView
                             break
-                        case .tastingMenu:
-                            // Handled via TastingMenuListView
-                            break
+                        case .tastingMenu(let code):
+                            NotificationCenter.default.post(
+                                name: .openTastingMenuInvite,
+                                object: nil,
+                                userInfo: ["inviteCode": code]
+                            )
                         }
                     }
                 }

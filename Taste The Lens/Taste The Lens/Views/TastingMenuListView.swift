@@ -5,6 +5,8 @@ import os
 private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "TastingMenuList")
 
 struct TastingMenuListView: View {
+    var initialInviteCode: String?
+
     @Environment(\.dismiss) private var dismiss
     @State private var selectedTab = 0
     @State private var showCreateMenu = false
@@ -69,6 +71,12 @@ struct TastingMenuListView: View {
             .task {
                 if authManager.isAuthenticated {
                     try? await menuService.fetchMyMenus()
+                }
+            }
+            .onAppear {
+                if let code = initialInviteCode, !code.isEmpty {
+                    inviteCode = code
+                    selectedTab = 1
                 }
             }
         }

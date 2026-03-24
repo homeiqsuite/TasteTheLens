@@ -132,28 +132,16 @@ final class TastingMenuService {
     // MARK: - Join
 
     func joinMenu(inviteCode: String) async throws -> TastingMenuDTO {
-        guard let userId = AuthManager.shared.currentUser?.id.uuidString else {
+        guard AuthManager.shared.currentUser != nil else {
             throw TastingMenuError.notAuthenticated
         }
 
-        // Look up menu by invite code
-        let menu: TastingMenuDTO = try await supabase
-            .from("tasting_menus")
-            .select()
-            .eq("invite_code", value: inviteCode)
-            .single()
+        // Use RPC function to bypass RLS for invite code lookup + join atomically
+        let response = try await supabase
+            .rpc("join_menu_by_invite_code", params: ["p_invite_code": inviteCode])
             .execute()
-            .value
 
-        // Add as participant
-        try await supabase
-            .from("menu_participants")
-            .insert([
-                "menu_id": menu.id,
-                "user_id": userId,
-                "role": "participant"
-            ])
-            .execute()
+        let menu = try JSONDecoder().decode(TastingMenuDTO.self, from: response.data)
 
         logger.info("Joined tasting menu '\(menu.theme)' via invite code")
         return menu
@@ -221,6 +209,67 @@ final class TastingMenuService {
         logger.info("Published tasting menu \(id)")
     }
 
+    // MARK: - Fetch Menu Recipes (for other users' courses)
+
+    /// Fetches recipe data + dish images from Supabase for all filled courses in a menu.
+    /// Returns in-memory Recipe objects keyed by Supabase recipe ID.
+    func fetchMenuRecipes(menuId: String) async throws -> [String: Recipe] {
+        // Get all recipe IDs from courses
+        let courses: [MenuCourseDTO] = try await supabase
+            .from("menu_courses")
+            .select()
+            .eq("menu_id", value: menuId)
+            .execute()
+            .value
+
+        let recipeIds = courses.compactMap(\.recipeId)
+        guard !recipeIds.isEmpty else { return [:] }
+
+        // Fetch recipe data (RLS now allows menu participants to read these)
+        let recipes: [SupabaseRecipeDTO] = try await supabase
+            .from("recipes")
+            .select()
+            .in("id", values: recipeIds)
+            .execute()
+            .value
+
+        var result: [String: Recipe] = [:]
+
+        for dto in recipes {
+            guard let remoteId = dto.id else { continue }
+
+            // Download dish image
+            var dishImageData: Data? = nil
+            if let path = dto.dishImagePath {
+                do {
+                    dishImageData = try await supabase.storage
+                        .from("dish-images")
+                        .download(path: path)
+                } catch {
+                    logger.warning("Failed to download dish image for recipe \(remoteId): \(error)")
+                }
+            }
+
+            // Download inspiration image (needed for Recipe init)
+            var inspirationData = Data()
+            if let path = dto.inspirationImagePath {
+                do {
+                    inspirationData = try await supabase.storage
+                        .from("inspiration-images")
+                        .download(path: path)
+                } catch {
+                    logger.warning("Failed to download inspiration image for recipe \(remoteId): \(error)")
+                }
+            }
+
+            let recipe = dto.toRecipe(inspirationData: inspirationData, dishImageData: dishImageData)
+            result[remoteId] = recipe
+        }
+
+        logger.info("Fetched \(result.count) menu recipes from Supabase")
+        return result
+    }
+
     // MARK: - Realtime
 
     func subscribeToMenu(id: String) {
@@ -280,6 +329,7 @@ final class TastingMenuService {
 
 extension Notification.Name {
     static let menuCourseUpdated = Notification.Name("menuCourseUpdated")
+    static let openTastingMenuInvite = Notification.Name("openTastingMenuInvite")
 }
 
 // MARK: - Errors

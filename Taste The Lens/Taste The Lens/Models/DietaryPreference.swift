@@ -34,13 +34,13 @@ enum DietaryPreference: String, CaseIterable, Identifiable, Codable {
         case .vegetarian: "leaf"
         case .vegan: "leaf.fill"
         case .pescatarian: "fish"
-        case .glutenFree: "wheat.slash"
-        case .dairyFree: "drop.slash"
+        case .glutenFree: "xmark.circle"
+        case .dairyFree: "drop.triangle"
         case .nutFree: "allergens"
         case .keto: "bolt"
-        case .lowCarb: "chart.bar.decrease"
+        case .lowCarb: "chart.bar"
         case .halal: "checkmark.seal"
-        case .kosher: "star.of.david"
+        case .kosher: "star"
         }
     }
 

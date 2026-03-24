@@ -11,6 +11,8 @@ struct DashboardView: View {
 
     @State private var selectedRecipe: Recipe?
     @State private var showChefPicker = false
+    @State private var progressAnimated = false
+    @State private var heroGlowPulse = false
     @AppStorage("selectedChef") private var selectedChef = "default"
 
     private let authManager = AuthManager.shared
@@ -20,24 +22,24 @@ struct DashboardView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
+            VStack(spacing: 22) {
                 greetingSection
                 heroCard
+                recentRecipesSection
                 communityImpactCard
-                activeChefCard
+                chefModeCard
                 if EntitlementManager.shared.hasAccess(to: .fullChallenges) {
                     challengesSection
                 }
                 if EntitlementManager.shared.hasAccess(to: .fullTastingMenus) {
                     tastingMenuCard
                 }
-                recentRecipesSection
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
             .padding(.bottom, 40)
         }
-        .background(Theme.background.ignoresSafeArea())
+        .background(Theme.warmBg.ignoresSafeArea())
         .sheet(item: $selectedRecipe) { recipe in
             NavigationStack {
                 RecipeCardView(recipe: recipe)
@@ -89,26 +91,21 @@ struct DashboardView: View {
 
     private var greetingSection: some View {
         HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(greetingText)
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundStyle(Theme.textPrimary)
-                Text(displayName)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(Theme.textTertiary)
-            }
+            Text("\(greetingText), \(displayName)")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
 
             Spacer()
 
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 Button {
                     vm.showSettings = true
                 } label: {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(Theme.textSecondary)
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Theme.gold)
                         .frame(width: 40, height: 40)
-                        .background(Theme.buttonBg)
+                        .background(Theme.gold.opacity(0.12))
                         .clipShape(Circle())
                 }
 
@@ -118,11 +115,11 @@ struct DashboardView: View {
                     if authManager.isAuthenticated {
                         initialsAvatar
                     } else {
-                        Image(systemName: "person.circle")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(Theme.textSecondary)
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(.white)
                             .frame(width: 40, height: 40)
-                            .background(Theme.buttonBg)
+                            .background(Theme.gold)
                             .clipShape(Circle())
                     }
                 }
@@ -133,8 +130,8 @@ struct DashboardView: View {
     private var initialsAvatar: some View {
         let initials = String(displayName.prefix(1)).uppercased()
         return Text(initials)
-            .font(.system(size: 15, weight: .bold))
-            .foregroundStyle(Theme.darkBg)
+            .font(.system(size: 16, weight: .bold))
+            .foregroundStyle(.white)
             .frame(width: 40, height: 40)
             .background(Theme.gold)
             .clipShape(Circle())
@@ -143,9 +140,9 @@ struct DashboardView: View {
     private var greetingText: String {
         let hour = Calendar.current.component(.hour, from: Date())
         switch hour {
-        case 5..<12: return "Good Morning"
-        case 12..<17: return "Good Afternoon"
-        default: return "Good Evening"
+        case 5..<12: return "Good morning"
+        case 12..<17: return "Good afternoon"
+        default: return "Good evening"
         }
     }
 
@@ -153,7 +150,7 @@ struct DashboardView: View {
         if authManager.isAuthenticated {
             return authManager.displayName ?? "Chef"
         }
-        return "Guest Chef"
+        return "Chef"
     }
 
     // MARK: - Hero Card
@@ -163,58 +160,98 @@ struct DashboardView: View {
             HapticManager.medium()
             vm.navigateToCamera()
         } label: {
-            VStack(spacing: 20) {
-                // Icon with gold glow background
-                Circle()
-                    .fill(Theme.gold.opacity(0.15))
-                    .frame(width: 64, height: 64)
-                    .overlay(
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 26))
-                            .foregroundStyle(Theme.gold)
+            ZStack {
+                // Warm gradient background
+                RoundedRectangle(cornerRadius: 28)
+                    .fill(Theme.heroGradient)
+
+                // Sparkle/glow overlay
+                RoundedRectangle(cornerRadius: 28)
+                    .fill(
+                        RadialGradient(
+                            colors: [
+                                Color.white.opacity(0.3),
+                                Color.white.opacity(0.05),
+                                Color.clear,
+                            ],
+                            center: .center,
+                            startRadius: 20,
+                            endRadius: 200
+                        )
                     )
 
-                VStack(spacing: 8) {
-                    Text("Snap a Photo")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundStyle(Theme.textPrimary)
-
-                    Text("Capture inspiration and generate a recipe from ingredients, meals, or dishes.")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Theme.textTertiary)
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(2)
+                // Subtle light particles
+                GeometryReader { geo in
+                    ForEach(0..<6, id: \.self) { i in
+                        Circle()
+                            .fill(Color.white.opacity(Double.random(in: 0.15...0.35)))
+                            .frame(width: CGFloat.random(in: 3...8))
+                            .position(
+                                x: CGFloat.random(in: 20...geo.size.width - 20),
+                                y: CGFloat.random(in: 20...geo.size.height - 20)
+                            )
+                    }
                 }
+                .clipShape(RoundedRectangle(cornerRadius: 28))
 
-                // Open Camera pill
-                Text("Open Camera")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.white)
-                    .padding(.horizontal, 28)
-                    .padding(.vertical, 12)
-                    .background(Theme.gold)
-                    .clipShape(Capsule())
+                VStack(spacing: 16) {
+                    // Camera icon with glow
+                    ZStack {
+                        // Glow behind icon
+                        Circle()
+                            .fill(Color.white.opacity(0.25))
+                            .frame(width: 90, height: 90)
+                            .blur(radius: 20)
+                            .scaleEffect(heroGlowPulse ? 1.1 : 0.9)
+                            .animation(
+                                .easeInOut(duration: 2.0).repeatForever(autoreverses: true),
+                                value: heroGlowPulse
+                            )
+
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 40, weight: .medium))
+                            .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                    }
+
+                    VStack(spacing: 6) {
+                        Text("Snap a Photo")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundStyle(.white)
+                            .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
+
+                        Text("Turn anything into a recipe in seconds")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.85))
+                            .lineSpacing(2)
+                    }
+
+                    // CTA button
+                    Text("Snap a Photo")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(Theme.goldDeep)
+                        .padding(.horizontal, 36)
+                        .padding(.vertical, 14)
+                        .background(
+                            Capsule()
+                                .fill(.white)
+                                .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
+                        )
+                }
+                .padding(.vertical, 32)
+                .padding(.horizontal, 24)
             }
-            .padding(.vertical, 28)
-            .padding(.horizontal, 20)
             .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(Theme.cardSurface)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 24)
-                            .stroke(Theme.gold.opacity(0.2), lineWidth: 1)
-                    )
-                    .shadow(color: Theme.gold.opacity(0.08), radius: 30, x: 0, y: 12)
-                    .shadow(color: .black.opacity(0.06), radius: 10, x: 0, y: 4)
-            )
+            .frame(minHeight: 260)
+            .shadow(color: Theme.gold.opacity(0.35), radius: 20, y: 10)
         }
         .buttonStyle(PremiumCardButtonStyle())
+        .onAppear { heroGlowPulse = true }
     }
 
-    // MARK: - Active Chef
+    // MARK: - Chef Mode
 
-    private var activeChefCard: some View {
+    private var chefModeCard: some View {
         let chef = ChefPersonality(rawValue: selectedChef) ?? .defaultChef
 
         return Button {
@@ -222,35 +259,32 @@ struct DashboardView: View {
             showChefPicker = true
         } label: {
             HStack(spacing: 14) {
+                // Chef icon
                 Circle()
-                    .fill(Theme.gold.opacity(0.15))
-                    .frame(width: 44, height: 44)
+                    .fill(Theme.gold.opacity(0.12))
+                    .frame(width: 48, height: 48)
                     .overlay(
                         Image(systemName: chef.icon)
-                            .font(.system(size: 18))
+                            .font(.system(size: 20))
                             .foregroundStyle(Theme.gold)
                     )
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(chef.displayName)
-                        .font(.system(size: 16, weight: .semibold))
+                    Text("Chef Mode")
+                        .font(.system(size: 17, weight: .bold))
                         .foregroundStyle(Theme.textPrimary)
                     Text(chef.subtitle)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Theme.textTertiary)
                 }
 
                 Spacer()
 
-                Text("Switch")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Theme.gold)
-
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Theme.textQuaternary)
             }
-            .lightCard()
+            .warmCard()
         }
         .buttonStyle(PremiumCardButtonStyle())
     }
@@ -261,20 +295,20 @@ struct DashboardView: View {
         VStack(spacing: 16) {
             HStack(spacing: 12) {
                 Circle()
-                    .fill(Color(red: 0.78, green: 0.42, blue: 0.31).opacity(0.15))
-                    .frame(width: 44, height: 44)
+                    .fill(Theme.warmPink.opacity(0.12))
+                    .frame(width: 48, height: 48)
                     .overlay(
                         Image(systemName: "heart.fill")
-                            .font(.system(size: 18))
-                            .foregroundStyle(Color(red: 0.78, green: 0.42, blue: 0.31))
+                            .font(.system(size: 20))
+                            .foregroundStyle(Theme.warmPink)
                     )
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Community Impact")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: 17, weight: .bold))
                         .foregroundStyle(Theme.textPrimary)
                     Text("Every recipe helps feed someone")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Theme.textTertiary)
                 }
 
@@ -282,12 +316,23 @@ struct DashboardView: View {
             }
 
             HStack(spacing: 0) {
-                // Meals Donated
-                VStack(spacing: 6) {
-                    Text(impactService.isLoaded ? "\(impactService.totalMealsDonated)" : "—")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color(red: 0.78, green: 0.42, blue: 0.31))
-                        .contentTransition(.numericText())
+                // Remaining / To Go
+                VStack(spacing: 4) {
+                    if impactService.isLoaded {
+                        let remaining = 25 - (impactService.totalGenerations % 25)
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text("\(remaining)")
+                                .font(.system(size: 32, weight: .bold, design: .rounded))
+                                .foregroundStyle(Theme.warmPink)
+                            Text("TO GO")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Theme.warmPink.opacity(0.7))
+                        }
+                    } else {
+                        Text("—")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .foregroundStyle(Theme.warmPink)
+                    }
                     Text("Meals Donated")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Theme.textTertiary)
@@ -299,14 +344,22 @@ struct DashboardView: View {
                 // Divider
                 Rectangle()
                     .fill(Theme.cardBorder)
-                    .frame(width: 1, height: 36)
+                    .frame(width: 1, height: 40)
 
                 // Recipes Created
-                VStack(spacing: 6) {
-                    Text(impactService.isLoaded ? "\(impactService.totalGenerations)" : "—")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundStyle(Theme.gold)
-                        .contentTransition(.numericText())
+                VStack(spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(impactService.isLoaded ? "\(impactService.totalGenerations)" : "—")
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                            .foregroundStyle(Theme.gold)
+                            .contentTransition(.numericText())
+
+                        if impactService.isLoaded && impactService.totalGenerations > 0 {
+                            Image(systemName: "trophy.fill")
+                                .font(.system(size: 16))
+                                .foregroundStyle(Theme.gold)
+                        }
+                    }
                     Text("Recipes Created")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Theme.textTertiary)
@@ -317,33 +370,34 @@ struct DashboardView: View {
             }
             .padding(.vertical, 4)
 
-            // Progress to next meal
+            // Progress bar
             if impactService.isLoaded {
                 let progress = Double(impactService.totalGenerations % 25) / 25.0
                 let remaining = 25 - (impactService.totalGenerations % 25)
 
-                VStack(spacing: 8) {
+                VStack(spacing: 10) {
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(Theme.cardBorder)
-                                .frame(height: 6)
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Theme.warmPink.opacity(0.12))
+                                .frame(height: 8)
 
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(Color(red: 0.78, green: 0.42, blue: 0.31))
-                                .frame(width: geo.size.width * progress, height: 6)
-                                .animation(.easeOut(duration: 0.6), value: progress)
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Theme.impactGradient)
+                                .frame(width: geo.size.width * (progressAnimated ? progress : 0), height: 8)
+                                .animation(.spring(response: 0.8, dampingFraction: 0.7).delay(0.3), value: progressAnimated)
                         }
                     }
-                    .frame(height: 6)
+                    .frame(height: 8)
 
-                    Text("\(remaining) more recipe\(remaining == 1 ? "" : "s") until the next meal donation")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Theme.textQuaternary)
+                    Text("You're \(remaining) recipe\(remaining == 1 ? "" : "s") away from feeding someone!")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Theme.textSecondary)
                 }
+                .onAppear { progressAnimated = true }
             }
         }
-        .lightCard()
+        .warmCard()
     }
 
     // MARK: - Challenges
@@ -352,7 +406,7 @@ struct DashboardView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("Cooking Challenges")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(Theme.textPrimary)
                 Spacer()
                 if !challengeService.challenges.isEmpty {
@@ -383,33 +437,29 @@ struct DashboardView: View {
     private var challengeEmptyState: some View {
         VStack(spacing: 12) {
             Circle()
-                .fill(Theme.gold.opacity(0.1))
-                .frame(width: 48, height: 48)
+                .fill(Theme.gold.opacity(0.12))
+                .frame(width: 52, height: 52)
                 .overlay(
                     Image(systemName: "flag.checkered")
-                        .font(.system(size: 20))
-                        .foregroundStyle(Theme.gold.opacity(0.5))
+                        .font(.system(size: 22))
+                        .foregroundStyle(Theme.gold)
                 )
 
             VStack(spacing: 4) {
                 Text("No challenges yet")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.textTertiary)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Theme.textSecondary)
                 Text("Create a recipe to start one")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.textQuaternary)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textTertiary)
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
         .background(
             RoundedRectangle(cornerRadius: 20)
-                .fill(Theme.cardSurface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(Theme.cardBorder, lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.06), radius: 10, x: 0, y: 4)
+                .fill(Theme.warmCardBg)
+                .shadow(color: Theme.gold.opacity(0.06), radius: 12, y: 4)
         )
     }
 
@@ -429,7 +479,7 @@ struct DashboardView: View {
             if authManager.isAuthenticated && !menuService.myMenus.isEmpty {
                 HStack {
                     Text("Tasting Menus")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: 18, weight: .bold))
                         .foregroundStyle(Theme.textPrimary)
                     Spacer()
                     Button {
@@ -446,7 +496,6 @@ struct DashboardView: View {
                 }
             }
 
-            // Create menu action card
             createMenuCard
         }
     }
@@ -457,7 +506,7 @@ struct DashboardView: View {
         } label: {
             HStack(spacing: 14) {
                 Circle()
-                    .fill(Theme.gold.opacity(0.15))
+                    .fill(Theme.gold.opacity(0.12))
                     .frame(width: 44, height: 44)
                     .overlay(
                         Image(systemName: "menucard")
@@ -480,7 +529,7 @@ struct DashboardView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.textQuaternary)
             }
-            .lightCard()
+            .warmCard()
         }
         .buttonStyle(PremiumCardButtonStyle())
     }
@@ -495,7 +544,7 @@ struct DashboardView: View {
         } label: {
             HStack(spacing: 14) {
                 Circle()
-                    .fill(Theme.gold.opacity(0.15))
+                    .fill(Theme.gold.opacity(0.12))
                     .frame(width: 44, height: 44)
                     .overlay(
                         Image(systemName: "plus")
@@ -520,7 +569,7 @@ struct DashboardView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.textQuaternary)
             }
-            .lightCard()
+            .warmCard()
         }
         .buttonStyle(PremiumCardButtonStyle())
     }
@@ -531,7 +580,7 @@ struct DashboardView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("Recent Recipes")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(Theme.textPrimary)
                 Spacer()
                 if !recipes.isEmpty {
@@ -560,36 +609,69 @@ struct DashboardView: View {
     }
 
     private var emptyRecipesState: some View {
-        VStack(spacing: 12) {
-            Circle()
-                .fill(Theme.gold.opacity(0.1))
-                .frame(width: 48, height: 48)
-                .overlay(
-                    Image(systemName: "book.closed")
-                        .font(.system(size: 20))
-                        .foregroundStyle(Theme.gold.opacity(0.5))
-                )
+        Button {
+            HapticManager.medium()
+            vm.navigateToCamera()
+        } label: {
+            HStack(spacing: 16) {
+                // Playful food illustration using layered icons
+                ZStack {
+                    Circle()
+                        .fill(Theme.gold.opacity(0.10))
+                        .frame(width: 72, height: 72)
 
-            VStack(spacing: 4) {
-                Text("No recipes yet")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.textTertiary)
-                Text("Snap a photo to generate your first dish")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.textQuaternary)
+                    // Layered food icons for playful feel
+                    Image(systemName: "carrot.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Theme.goldOrange)
+                        .offset(x: -14, y: -10)
+
+                    Image(systemName: "leaf.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.green.opacity(0.6))
+                        .offset(x: 16, y: -14)
+
+                    Image(systemName: "camera.fill")
+                        .font(.system(size: 24))
+                        .foregroundStyle(Theme.gold)
+
+                    Image(systemName: "fork.knife")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.goldDeep)
+                        .offset(x: 14, y: 12)
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("No recipes yet")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(Theme.textPrimary)
+
+                    Text("Your first recipe is waiting")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Theme.textTertiary)
+
+                    Text("Snap Your First Recipe")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Theme.goldDeep)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(Theme.ctaGradient)
+                                .opacity(0.18)
+                        )
+                        .overlay(
+                            Capsule()
+                                .stroke(Theme.gold.opacity(0.3), lineWidth: 1)
+                        )
+                        .padding(.top, 2)
+                }
+
+                Spacer()
             }
+            .warmCard()
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 24)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Theme.cardSurface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(Theme.cardBorder, lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.06), radius: 10, x: 0, y: 4)
-        )
+        .buttonStyle(PremiumCardButtonStyle())
     }
 
     private func recentRecipeCard(_ recipe: Recipe) -> some View {
@@ -608,11 +690,11 @@ struct DashboardView: View {
                                 .aspectRatio(contentMode: .fill)
                         } else {
                             RoundedRectangle(cornerRadius: 16)
-                                .fill(Theme.gold.opacity(0.06))
+                                .fill(Theme.gold.opacity(0.08))
                                 .overlay(
                                     Image(systemName: "fork.knife")
                                         .font(.system(size: 28))
-                                        .foregroundStyle(Theme.gold.opacity(0.2))
+                                        .foregroundStyle(Theme.gold.opacity(0.3))
                                 )
                         }
                     }
@@ -636,14 +718,36 @@ struct DashboardView: View {
     }
 }
 
+// MARK: - Warm Card Modifier
+
+private struct WarmCard: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Theme.warmCardBg)
+                    .shadow(color: Theme.gold.opacity(0.06), radius: 12, y: 4)
+                    .shadow(color: .black.opacity(0.03), radius: 4, y: 2)
+            )
+    }
+}
+
+extension View {
+    fileprivate func warmCard() -> some View {
+        modifier(WarmCard())
+    }
+}
+
 // MARK: - Premium Button Style
 
 /// Subtle scale + lift animation on press for all interactive cards.
 struct PremiumCardButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
-            .opacity(configuration.isPressed ? 0.92 : 1.0)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
             .animation(.easeOut(duration: 0.2), value: configuration.isPressed)
     }
 }

@@ -10,6 +10,7 @@ struct PublishedMenuView: View {
 
     @Environment(\.modelContext) private var modelContext
     @State private var loadedRecipes: [Int: Recipe] = [:]
+    @State private var remoteRecipes: [String: Recipe] = [:]
     @State private var showSharePDF = false
     @State private var pdfData: Data?
 
@@ -77,6 +78,7 @@ struct PublishedMenuView: View {
         }
         .task {
             loadAllRecipes()
+            await fetchRemoteRecipes()
         }
     }
 
@@ -141,12 +143,29 @@ struct PublishedMenuView: View {
 
     private func loadAllRecipes() {
         for course in courses {
-            guard let recipeIdString = course.recipeId,
-                  let uuid = UUID(uuidString: recipeIdString) else { continue }
-            let descriptor = FetchDescriptor<Recipe>(predicate: #Predicate { $0.id == uuid })
+            guard let recipeIdString = course.recipeId else { continue }
+            // Look up by remoteId in local SwiftData first
+            let descriptor = FetchDescriptor<Recipe>(predicate: #Predicate { $0.remoteId == recipeIdString })
             if let recipe = try? modelContext.fetch(descriptor).first {
                 loadedRecipes[course.courseOrder] = recipe
             }
+        }
+    }
+
+    private func fetchRemoteRecipes() async {
+        do {
+            let fetched = try await TastingMenuService.shared.fetchMenuRecipes(menuId: menu.id)
+            remoteRecipes = fetched
+
+            // Fill any courses that weren't found locally
+            for course in courses {
+                guard let recipeId = course.recipeId,
+                      loadedRecipes[course.courseOrder] == nil,
+                      let recipe = fetched[recipeId] else { continue }
+                loadedRecipes[course.courseOrder] = recipe
+            }
+        } catch {
+            logger.error("Failed to fetch remote recipes: \(error)")
         }
     }
 

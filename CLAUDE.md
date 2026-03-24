@@ -53,13 +53,39 @@ Taste The Lens/Taste The Lens/
 - [MobileColorDesign.md](MobileColorDesign.md) — Principles for choosing colors in mobile apps (color psychology, the "Fourth C" of design, and best practices).
 - [ColorTheory.md](ColorTheory.md) — Color theory fundamentals (the color wheel, color properties, and six color harmonies).
 
-### Color Palette (Dark Theme) — Analogous Warm + Cool Complement
+### Color Palette — iOS App (Dark Theme, Analogous Warm + Cool Complement)
 
 - Background: `#0D0D0F`
 - Gold (brand identity, decorative emphasis): `#D4A43A`
 - Primary (interactive elements, buttons): `#B89530`
 - Visual (photography/scene analysis domain): `#3A9E8F` (teal)
 - Culinary (cooking/recipe domain): `#C86B50` (terracotta)
+
+### Color Palette — Landing Page Website (Dark Theme, Warm/Cool Harmony)
+
+Defined as CSS custom properties in `LandingPage/styles.css`.
+
+**Backgrounds:**
+- `--bg`: `#0A0A12` (primary dark background)
+- `--bg-alt`: `#13101E` (alternative dark background)
+- `--bg-warm`: `#1A1530` (warm dark background)
+
+**Brand & Accent:**
+- `--gold` / `--primary`: `#E8A832` (primary accent, brand color)
+- `--gold-dim`: `#A07520` (dimmed gold)
+- `--purple`: `#7B3FA0` (secondary accent)
+- `--purple-bright`: `#9B5FC0` (bright purple)
+- `--magenta`: `#C73B8E` (accent color)
+
+**Text:**
+- `--text-primary`: `#F0ECF5`
+- `--text-secondary`: `#C8BFD6`
+- `--text-muted`: `#9B8FB5`
+- `--text-dim`: `#6B5F80`
+
+**Components:**
+- `--card-bg`: `rgba(35, 28, 58, 0.95)`
+- `--card-border`: `rgba(123, 63, 160, 0.35)`
 
 ### Fill Images — Use the Overlay Pattern
 

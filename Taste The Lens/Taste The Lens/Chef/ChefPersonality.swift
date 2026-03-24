@@ -48,6 +48,26 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Asset catalog image name — falls back to SF Symbol icon if not found
+    var avatarImageName: String {
+        switch self {
+        case .defaultChef: return "chef-default"
+        case .dooby: return "chef-dooby"
+        case .beginner: return "chef-beginner"
+        case .grizzly: return "chef-grizzly"
+        }
+    }
+
+    /// Short personality tagline shown on the card
+    var tagline: String {
+        switch self {
+        case .defaultChef: return "Everyday ingredients, extraordinary dishes."
+        case .dooby: return "Late-night cravings? I got you."
+        case .beginner: return "No experience needed. Let's cook!"
+        case .grizzly: return "Fire, smoke, and bold flavors."
+        }
+    }
+
     // MARK: - System Prompt
 
     var systemPrompt: String {
