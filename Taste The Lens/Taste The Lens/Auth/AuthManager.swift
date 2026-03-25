@@ -4,7 +4,7 @@ import Auth
 import AuthenticationServices
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "Auth")
+private let logger = makeLogger(category: "Auth")
 
 @Observable
 final class AuthManager {

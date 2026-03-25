@@ -2,7 +2,7 @@ import SwiftUI
 import Auth
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "TastingMenuList")
+private let logger = makeLogger(category: "TastingMenuList")
 
 struct TastingMenuListView: View {
     var initialInviteCode: String?

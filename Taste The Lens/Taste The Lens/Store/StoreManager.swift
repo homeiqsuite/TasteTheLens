@@ -3,7 +3,7 @@ import StoreKit
 import Supabase
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "Store")
+private let logger = makeLogger(category: "Store")
 
 @Observable
 final class StoreManager {
@@ -125,13 +125,11 @@ final class StoreManager {
                 // Subscription
                 await updateSubscriptionStatus()
 
-                // Update Supabase tier
-                if AuthManager.shared.isAuthenticated,
-                   let userId = AuthManager.shared.currentUser?.id.uuidString {
+                // Update Supabase tier via server-side RPC (validates auth.uid())
+                if AuthManager.shared.isAuthenticated {
                     let tierValue = tierForProductId(product.id).rawValue
-                    try? await SupabaseManager.shared.client.from("users")
-                        .update(["subscription_tier": tierValue])
-                        .eq("id", value: userId)
+                    try? await SupabaseManager.shared.client
+                        .rpc("update_subscription_tier", params: ["tier_value": tierValue])
                         .execute()
                 }
 

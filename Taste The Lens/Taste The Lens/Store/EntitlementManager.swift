@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "Entitlement")
+private let logger = makeLogger(category: "Entitlement")
 
 // MARK: - Subscription Tier
 

@@ -1,7 +1,7 @@
 import SwiftUI
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "ChallengeFeed")
+private let logger = makeLogger(category: "ChallengeFeed")
 
 struct ChallengeFeedView: View {
     @Environment(\.dismiss) private var dismiss

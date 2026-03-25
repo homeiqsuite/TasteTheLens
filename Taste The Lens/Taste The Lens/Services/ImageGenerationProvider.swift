@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "ImageGen")
+private let logger = makeLogger(category: "ImageGen")
 
 // MARK: - Model Selection
 

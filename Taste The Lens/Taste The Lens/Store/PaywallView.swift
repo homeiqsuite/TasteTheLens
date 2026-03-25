@@ -2,7 +2,7 @@ import SwiftUI
 import StoreKit
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "Paywall")
+private let logger = makeLogger(category: "Paywall")
 
 // MARK: - Paywall Context
 

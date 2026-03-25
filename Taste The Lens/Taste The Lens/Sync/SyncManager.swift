@@ -3,7 +3,7 @@ import SwiftData
 import Supabase
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "Sync")
+private let logger = makeLogger(category: "Sync")
 
 @Observable
 final class SyncManager {

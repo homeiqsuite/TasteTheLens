@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "PublishedMenu")
+private let logger = makeLogger(category: "PublishedMenu")
 
 struct PublishedMenuView: View {
     let menu: TastingMenuDTO

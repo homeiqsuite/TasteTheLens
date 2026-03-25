@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "MainViewModel")
+private let logger = makeLogger(category: "MainViewModel")
 
 @Observable @MainActor
 final class MainViewModel {
@@ -23,22 +23,48 @@ final class MainViewModel {
     var showError = false
     var pendingMenuCourse: (menuId: String, courseOrder: Int)?
 
+    var showPrivacyNotice = false
+
     private var processingTask: Task<Void, Never>?
+    private var lastGenerationStartTime: Date?
+    private var pendingCapturedImage: UIImage?
+    @ObservationIgnored @AppStorage("hasSeenPrivacyNotice") private var hasSeenPrivacyNotice = false
 
     // MARK: - Photo Capture
 
     func handlePhotoCaptured(_ image: UIImage) {
+        if !hasSeenPrivacyNotice {
+            pendingCapturedImage = image
+            showPrivacyNotice = true
+            return
+        }
+
+        if let last = lastGenerationStartTime, Date().timeIntervalSince(last) < 10 {
+            showTemporaryError("Please wait a moment before generating another recipe.")
+            return
+        }
+
         if UsageTracker.shared.canGenerate {
             logger.info("Photo received — transitioning to processing. pendingMenuCourse: \(String(describing: self.pendingMenuCourse))")
             capturedImage = image
             excludedDishNames = []
             courseType = nil
             pipeline = ImageAnalysisPipeline()
+            lastGenerationStartTime = Date()
             currentScreen = .processing
         } else {
             logger.info("Usage limit reached — showing paywall")
             paywallContext = .outOfGenerations
             showPaywall = true
+        }
+    }
+
+    func acceptPrivacyNotice() {
+        hasSeenPrivacyNotice = true
+        showPrivacyNotice = false
+        if let image = pendingCapturedImage {
+            pendingCapturedImage = nil
+            handlePhotoCaptured(image)
         }
     }
 
@@ -186,6 +212,7 @@ final class MainViewModel {
             budgetLimit = budget
         }
         pipeline = ImageAnalysisPipeline()
+        lastGenerationStartTime = Date()
         currentScreen = .processing
     }
 
@@ -217,6 +244,7 @@ final class MainViewModel {
         excludedDishNames = []
         budgetLimit = nil
         courseType = nil
+        lastGenerationStartTime = nil
         pipeline = ImageAnalysisPipeline()
     }
 

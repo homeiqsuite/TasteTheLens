@@ -125,7 +125,7 @@ struct RecipeCardView: View {
 
     private var heroImageSection: some View {
         ZStack(alignment: .bottom) {
-            // Full-bleed generated dish image
+            // Full-bleed generated dish image (or inspiration fallback)
             if let imageData = recipe.generatedDishImageData,
                let uiImage = UIImage(data: imageData) {
                 Color.clear
@@ -140,6 +140,26 @@ struct RecipeCardView: View {
                     .offset(y: heroAppeared ? 0 : -30)
                     .opacity(heroAppeared ? 1 : 0)
                     .animation(.spring(response: 0.7, dampingFraction: 0.8), value: heroAppeared)
+            } else if let uiImage = UIImage(data: recipe.inspirationImageData) {
+                Color.clear
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 380)
+                    .overlay {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    }
+                    .clipped()
+                    .overlay(Theme.visual.opacity(0.35))
+                    .overlay(alignment: .topLeading) {
+                        Label("Showing your inspiration photo", systemImage: "photo")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.8))
+                            .padding(8)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Capsule())
+                            .padding(12)
+                    }
             }
 
             // Gradient scrim for text readability

@@ -2,7 +2,7 @@ import Foundation
 import Supabase
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "TastingMenuService")
+private let logger = makeLogger(category: "TastingMenuService")
 
 @Observable @MainActor
 final class TastingMenuService {

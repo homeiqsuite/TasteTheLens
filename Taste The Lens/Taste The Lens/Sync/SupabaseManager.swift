@@ -2,7 +2,7 @@ import Foundation
 import Supabase
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "Supabase")
+private let logger = makeLogger(category: "Supabase")
 
 @Observable
 final class SupabaseManager {
@@ -21,6 +21,6 @@ final class SupabaseManager {
             supabaseKey: key
         )
 
-        logger.info("Supabase client initialized — \(AppConfig.supabaseURL)")
+        logger.info("Supabase client initialized")
     }
 }

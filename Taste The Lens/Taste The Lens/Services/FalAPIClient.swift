@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "FalAPI")
+private let logger = makeLogger(category: "FalAPI")
 
 enum FalAPIError: LocalizedError {
     case networkError(Error)

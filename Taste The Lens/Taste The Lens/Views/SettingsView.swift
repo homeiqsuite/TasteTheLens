@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "Settings")
+private let logger = makeLogger(category: "Settings")
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -12,6 +12,9 @@ struct SettingsView: View {
     @State private var showSignIn = false
     @State private var showProfile = false
     @State private var showPaywall = false
+    @State private var exportFileURL: URL?
+    @State private var showExportShare = false
+    @State private var isExporting = false
 
     private let authManager = AuthManager.shared
 
@@ -103,6 +106,10 @@ struct SettingsView: View {
                     // App Section
                     settingsSection("App") {
                         VStack(spacing: 0) {
+                            settingsButton("Export My Data", icon: "square.and.arrow.up", color: Theme.textPrimary) {
+                                exportData()
+                            }
+                            settingsDivider
                             settingsButton("Clear Local Data", icon: "trash", color: Theme.textSecondary) {
                                 showClearDataConfirmation = true
                             }
@@ -124,6 +131,9 @@ struct SettingsView: View {
                     Spacer().frame(height: 40)
                 }
                 .padding(.top, 20)
+            }
+            .refreshable {
+                await refreshSettings()
             }
             .background(Theme.background.ignoresSafeArea())
             .navigationTitle("Settings")
@@ -150,6 +160,11 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showPaywall) {
                 PaywallView(context: EntitlementManager.shared.isSubscriber ? .topUp : .outOfGenerations)
+            }
+            .sheet(isPresented: $showExportShare) {
+                if let url = exportFileURL {
+                    ShareSheet(items: [url])
+                }
             }
         }
     }
@@ -303,6 +318,14 @@ struct SettingsView: View {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
     }
 
+    private func refreshSettings() async {
+        async let creditsTask: () = UsageTracker.shared.syncCreditsFromServer()
+        async let usageTask: () = UsageTracker.shared.syncUsageFromServer()
+        async let subscriptionTask: () = StoreManager.shared.updateSubscriptionStatus()
+        _ = await (creditsTask, usageTask, subscriptionTask)
+        logger.info("Settings refreshed")
+    }
+
     private func clearLocalData() {
         logger.info("Clearing all local recipe data")
         do {
@@ -312,6 +335,38 @@ struct SettingsView: View {
             logger.error("Failed to clear local data: \(error)")
         }
     }
+
+    private func exportData() {
+        logger.info("Exporting user data")
+        let descriptor = FetchDescriptor<Recipe>()
+        let recipes = (try? modelContext.fetch(descriptor)) ?? []
+
+        let userInfo = DataExporter.UserExportInfo(
+            displayName: authManager.displayName,
+            email: authManager.email,
+            memberSince: authManager.memberSinceDate,
+            subscriptionTier: StoreManager.shared.currentTier.displayName
+        )
+
+        let jsonData = DataExporter.exportJSON(recipes: recipes, user: userInfo)
+        if let url = DataExporter.exportFileURL(data: jsonData) {
+            exportFileURL = url
+            showExportShare = true
+            logger.info("Data export ready — \(recipes.count) recipes")
+        }
+    }
+}
+
+// MARK: - Share Sheet
+
+private struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 #Preview {

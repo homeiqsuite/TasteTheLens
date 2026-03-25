@@ -2,7 +2,7 @@ import SwiftUI
 import PhotosUI
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "ChallengeDetail")
+private let logger = makeLogger(category: "ChallengeDetail")
 
 struct ChallengeDetailView: View {
     let challenge: ChallengeDTO

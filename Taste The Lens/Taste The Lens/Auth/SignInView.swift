@@ -3,7 +3,7 @@ import AuthenticationServices
 import CryptoKit
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "SignIn")
+private let logger = makeLogger(category: "SignIn")
 
 struct SignInView: View {
     @Environment(\.dismiss) private var dismiss
@@ -178,6 +178,8 @@ struct SignInView: View {
             Task {
                 do {
                     try await authManager.signInWithApple(idToken: idToken, nonce: nonce)
+                    await UsageTracker.shared.claimSignupBonusIfNeeded()
+                    await UsageTracker.shared.syncCreditsFromServer()
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
                     dismiss()
                 } catch {
@@ -202,6 +204,8 @@ struct SignInView: View {
             } else {
                 try await authManager.signInWithEmail(email: email, password: password)
             }
+            await UsageTracker.shared.claimSignupBonusIfNeeded()
+            await UsageTracker.shared.syncCreditsFromServer()
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             dismiss()
         } catch {

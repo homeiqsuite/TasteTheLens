@@ -2,7 +2,7 @@ import SwiftUI
 import PhotosUI
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "CameraView")
+private let logger = makeLogger(category: "CameraView")
 
 struct CameraView: View {
     @State var cameraManager = CameraManager()

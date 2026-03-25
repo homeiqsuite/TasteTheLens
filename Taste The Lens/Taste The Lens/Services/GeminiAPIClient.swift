@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "GeminiAPI")
+private let logger = makeLogger(category: "GeminiAPI")
 
 enum GeminiAPIError: LocalizedError {
     case invalidImage

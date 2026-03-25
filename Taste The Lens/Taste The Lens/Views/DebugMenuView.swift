@@ -1,7 +1,7 @@
 import SwiftUI
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "DebugMenu")
+private let logger = makeLogger(category: "DebugMenu")
 
 struct DebugMenuView: View {
     @AppStorage("debug_imageGenModel") private var selectedModelRaw = ImageGenerationModel.imagen4.rawValue

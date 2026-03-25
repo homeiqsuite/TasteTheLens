@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "ClaudeAPI")
+private let logger = makeLogger(category: "ClaudeAPI")
 
 struct ClaudeRecipeResponse: Codable, Sendable {
     let dishName: String

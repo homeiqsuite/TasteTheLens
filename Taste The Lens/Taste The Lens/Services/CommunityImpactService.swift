@@ -2,7 +2,7 @@ import Foundation
 import Supabase
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "CommunityImpact")
+private let logger = makeLogger(category: "CommunityImpact")
 
 /// Tracks community-wide meal donations and generation milestones.
 @Observable @MainActor

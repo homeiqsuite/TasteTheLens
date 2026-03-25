@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "ContentView")
+private let logger = makeLogger(category: "ContentView")
 
 enum AppScreen: Equatable {
     case dashboard
@@ -15,7 +15,9 @@ struct ContentView: View {
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @AppStorage("debug_processingStyle") private var processingStyleRaw = ProcessingStyle.kitchenPass.rawValue
     @State private var showOnboarding = false
+    #if !PRODUCTION
     @State private var showDebugMenu = false
+    #endif
     @State private var vm = MainViewModel()
     @Namespace private var heroNamespace
 
@@ -65,12 +67,14 @@ struct ContentView: View {
                 errorToast(message: message)
             }
         }
+        #if !PRODUCTION
         .onTapGesture(count: 3) {
             showDebugMenu = true
         }
         .sheet(isPresented: $showDebugMenu) {
             DebugMenuView()
         }
+        #endif
         .animation(reduceMotion ? .easeInOut(duration: 0.3) : .spring(response: 0.6, dampingFraction: 0.85), value: vm.currentScreen)
         .preferredColorScheme(vm.currentScreen == .dashboard ? .light : .dark)
         .fullScreenCover(isPresented: $showOnboarding) {
@@ -100,6 +104,11 @@ struct ContentView: View {
         .sheet(isPresented: $vm.showTastingMenus) {
             TastingMenuListView(initialInviteCode: vm.deepLinkedInviteCode)
                 .onDisappear { vm.deepLinkedInviteCode = nil }
+        }
+        .sheet(isPresented: $vm.showPrivacyNotice) {
+            PrivacyNoticeSheet {
+                vm.acceptPrivacyNotice()
+            }
         }
         .onAppear {
             logger.info("ContentView appeared — hasSeenOnboarding: \(hasSeenOnboarding)")
@@ -358,5 +367,72 @@ struct ContentView: View {
         }
         .transition(.move(edge: .top).combined(with: .opacity))
         .animation(.spring(response: 0.4), value: vm.showError)
+    }
+}
+
+// MARK: - Privacy Notice Sheet
+
+private struct PrivacyNoticeSheet: View {
+    let onAccept: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.darkBg.ignoresSafeArea()
+
+                VStack(spacing: 20) {
+                    Image(systemName: "shield.checkered")
+                        .font(.system(size: 48))
+                        .foregroundStyle(Theme.visual)
+                        .padding(.top, 32)
+
+                    Text("How Your Photos Are Used")
+                        .font(.system(size: 22, weight: .bold, design: .serif))
+                        .foregroundStyle(Theme.darkTextPrimary)
+
+                    Text("When you capture a photo, it's sent to AI services to analyze the scene and generate your recipe. Photos are processed in real-time and are not stored on external servers beyond processing.")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.darkTextSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+
+                    Button {
+                        if let url = URL(string: "https://tastethelens.com/privacy") {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "doc.text")
+                                .font(.system(size: 13))
+                            Text("Privacy Policy")
+                                .font(.system(size: 14, weight: .medium))
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 11))
+                        }
+                        .foregroundStyle(Theme.darkTextTertiary)
+                    }
+
+                    Spacer()
+
+                    Button {
+                        onAccept()
+                    } label: {
+                        Text("I Understand")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Theme.darkBg)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Theme.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 32)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+        }
+        .interactiveDismissDisabled()
     }
 }

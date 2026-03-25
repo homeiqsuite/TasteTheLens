@@ -5,7 +5,7 @@ import ActivityKit
 import WidgetKit
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "Pipeline")
+private let logger = makeLogger(category: "Pipeline")
 
 enum PipelineState: Equatable {
     case idle
@@ -123,19 +123,29 @@ final class ImageAnalysisPipeline: Identifiable {
             partialIngredients = recipeResponse.components.flatMap { $0.ingredients }
             processingStatus = "Translating emotion..."
 
-            // Step 2: Image generation
+            // Step 2: Image generation (non-fatal — recipe is still useful without a generated image)
             try Task.checkCancellation()
             state = .generatingImage
             processingStatus = "Plating concept..."
             await LiveActivityManager.shared.updatePhase("Generating", progress: 0.65, status: "Plating concept...")
             logger.info("Generating image with \(self.imageGenModel.displayName)...")
 
-            let enhancedPrompt = recipeResponse.imageGenerationPrompt
-                + " Professional editorial food photography, Michelin star presentation, warm inviting lighting, shallow depth of field, 85mm lens, appetizing and delicious."
-            let (generatedImageData, imageURL) = try await withExponentialBackoff {
-                try await imageGenClient.generateImage(prompt: enhancedPrompt)
+            var generatedImageData: Data? = nil
+            var imageURL: String = ""
+            do {
+                let enhancedPrompt = recipeResponse.imageGenerationPrompt
+                    + " Professional editorial food photography, Michelin star presentation, warm inviting lighting, shallow depth of field, 85mm lens, appetizing and delicious."
+                let (data, url) = try await withExponentialBackoff {
+                    try await self.imageGenClient.generateImage(prompt: enhancedPrompt)
+                }
+                generatedImageData = data
+                imageURL = url
+                logger.info("\(self.imageGenModel.displayName) response — image: \(data.count) bytes, URL: \(url)")
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                logger.error("Image generation failed, continuing without image: \(error)")
             }
-            logger.info("\(self.imageGenModel.displayName) response — image: \(generatedImageData.count) bytes, URL: \(imageURL)")
 
             // Step 3: Create Recipe
             let recipe = Recipe(
@@ -162,7 +172,9 @@ final class ImageAnalysisPipeline: Identifiable {
             state = .complete
             UsageTracker.shared.incrementUsage()
             await CommunityImpactService.shared.recordGeneration()
-            updateWidgetData(recipe: recipe)
+            if recipe.generatedDishImageData != nil {
+                updateWidgetData(recipe: recipe)
+            }
             await LiveActivityManager.shared.endGeneration(dishName: recipe.dishName)
             logger.info("Pipeline complete — recipe ready")
 

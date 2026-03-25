@@ -3,17 +3,8 @@
    Supabase waitlist + animations + geometric overlay
    ============================================================ */
 
-// --- Supabase Configuration ---
-const SUPABASE_URL = 'https://marimaxtqnzmsynsvhrc.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1hcmltYXh0cW56bXN5bnN2aHJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MDY0NjQsImV4cCI6MjA4OTE4MjQ2NH0.zOXzCqXZ_9HE2pLSU23R-Tv767vFdS1HxyuYtmar_D0';
-
-let supabaseClient;
-
-function initSupabase() {
-    if (typeof supabase !== 'undefined' && supabase.createClient) {
-        supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    }
-}
+// --- API Configuration (Edge Functions — no credentials exposed) ---
+const EDGE_FUNCTION_BASE = 'https://marimaxtqnzmsynsvhrc.supabase.co/functions/v1';
 
 // --- Waitlist Form ---
 function initWaitlistForm() {
@@ -45,13 +36,7 @@ function initWaitlistForm() {
             return;
         }
 
-        if (!supabaseClient) {
-            message.textContent = 'Connection error. Please try again.';
-            message.className = 'waitlist-message error';
-            return;
-        }
-
-        // Submit
+        // Submit via edge function (no Supabase credentials exposed)
         isSubmitting = true;
         button.disabled = true;
         button.classList.add('loading');
@@ -59,32 +44,28 @@ function initWaitlistForm() {
         try {
             const referralSource = new URLSearchParams(window.location.search).get('ref');
 
-            const { error } = await supabaseClient
-                .from('waitlist')
-                .insert({
-                    email: email,
-                    referral_source: referralSource || null
-                });
+            const response = await fetch(`${EDGE_FUNCTION_BASE}/waitlist-signup`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, referral_source: referralSource || null })
+            });
 
-            if (error) {
-                // Duplicate email (unique constraint violation)
-                if (error.code === '23505') {
-                    button.classList.remove('loading');
-                    button.classList.add('success');
-                    message.textContent = "You're already on the list! We'll be in touch.";
-                    message.className = 'waitlist-message success';
-                    input.value = '';
-                } else {
-                    throw error;
-                }
-            } else {
-                // Success
-                button.classList.remove('loading');
-                button.classList.add('success');
-                message.textContent = "You're on the list! We'll notify you when we launch.";
-                message.className = 'waitlist-message success';
-                input.value = '';
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Request failed');
             }
+
+            button.classList.remove('loading');
+            button.classList.add('success');
+
+            if (data.message === 'already_registered') {
+                message.textContent = "You're already on the list! We'll be in touch.";
+            } else {
+                message.textContent = "You're on the list! We'll notify you when we launch.";
+            }
+            message.className = 'waitlist-message success';
+            input.value = '';
 
             // Reset button after 3s
             setTimeout(() => {
@@ -261,16 +242,12 @@ function initSmoothScroll() {
 
 // --- Community Impact Counter ---
 async function initImpactCounter() {
-    if (!supabaseClient) return;
-
     try {
-        const { data, error } = await supabaseClient
-            .from('community_stats')
-            .select('total_generations, total_meals_donated')
-            .eq('id', 1)
-            .single();
+        const response = await fetch(`${EDGE_FUNCTION_BASE}/community-stats`);
+        if (!response.ok) return;
+        const data = await response.json();
 
-        if (error || !data) return;
+        if (!data) return;
 
         const mealsEl = document.getElementById('meals-counter');
         const recipesEl = document.getElementById('recipes-counter');
@@ -299,9 +276,30 @@ async function initImpactCounter() {
     }
 }
 
+// --- FAQ Accordion ---
+function initFAQ() {
+    document.querySelectorAll('.faq-question').forEach(button => {
+        button.addEventListener('click', () => {
+            const item = button.parentElement;
+            const isOpen = item.classList.contains('faq-item--open');
+
+            // Close all other items
+            document.querySelectorAll('.faq-item--open').forEach(openItem => {
+                openItem.classList.remove('faq-item--open');
+                openItem.querySelector('.faq-question').setAttribute('aria-expanded', 'false');
+            });
+
+            // Toggle clicked item
+            if (!isOpen) {
+                item.classList.add('faq-item--open');
+                button.setAttribute('aria-expanded', 'true');
+            }
+        });
+    });
+}
+
 // --- Initialize Everything ---
 document.addEventListener('DOMContentLoaded', () => {
-    initSupabase();
     initGeometricOverlay();
     initHeroAnimation();
     initScrollAnimations();
@@ -309,4 +307,5 @@ document.addEventListener('DOMContentLoaded', () => {
     initNavScroll();
     initSmoothScroll();
     initImpactCounter();
+    initFAQ();
 });

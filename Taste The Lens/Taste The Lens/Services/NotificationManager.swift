@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "Notifications")
+private let logger = makeLogger(category: "Notifications")
 
 enum AppNotificationType {
     case challengeAccepted(challengeTitle: String)

@@ -3,7 +3,7 @@ import SwiftData
 import Auth
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "TastingMenuDetail")
+private let logger = makeLogger(category: "TastingMenuDetail")
 
 struct TastingMenuDetailView: View {
     let menu: TastingMenuDTO

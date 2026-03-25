@@ -1,7 +1,7 @@
 import SwiftUI
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "CreateMenu")
+private let logger = makeLogger(category: "CreateMenu")
 
 struct CreateMenuView: View {
     var onCreated: () -> Void = {}

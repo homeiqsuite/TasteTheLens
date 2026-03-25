@@ -3,7 +3,7 @@ import UIKit
 import Supabase
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "ChallengeService")
+private let logger = makeLogger(category: "ChallengeService")
 
 @Observable @MainActor
 final class ChallengeService {

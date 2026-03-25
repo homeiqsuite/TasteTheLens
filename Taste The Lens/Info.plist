@@ -12,6 +12,13 @@
 	<string>$(SUPABASE_URL)</string>
 	<key>SUPABASE_ANON_KEY</key>
 	<string>$(SUPABASE_ANON_KEY)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>TasteTheLens needs camera access to photograph scenes and generate inspired recipes.</string>
 	<key>CFBundleURLTypes</key>

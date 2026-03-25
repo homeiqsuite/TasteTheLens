@@ -2,7 +2,7 @@ import Foundation
 import Supabase
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "Usage")
+private let logger = makeLogger(category: "Usage")
 
 @Observable
 final class UsageTracker {
@@ -290,6 +290,30 @@ final class UsageTracker {
             }
         } catch {
             logger.warning("Failed to sync credits from server: \(error)")
+        }
+    }
+
+    // MARK: - Signup Bonus
+
+    /// Call the handle-signup edge function to grant bonus credits for new users.
+    /// Idempotent — safe to call multiple times; the server checks `signup_bonus_granted`.
+    func claimSignupBonusIfNeeded() async {
+        guard AuthManager.shared.isAuthenticated else { return }
+
+        struct BonusResponse: Decodable {
+            let bonus_granted: Bool
+            let credits_added: Int
+        }
+
+        do {
+            let bonus: BonusResponse = try await SupabaseManager.shared.client.functions
+                .invoke("handle-signup")
+            if bonus.bonus_granted {
+                purchasedCredits += bonus.credits_added
+                logger.info("Signup bonus claimed: \(bonus.credits_added) credits")
+            }
+        } catch {
+            logger.warning("Failed to claim signup bonus: \(error)")
         }
     }
 

@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 import os
 
-private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "Dashboard")
+private let logger = makeLogger(category: "Dashboard")
 
 struct DashboardView: View {
     @Bindable var vm: MainViewModel
@@ -71,6 +71,9 @@ struct DashboardView: View {
                 .presentationDetents([.medium])
             }
         }
+        .refreshable {
+            await refreshDashboard()
+        }
         .task {
             await loadDashboardData()
         }
@@ -85,6 +88,15 @@ struct DashboardView: View {
             }
         }()
         _ = await (statsTask, challengesTask, menusTask)
+    }
+
+    private func refreshDashboard() async {
+        async let dashboardTask: () = loadDashboardData()
+        async let creditsTask: () = UsageTracker.shared.syncCreditsFromServer()
+        async let usageTask: () = UsageTracker.shared.syncUsageFromServer()
+        async let subscriptionTask: () = StoreManager.shared.updateSubscriptionStatus()
+        _ = await (dashboardTask, creditsTask, usageTask, subscriptionTask)
+        logger.info("Dashboard refreshed")
     }
 
     // MARK: - Greeting

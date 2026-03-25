@@ -1,0 +1,3 @@
+// App Version — Single source of truth
+// Use Scripts/version-bump.sh to increment (major, minor, or patch)
+MARKETING_VERSION = 1.0.0
