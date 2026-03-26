@@ -22,10 +22,14 @@
         .legal-page h2 { font-family: var(--font-serif); font-size: 1.4rem; color: var(--text-primary); margin: 40px 0 16px; }
         .legal-page h3 { font-size: 1.1rem; color: var(--text-secondary); margin: 24px 0 12px; }
         .legal-page p, .legal-page li { color: var(--text-secondary); line-height: 1.8; margin-bottom: 12px; }
-        .legal-page ul { padding-left: 24px; margin-bottom: 16px; }
+        .legal-page ul, .legal-page ol { padding-left: 24px; margin-bottom: 16px; }
         .legal-page li { margin-bottom: 8px; }
         .legal-page a { color: var(--gold); text-decoration: underline; }
         .legal-page a:hover { color: var(--purple-bright); }
+        .legal-page strong { color: var(--text-primary); }
+        .legal-page .legal-table { width: 100%; border-collapse: collapse; margin: 16px 0 24px; }
+        .legal-page .legal-table th, .legal-page .legal-table td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--card-border); color: var(--text-secondary); font-size: 0.95rem; }
+        .legal-page .legal-table th { color: var(--text-primary); font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; }
         .legal-back { display: inline-flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: 0.95rem; margin-bottom: 32px; transition: color 0.2s; }
         .legal-back:hover { color: var(--gold); }
     </style>
@@ -50,94 +54,316 @@
             </a>
 
             <h1>Privacy Policy</h1>
-            <p class="legal-updated">Last updated: March 26, 2026</p>
+            <p class="legal-updated">Effective date: March 26, 2026 &middot; Last updated: March 26, 2026</p>
 
-            <p>Taste The Lens ("we," "our," or "us") is operated by Eight Gates LLC. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application and website (collectively, the "Service").</p>
+            <p>Taste The Lens ("we," "our," or "us") is operated by Eight Gates LLC, a Texas limited liability company. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application and website at tastethelens.com (collectively, the "Service").</p>
+            <p>By using the Service, you consent to the data practices described in this policy. If you do not agree, please do not use the Service.</p>
 
-            <h2>1. Information We Collect</h2>
-
-            <h3>Information You Provide</h3>
-            <ul>
-                <li><strong>Account information:</strong> Email address when you join our waitlist or create an account.</li>
-                <li><strong>Photos:</strong> Images you capture or upload for recipe generation.</li>
-                <li><strong>Payment information:</strong> Processed securely through Apple's In-App Purchase system. We do not store credit card numbers.</li>
-            </ul>
-
-            <h3>Information Collected Automatically</h3>
-            <ul>
-                <li><strong>Usage data:</strong> Features used, number of recipes generated, app interactions, and crash reports.</li>
-                <li><strong>Device information:</strong> Device model, operating system version, and unique device identifiers.</li>
-            </ul>
-
-            <h2>2. How We Use Your Information</h2>
-            <ul>
-                <li>Process your photos through AI services to generate recipes.</li>
-                <li>Manage your account and provide customer support.</li>
-                <li>Track community recipe milestones for our meal donation program.</li>
-                <li>Improve the Service through aggregated, anonymized analytics.</li>
-                <li>Send important service-related communications.</li>
-            </ul>
-
-            <h2>3. Photo Processing &amp; AI Services</h2>
-            <p>When you generate a recipe, your photo is sent to third-party AI services (such as Google Gemini and Fal.ai) for real-time processing. These services process your image to extract visual elements and generate recipe content and food photography.</p>
-            <ul>
-                <li>Photos are transmitted securely using encrypted connections.</li>
-                <li>Photos are processed in real time and are <strong>not permanently stored</strong> on third-party AI servers beyond the generation session.</li>
-                <li>We do not use your photos to train AI models.</li>
-            </ul>
-
-            <h2>4. Data Storage &amp; Retention</h2>
-            <ul>
-                <li><strong>Recipes &amp; images:</strong> Saved recipes and generated food images are stored locally on your device using Apple's SwiftData framework.</li>
-                <li><strong>Account data:</strong> Retained for as long as your account is active or as needed to provide the Service.</li>
-                <li><strong>Waitlist emails:</strong> Stored securely and used only for launch communications. You can unsubscribe at any time.</li>
-            </ul>
-
-            <h2>5. Third-Party Services</h2>
-            <p>We use the following third-party services to operate the app:</p>
-            <ul>
-                <li><strong>Google Gemini API:</strong> Image analysis and recipe generation.</li>
-                <li><strong>Fal.ai:</strong> AI food photography generation.</li>
-                <li><strong>Supabase:</strong> Backend services and waitlist management.</li>
-                <li><strong>Apple In-App Purchases:</strong> Payment processing.</li>
-            </ul>
-            <p>Each third-party service operates under its own privacy policy. We encourage you to review their policies.</p>
-
-            <h2>6. Data Sharing</h2>
-            <p>We do <strong>not</strong> sell, rent, or trade your personal information. We may share data only in the following cases:</p>
-            <ul>
-                <li>With third-party AI services as described above, solely for recipe generation.</li>
-                <li>To comply with legal obligations or respond to lawful requests.</li>
-                <li>To protect our rights, privacy, safety, or property.</li>
-                <li>In connection with a merger, acquisition, or sale of assets (with notice to you).</li>
-            </ul>
-
-            <h2>7. Data Security</h2>
-            <p>We implement appropriate technical and organizational measures to protect your information, including encrypted data transmission (TLS/SSL), secure API key management, and local-first data storage. However, no method of transmission or storage is 100% secure.</p>
-
-            <h2>8. Children's Privacy</h2>
-            <p>The Service is not intended for children under 13. We do not knowingly collect personal information from children under 13. If you believe we have collected such information, please contact us immediately.</p>
-
-            <h2>9. Your Rights</h2>
-            <p>Depending on your location, you may have the right to:</p>
-            <ul>
-                <li>Access the personal data we hold about you.</li>
-                <li>Request correction or deletion of your data.</li>
-                <li>Object to or restrict certain processing.</li>
-                <li>Request data portability.</li>
-                <li>Withdraw consent at any time.</li>
-            </ul>
-            <p>To exercise these rights, contact us at <a href="mailto:privacy@tastethelens.com">privacy@tastethelens.com</a>.</p>
-
-            <h2>10. Changes to This Policy</h2>
-            <p>We may update this Privacy Policy from time to time. We will notify you of material changes by posting the updated policy on this page with a revised "Last updated" date. Your continued use of the Service after changes constitutes acceptance.</p>
-
-            <h2>11. Contact Us</h2>
-            <p>If you have questions about this Privacy Policy, please contact us at:</p>
+            <!-- ===== 1. DATA CONTROLLER ===== -->
+            <h2>1. Data Controller</h2>
+            <p>The data controller responsible for your personal information is:</p>
             <p>
                 Eight Gates LLC<br>
                 Email: <a href="mailto:privacy@tastethelens.com">privacy@tastethelens.com</a>
             </p>
+            <p>For EU/EEA inquiries, you may contact us at the same address. We will respond within the timeframes required by applicable law.</p>
+
+            <!-- ===== 2. INFORMATION WE COLLECT ===== -->
+            <h2>2. Information We Collect</h2>
+
+            <h3>2.1 Information You Provide</h3>
+            <ul>
+                <li><strong>Account information:</strong> Email address when you join our waitlist or create an account.</li>
+                <li><strong>Photos:</strong> Images you capture or upload for recipe generation. Photos are transmitted to our AI processing services and are not permanently stored on our servers.</li>
+                <li><strong>Payment information:</strong> All purchases are processed securely through Apple's In-App Purchase system. We do not collect, process, or store credit card numbers, bank account details, or other financial information.</li>
+                <li><strong>Communications:</strong> Any correspondence you send to us (support requests, feedback).</li>
+            </ul>
+
+            <h3>2.2 Information Collected Automatically</h3>
+            <ul>
+                <li><strong>Usage data:</strong> Features used, number of recipes generated, app interactions, session duration, and crash reports.</li>
+                <li><strong>Device information:</strong> Device model, operating system version, app version, language settings, and time zone.</li>
+                <li><strong>Identifiers:</strong> Anonymous device identifiers for analytics purposes. We do not use Apple's IDFA or perform cross-app tracking.</li>
+            </ul>
+
+            <h3>2.3 Information We Do NOT Collect</h3>
+            <ul>
+                <li><strong>Biometric data:</strong> We do not extract, analyze, or store biometric identifiers (facial geometry, fingerprints, retina scans) from your photos. Our AI analyzes visual elements such as color, texture, composition, and subject matter — not biometric characteristics.</li>
+                <li><strong>Precise location:</strong> We do not collect GPS coordinates or precise geolocation data.</li>
+                <li><strong>Contacts, calendars, or health data:</strong> We do not access these device features.</li>
+            </ul>
+
+            <!-- ===== 3. LEGAL BASIS FOR PROCESSING ===== -->
+            <h2>3. Legal Basis for Processing (GDPR)</h2>
+            <p>If you are located in the EU/EEA/UK, we process your data under the following legal bases:</p>
+            <table class="legal-table">
+                <thead>
+                    <tr>
+                        <th>Data Type</th>
+                        <th>Legal Basis</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Photos (recipe generation)</td>
+                        <td>Consent — you actively choose to capture/upload each photo</td>
+                    </tr>
+                    <tr>
+                        <td>Email (waitlist/account)</td>
+                        <td>Consent — explicit opt-in at sign-up</td>
+                    </tr>
+                    <tr>
+                        <td>Purchase data</td>
+                        <td>Contract performance — necessary to fulfill your subscription</td>
+                    </tr>
+                    <tr>
+                        <td>Usage &amp; device data</td>
+                        <td>Legitimate interest — improving and securing the Service</td>
+                    </tr>
+                    <tr>
+                        <td>Crash reports</td>
+                        <td>Legitimate interest — maintaining Service stability</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>You may withdraw consent at any time by discontinuing use of the feature or contacting us. Withdrawal does not affect the lawfulness of processing performed before withdrawal.</p>
+
+            <!-- ===== 4. HOW WE USE YOUR INFORMATION ===== -->
+            <h2>4. How We Use Your Information</h2>
+            <ul>
+                <li><strong>Recipe generation:</strong> Process your photos through AI services to generate recipes and food photography.</li>
+                <li><strong>Service delivery:</strong> Manage your account, process purchases, and deliver credits.</li>
+                <li><strong>Donation tracking:</strong> Track community recipe milestones for our meal donation program (aggregated counts only).</li>
+                <li><strong>Service improvement:</strong> Analyze aggregated, anonymized usage data to improve features and performance.</li>
+                <li><strong>Communications:</strong> Send service-related notices (account confirmations, security alerts, policy changes). We do not send marketing emails without your explicit consent.</li>
+                <li><strong>Safety &amp; security:</strong> Detect and prevent fraud, abuse, and security incidents.</li>
+            </ul>
+
+            <!-- ===== 5. AI PROCESSING & PHOTO DATA ===== -->
+            <h2>5. AI Processing &amp; Photo Data</h2>
+            <p>When you generate a recipe, your photo is transmitted to third-party AI services for processing. Here is exactly what happens:</p>
+
+            <h3>5.1 How Photos Are Processed</h3>
+            <ul>
+                <li>Your photo is sent over an encrypted connection (TLS 1.2+) to Google's Gemini API, which analyzes visual elements (color, texture, composition, mood, subject matter) and generates a recipe in structured format.</li>
+                <li>A text description of the generated dish is sent to Fal.ai's image generation service (Flux Pro) to create an AI food photograph.</li>
+                <li>Both services process your data in real time and return results to your device.</li>
+            </ul>
+
+            <h3>5.2 Photo Retention</h3>
+            <ul>
+                <li>Photos are <strong>not permanently stored</strong> on our servers or on third-party AI servers beyond the generation session.</li>
+                <li>Google and Fal.ai may retain data temporarily for abuse monitoring per their own policies (see Section 6).</li>
+                <li>Generated recipes and food images are stored <strong>locally on your device</strong> using Apple's SwiftData framework — not on our servers.</li>
+            </ul>
+
+            <h3>5.3 AI Training</h3>
+            <ul>
+                <li>We do not use your photos to train AI models.</li>
+                <li>When using the Gemini API with a paid API key, Google states that API data is not used to train their models. Fal.ai processes images on-demand without using them for model training. We encourage you to review their current policies for the latest information.</li>
+            </ul>
+
+            <h3>5.4 AI-Generated Content Disclosure</h3>
+            <p>All food photography images displayed alongside recipes are <strong>AI-generated</strong> — they are not photographs of real dishes. Recipe text is also AI-generated and has not been reviewed by human chefs or nutritionists.</p>
+
+            <!-- ===== 6. THIRD-PARTY SERVICES ===== -->
+            <h2>6. Third-Party Services</h2>
+            <p>We use the following third-party services to operate the Service. Each operates under its own privacy policy:</p>
+            <table class="legal-table">
+                <thead>
+                    <tr>
+                        <th>Service</th>
+                        <th>Purpose</th>
+                        <th>Data Shared</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Google Gemini API</td>
+                        <td>Image analysis &amp; recipe generation</td>
+                        <td>Photos (transmitted, not stored)</td>
+                    </tr>
+                    <tr>
+                        <td>Fal.ai (Flux Pro)</td>
+                        <td>AI food image generation</td>
+                        <td>Text prompts (no photos)</td>
+                    </tr>
+                    <tr>
+                        <td>Supabase</td>
+                        <td>Backend services, waitlist, usage tracking</td>
+                        <td>Email, anonymized usage data</td>
+                    </tr>
+                    <tr>
+                        <td>Apple In-App Purchase</td>
+                        <td>Payment processing</td>
+                        <td>Managed entirely by Apple</td>
+                    </tr>
+                    <tr>
+                        <td>Google Fonts</td>
+                        <td>Website typography (landing page only)</td>
+                        <td>IP address (per Google's policy)</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p>We encourage you to review the privacy policies of these services. We select providers that maintain appropriate security and data handling practices.</p>
+
+            <!-- ===== 7. DATA SHARING ===== -->
+            <h2>7. Data Sharing &amp; Disclosure</h2>
+            <p>We do <strong>not</strong> sell, rent, or trade your personal information. We do <strong>not</strong> share data for cross-context behavioral advertising. We may disclose data only in the following limited circumstances:</p>
+            <ul>
+                <li><strong>AI service providers:</strong> As described in Section 5, solely for recipe generation.</li>
+                <li><strong>Legal obligations:</strong> To comply with applicable laws, regulations, legal processes, or enforceable governmental requests.</li>
+                <li><strong>Safety &amp; rights protection:</strong> To protect the rights, property, or safety of Eight Gates LLC, our users, or the public.</li>
+                <li><strong>Business transfers:</strong> In connection with a merger, acquisition, or sale of assets. We will notify you before your data is transferred to a new entity and becomes subject to a different privacy policy.</li>
+                <li><strong>Donation program:</strong> We share only aggregated, anonymized statistics (total meals donated, total recipes created) with our charitable partners. No individual user data is shared with charities.</li>
+            </ul>
+
+            <!-- ===== 8. INTERNATIONAL DATA TRANSFERS ===== -->
+            <h2>8. International Data Transfers</h2>
+            <p>Your data may be transferred to and processed in the United States, where our servers and third-party service providers are located. If you are located in the EU/EEA/UK:</p>
+            <ul>
+                <li>Transfers are conducted pursuant to Standard Contractual Clauses (SCCs) approved by the European Commission, or other lawful transfer mechanisms.</li>
+                <li>By using the Service, you acknowledge that your data will be processed in the United States, which may not offer the same level of data protection as your home country.</li>
+            </ul>
+
+            <!-- ===== 9. DATA RETENTION ===== -->
+            <h2>9. Data Retention</h2>
+            <table class="legal-table">
+                <thead>
+                    <tr>
+                        <th>Data Type</th>
+                        <th>Retention Period</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Photos submitted for processing</td>
+                        <td>Not stored — processed in real time and discarded</td>
+                    </tr>
+                    <tr>
+                        <td>Generated recipes &amp; food images</td>
+                        <td>Stored locally on your device until you delete them</td>
+                    </tr>
+                    <tr>
+                        <td>Account data (email)</td>
+                        <td>Retained while your account is active; deleted within 30 days of account deletion request</td>
+                    </tr>
+                    <tr>
+                        <td>Waitlist emails</td>
+                        <td>Retained until you unsubscribe or we complete the waitlist program</td>
+                    </tr>
+                    <tr>
+                        <td>Usage &amp; analytics data</td>
+                        <td>Retained in anonymized/aggregated form for up to 24 months</td>
+                    </tr>
+                    <tr>
+                        <td>Purchase records</td>
+                        <td>Retained as required for tax and legal compliance (typically 7 years)</td>
+                    </tr>
+                    <tr>
+                        <td>Support communications</td>
+                        <td>Retained for up to 24 months after resolution</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- ===== 10. DATA SECURITY ===== -->
+            <h2>10. Data Security</h2>
+            <p>We implement appropriate technical and organizational measures to protect your information:</p>
+            <ul>
+                <li><strong>Encryption in transit:</strong> All data transmitted between your device and our services uses TLS 1.2 or higher.</li>
+                <li><strong>Local-first architecture:</strong> Recipes and images are stored on your device, not on our servers.</li>
+                <li><strong>Secure API key management:</strong> API credentials are stored securely and never exposed in client-side code.</li>
+                <li><strong>Access controls:</strong> Access to backend systems is restricted to authorized personnel on a need-to-know basis.</li>
+            </ul>
+            <p>No method of electronic transmission or storage is 100% secure. While we strive to protect your data, we cannot guarantee absolute security. If you discover a security vulnerability, please report it to <a href="mailto:security@tastethelens.com">security@tastethelens.com</a>.</p>
+
+            <!-- ===== 11. DATA BREACH NOTIFICATION ===== -->
+            <h2>11. Data Breach Notification</h2>
+            <p>In the event of a data breach that compromises your personal information, we will:</p>
+            <ul>
+                <li>Notify affected users without unreasonable delay and in accordance with applicable state and federal laws.</li>
+                <li>Notify applicable regulatory authorities as required (e.g., within 72 hours for GDPR-covered individuals).</li>
+                <li>Provide information about the nature of the breach, the data involved, and steps you can take to protect yourself.</li>
+            </ul>
+
+            <!-- ===== 12. YOUR RIGHTS ===== -->
+            <h2>12. Your Rights</h2>
+
+            <h3>12.1 All Users</h3>
+            <p>Regardless of your location, you may:</p>
+            <ul>
+                <li>Request access to the personal data we hold about you.</li>
+                <li>Request deletion of your account and associated data.</li>
+                <li>Unsubscribe from waitlist or marketing communications at any time.</li>
+                <li>Export your locally stored recipe data from within the app.</li>
+            </ul>
+
+            <h3>12.2 California Residents (CCPA/CPRA)</h3>
+            <p>If you are a California resident, you have the following additional rights under the California Consumer Privacy Act as amended by the California Privacy Rights Act:</p>
+            <ul>
+                <li><strong>Right to Know:</strong> Request disclosure of the categories and specific pieces of personal information we have collected.</li>
+                <li><strong>Right to Delete:</strong> Request deletion of your personal information, subject to certain exceptions.</li>
+                <li><strong>Right to Correct:</strong> Request correction of inaccurate personal information.</li>
+                <li><strong>Right to Opt-Out of Sale/Sharing:</strong> We do not sell or share your personal information for cross-context behavioral advertising. No opt-out is necessary.</li>
+                <li><strong>Right to Limit Use of Sensitive Personal Information:</strong> We only use sensitive personal information (if any) for purposes permitted under CPRA.</li>
+                <li><strong>Right to Non-Discrimination:</strong> We will not penalize you for exercising your privacy rights.</li>
+            </ul>
+            <p>To exercise these rights, contact <a href="mailto:privacy@tastethelens.com">privacy@tastethelens.com</a>. We will verify your identity and respond within 45 days.</p>
+
+            <h3>12.3 EU/EEA/UK Residents (GDPR)</h3>
+            <p>If you are located in the EU/EEA/UK, you have the following rights:</p>
+            <ul>
+                <li><strong>Right of Access</strong> (Art. 15) — obtain a copy of your personal data.</li>
+                <li><strong>Right to Rectification</strong> (Art. 16) — correct inaccurate data.</li>
+                <li><strong>Right to Erasure</strong> (Art. 17) — request deletion ("right to be forgotten").</li>
+                <li><strong>Right to Restriction of Processing</strong> (Art. 18) — limit how we process your data.</li>
+                <li><strong>Right to Data Portability</strong> (Art. 20) — receive your data in a structured, machine-readable format.</li>
+                <li><strong>Right to Object</strong> (Art. 21) — object to processing based on legitimate interest.</li>
+                <li><strong>Right Regarding Automated Decision-Making</strong> (Art. 22) — our AI processing generates creative content (recipes) and does not produce decisions with legal or similarly significant effects on you. You may contact us with questions about how AI processes your photos.</li>
+            </ul>
+            <p>To exercise these rights, contact <a href="mailto:privacy@tastethelens.com">privacy@tastethelens.com</a>. You also have the right to lodge a complaint with your local data protection supervisory authority.</p>
+
+            <!-- ===== 13. CHILDREN'S PRIVACY ===== -->
+            <h2>13. Children's Privacy</h2>
+            <p>The Service is not directed at children under 13. We do not knowingly collect personal information from children under 13. If we discover that we have inadvertently collected data from a child under 13, we will promptly delete that data and terminate the associated account.</p>
+            <p>If you are a parent or guardian and believe your child under 13 has provided us with personal information, please contact us immediately at <a href="mailto:privacy@tastethelens.com">privacy@tastethelens.com</a>.</p>
+            <p>Users between 13 and 18 must have parental or guardian consent to use the Service.</p>
+
+            <!-- ===== 14. COOKIES & TRACKING (WEBSITE) ===== -->
+            <h2>14. Cookies &amp; Tracking Technologies</h2>
+            <p>Our landing page website (tastethelens.com) uses the following:</p>
+            <ul>
+                <li><strong>Essential functionality:</strong> The website uses minimal JavaScript for animations and waitlist form submission. No cookies are set by our code.</li>
+                <li><strong>Third-party resources:</strong> We load fonts from Google Fonts, which may record your IP address per Google's privacy policy.</li>
+                <li><strong>No analytics cookies:</strong> We do not currently use Google Analytics, Facebook Pixel, or similar tracking technologies on the landing page.</li>
+            </ul>
+            <p>If we add analytics or tracking technologies in the future, we will update this policy and implement appropriate consent mechanisms for EU/EEA visitors.</p>
+            <p>Our iOS app does not use cookies. It does not perform cross-app tracking and does not use Apple's IDFA (Identifier for Advertisers).</p>
+
+            <!-- ===== 15. DO NOT TRACK ===== -->
+            <h2>15. "Do Not Track" Signals</h2>
+            <p>We honor Do Not Track (DNT) browser signals. Since we do not engage in cross-site tracking, our practices remain the same regardless of your DNT setting.</p>
+
+            <!-- ===== 16. CHANGES TO THIS POLICY ===== -->
+            <h2>16. Changes to This Policy</h2>
+            <p>We may update this Privacy Policy from time to time. When we make material changes, we will:</p>
+            <ul>
+                <li>Update the "Last updated" date at the top of this page.</li>
+                <li>Notify registered users via email or in-app notification for material changes.</li>
+                <li>For changes requiring renewed consent under GDPR, we will request your consent before applying new data practices.</li>
+            </ul>
+            <p>Your continued use of the Service after changes take effect constitutes acceptance of the updated policy. If you do not agree with the changes, please discontinue use and contact us to delete your account.</p>
+
+            <!-- ===== 17. CONTACT US ===== -->
+            <h2>17. Contact Us</h2>
+            <p>If you have questions, concerns, or requests regarding this Privacy Policy or our data practices, please contact us:</p>
+            <p>
+                Eight Gates LLC<br>
+                Email: <a href="mailto:privacy@tastethelens.com">privacy@tastethelens.com</a><br>
+                Security issues: <a href="mailto:security@tastethelens.com">security@tastethelens.com</a>
+            </p>
+            <p>We will respond to all privacy inquiries within 30 days (or sooner as required by applicable law).</p>
         </div>
     </main>
 

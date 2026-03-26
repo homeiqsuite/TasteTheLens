@@ -109,8 +109,6 @@ struct SettingsView: View {
                                 exportData()
                             }
                             settingsDivider
-                            settingsLink("Send Feedback", icon: "envelope", url: "mailto:support@tastethelens.com")
-                            settingsDivider
                             settingsLink("Privacy Policy", icon: "hand.raised", url: "https://tastethelens.com/privacy")
                             settingsDivider
                             settingsLink("Terms of Service", icon: "doc.text", url: "https://tastethelens.com/terms")

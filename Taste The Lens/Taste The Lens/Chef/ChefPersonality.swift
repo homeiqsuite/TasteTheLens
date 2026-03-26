@@ -333,6 +333,17 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
         """
     }
 
+    // MARK: - Dashboard Theme
+
+    var theme: ChefTheme {
+        switch self {
+        case .defaultChef: return .defaultChef
+        case .dooby: return .dooby
+        case .beginner: return .beginner
+        case .grizzly: return .grizzly
+        }
+    }
+
     // MARK: - Current Selection
 
     static var current: ChefPersonality {

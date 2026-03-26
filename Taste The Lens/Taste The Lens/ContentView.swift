@@ -14,6 +14,7 @@ enum AppScreen: Equatable {
 struct ContentView: View {
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @AppStorage("debug_processingStyle") private var processingStyleRaw = ProcessingStyle.kitchenPass.rawValue
+    @AppStorage("selectedChef") private var selectedChef = "default"
     @State private var showOnboarding = false
     #if !PRODUCTION
     @State private var showDebugMenu = false
@@ -25,6 +26,12 @@ struct ContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let bg = Theme.darkBg
+
+    private var dashboardColorScheme: ColorScheme {
+        guard vm.currentScreen == .dashboard else { return .dark }
+        let chef = ChefPersonality(rawValue: selectedChef) ?? .defaultChef
+        return chef.theme.prefersDarkMode ? .dark : .light
+    }
 
     var body: some View {
         ZStack {
@@ -76,7 +83,7 @@ struct ContentView: View {
         }
         #endif
         .animation(reduceMotion ? .easeInOut(duration: 0.3) : .spring(response: 0.6, dampingFraction: 0.85), value: vm.currentScreen)
-        .preferredColorScheme(vm.currentScreen == .dashboard ? .light : .dark)
+        .preferredColorScheme(dashboardColorScheme)
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingView(isPresented: $showOnboarding)
         }
