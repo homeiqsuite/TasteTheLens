@@ -159,6 +159,22 @@ final class MainViewModel {
                     if pendingMenuCourse == nil {
                         logger.info("No pendingMenuCourse — normal recipe flow")
                     }
+
+                    // Auto-save recipe to SwiftData
+                    if let recipe = pipeline.completedRecipe {
+                        modelContext.insert(recipe)
+                        do {
+                            try modelContext.save()
+                            logger.info("Recipe auto-saved to SwiftData")
+                        } catch {
+                            logger.error("Failed to auto-save recipe: \(error)")
+                        }
+
+                        if AuthManager.shared.isAuthenticated {
+                            await SyncManager.shared.syncRecipe(recipe)
+                        }
+                    }
+
                     logger.info("Transitioning to recipe card")
                     withAnimation(reduceMotion ? .easeInOut(duration: 0.3) : .spring(response: 0.6, dampingFraction: 0.8)) {
                         currentScreen = .recipeCard

@@ -7,7 +7,6 @@ private let logger = makeLogger(category: "Settings")
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    @State private var showClearDataConfirmation = false
     @State private var showDeleteAccountConfirmation = false
     @State private var showSignIn = false
     @State private var showProfile = false
@@ -110,10 +109,6 @@ struct SettingsView: View {
                                 exportData()
                             }
                             settingsDivider
-                            settingsButton("Clear Local Data", icon: "trash", color: Theme.textSecondary) {
-                                showClearDataConfirmation = true
-                            }
-                            settingsDivider
                             settingsLink("Send Feedback", icon: "envelope", url: "mailto:support@tastethelens.com")
                             settingsDivider
                             settingsLink("Privacy Policy", icon: "hand.raised", url: "https://tastethelens.com/privacy")
@@ -143,14 +138,6 @@ struct SettingsView: View {
                     Button("Done") { dismiss() }
                         .foregroundStyle(Theme.primary)
                 }
-            }
-            .alert("Clear Local Data", isPresented: $showClearDataConfirmation) {
-                Button("Cancel", role: .cancel) { }
-                Button("Clear All", role: .destructive) {
-                    clearLocalData()
-                }
-            } message: {
-                Text("This will delete all locally saved recipes. This cannot be undone.")
             }
             .sheet(isPresented: $showSignIn) {
                 SignInView()
@@ -324,16 +311,6 @@ struct SettingsView: View {
         async let subscriptionTask: () = StoreManager.shared.updateSubscriptionStatus()
         _ = await (creditsTask, usageTask, subscriptionTask)
         logger.info("Settings refreshed")
-    }
-
-    private func clearLocalData() {
-        logger.info("Clearing all local recipe data")
-        do {
-            try modelContext.delete(model: Recipe.self)
-            logger.info("Local data cleared successfully")
-        } catch {
-            logger.error("Failed to clear local data: \(error)")
-        }
     }
 
     private func exportData() {

@@ -46,7 +46,6 @@ struct RecipeCardView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var exportImage: UIImage?
     @State private var heroAppeared = false
-    @State private var isSaved = false
     @State private var checkedIngredients: Set<String> = []
     @State private var expandedSubstitutions: Set<String> = []
     @State private var expandedSections: Set<String> = []
@@ -59,7 +58,6 @@ struct RecipeCardView: View {
     @State private var servingCount: Int = 2
     @State private var showBudgetInput = false
     @State private var budgetAmount: Double = 15
-    @State private var showSaveLimitAlert = false
     @AppStorage("hasSeenAuthPrompt") private var hasSeenAuthPrompt = false
 
     var body: some View {
@@ -113,11 +111,6 @@ struct RecipeCardView: View {
         }
         .sheet(isPresented: $showBudgetInput) {
             budgetInputSheet
-        }
-        .alert("Save Limit Reached", isPresented: $showSaveLimitAlert) {
-            Button("Not Now", role: .cancel) {}
-        } message: {
-            Text("Free accounts can save up to 10 recipes. Subscribe to Chef's Table for unlimited saves.")
         }
     }
 
@@ -272,7 +265,7 @@ struct RecipeCardView: View {
     private var quickStatsStrip: some View {
         HStack(spacing: 0) {
             // Servings stepper
-            HStack(spacing: 10) {
+            HStack(spacing: 6) {
                 Button {
                     if servingCount > 1 {
                         servingCount -= 1
@@ -293,6 +286,7 @@ struct RecipeCardView: View {
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.textTertiary)
                 }
+                .fixedSize()
 
                 Button {
                     if servingCount < 12 {
@@ -306,6 +300,7 @@ struct RecipeCardView: View {
                 }
                 .disabled(servingCount >= 12)
             }
+            .fixedSize(horizontal: true, vertical: false)
 
             dividerLine
 
@@ -884,22 +879,6 @@ struct RecipeCardView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14))
             }
 
-            // Save button
-            Button {
-                saveRecipe()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: isSaved ? "checkmark" : "bookmark")
-                        .font(.system(size: 14, weight: .semibold))
-                    Text(isSaved ? "Saved" : "Save")
-                        .font(.system(size: 15, weight: .semibold))
-                }
-                .foregroundStyle(isSaved ? Theme.darkTextPrimary : Theme.textPrimary)
-                .frame(maxWidth: .infinity)
-                .frame(height: 48)
-                .background(isSaved ? Theme.primary : Theme.buttonBg)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -979,29 +958,6 @@ struct RecipeCardView: View {
 
     // MARK: - Actions
 
-    private func saveRecipe() {
-        guard !isSaved else { return }
-
-        // Enforce save limit for non-subscribers
-        if EntitlementManager.shared.requiresUpgrade(for: .unlimitedSaves) {
-            let count = (try? modelContext.fetchCount(FetchDescriptor<Recipe>())) ?? 0
-            if count >= 10 {
-                showSaveLimitAlert = true
-                return
-            }
-        }
-
-        modelContext.insert(recipe)
-        try? modelContext.save()
-        isSaved = true
-        HapticManager.success()
-
-        if AuthManager.shared.isAuthenticated {
-            Task {
-                await SyncManager.shared.syncRecipe(recipe)
-            }
-        }
-    }
 
     private func reimagineRecipe(as courseType: String? = nil, budgetLimit: Double? = nil) {
         // Check reimagination feature access (subscriber only)
@@ -1038,9 +994,6 @@ struct RecipeCardView: View {
         guard AuthManager.shared.isAuthenticated else {
             showAuthPrompt = true
             return
-        }
-        if !isSaved {
-            saveRecipe()
         }
         showCreateChallenge = true
     }

@@ -109,44 +109,17 @@ struct DashboardView: View {
 
             Spacer()
 
-            HStack(spacing: 10) {
-                Button {
-                    vm.showSettings = true
-                } label: {
-                    Image(systemName: "gearshape.fill")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(Theme.gold)
-                        .frame(width: 40, height: 40)
-                        .background(Theme.gold.opacity(0.12))
-                        .clipShape(Circle())
-                }
-
-                Button {
-                    vm.showSettings = true
-                } label: {
-                    if authManager.isAuthenticated {
-                        initialsAvatar
-                    } else {
-                        Image(systemName: "person.fill")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(.white)
-                            .frame(width: 40, height: 40)
-                            .background(Theme.gold)
-                            .clipShape(Circle())
-                    }
-                }
+            Button {
+                vm.showSettings = true
+            } label: {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Theme.gold)
+                    .frame(width: 40, height: 40)
+                    .background(Theme.gold.opacity(0.12))
+                    .clipShape(Circle())
             }
         }
-    }
-
-    private var initialsAvatar: some View {
-        let initials = String(displayName.prefix(1)).uppercased()
-        return Text(initials)
-            .font(.system(size: 16, weight: .bold))
-            .foregroundStyle(.white)
-            .frame(width: 40, height: 40)
-            .background(Theme.gold)
-            .clipShape(Circle())
     }
 
     private var greetingText: String {
@@ -591,7 +564,7 @@ struct DashboardView: View {
     private var recentRecipesSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("Recent Recipes")
+                Text("My Recipes")
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(Theme.textPrimary)
                 Spacer()
