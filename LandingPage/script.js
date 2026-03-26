@@ -251,26 +251,9 @@ async function initImpactCounter() {
 
         const mealsEl = document.getElementById('meals-counter');
         const recipesEl = document.getElementById('recipes-counter');
-        const progressWrap = document.getElementById('impact-progress-wrap');
-        const progressBar = document.getElementById('impact-progress-bar');
-        const progressText = document.getElementById('impact-progress-text');
 
         if (mealsEl) mealsEl.textContent = data.total_meals_donated.toLocaleString();
         if (recipesEl) recipesEl.textContent = data.total_generations.toLocaleString();
-
-        // Progress toward next milestone
-        if (progressWrap && progressBar && progressText) {
-            const progress = (data.total_generations % 25) / 25;
-            const remaining = 25 - (data.total_generations % 25);
-            progressWrap.style.display = 'block';
-            // Delay to trigger CSS transition
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    progressBar.style.width = (progress * 100) + '%';
-                });
-            });
-            progressText.textContent = remaining + ' more recipe' + (remaining === 1 ? '' : 's') + ' until the next community milestone meal';
-        }
     } catch (err) {
         // Silently fail — counter just shows placeholder
     }
