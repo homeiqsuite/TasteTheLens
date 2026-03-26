@@ -298,7 +298,7 @@ struct DashboardView: View {
                     Text("Community Impact")
                         .font(.system(size: 17, weight: .bold))
                         .foregroundStyle(chefTheme.textPrimary)
-                    Text("Every recipe helps feed someone")
+                    Text("Our community's impact on hunger")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(chefTheme.textTertiary)
                 }
@@ -307,23 +307,12 @@ struct DashboardView: View {
             }
 
             HStack(spacing: 0) {
-                // Remaining / To Go
+                // Meals Donated
                 VStack(spacing: 4) {
-                    if impactService.isLoaded {
-                        let remaining = 25 - (impactService.totalGenerations % 25)
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text("\(remaining)")
-                                .font(.system(size: 32, weight: .bold, design: .rounded))
-                                .foregroundStyle(chefTheme.impactColor)
-                            Text("TO GO")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(chefTheme.impactColor.opacity(0.7))
-                        }
-                    } else {
-                        Text("—")
-                            .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .foregroundStyle(chefTheme.impactColor)
-                    }
+                    Text(impactService.isLoaded ? "\(impactService.totalMealsDonated)" : "—")
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                        .foregroundStyle(chefTheme.impactColor)
+                        .contentTransition(.numericText())
                     Text("Meals Donated")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(chefTheme.textTertiary)
@@ -361,31 +350,11 @@ struct DashboardView: View {
             }
             .padding(.vertical, 4)
 
-            // Progress bar
             if impactService.isLoaded {
-                let progress = Double(impactService.totalGenerations % 25) / 25.0
-                let remaining = 25 - (impactService.totalGenerations % 25)
-
-                VStack(spacing: 10) {
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(chefTheme.impactColor.opacity(0.12))
-                                .frame(height: 8)
-
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(chefTheme.impactGradient)
-                                .frame(width: geo.size.width * (progressAnimated ? progress : 0), height: 8)
-                                .animation(.spring(response: 0.8, dampingFraction: 0.7).delay(0.3), value: progressAnimated)
-                        }
-                    }
-                    .frame(height: 8)
-
-                    Text("You're \(remaining) recipe\(remaining == 1 ? "" : "s") away from feeding someone!")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(chefTheme.textSecondary)
-                }
-                .onAppear { progressAnimated = true }
+                Text("A portion of our revenue goes to fighting hunger")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(chefTheme.textSecondary)
+                    .multilineTextAlignment(.center)
             }
         }
         .themedCard(chefTheme)

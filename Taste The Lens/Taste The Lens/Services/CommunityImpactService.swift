@@ -4,7 +4,7 @@ import os
 
 private let logger = makeLogger(category: "CommunityImpact")
 
-/// Tracks community-wide meal donations and generation milestones.
+/// Tracks community-wide recipe generation milestones and corporate donation stats.
 @Observable @MainActor
 final class CommunityImpactService {
     static let shared = CommunityImpactService()
@@ -42,7 +42,6 @@ final class CommunityImpactService {
     // MARK: - Increment Generation
 
     /// Call after each recipe generation to increment the community counter.
-    /// Automatically donates a meal every 25 generations.
     func recordGeneration() async {
         do {
             let result: IncrementResult = try await supabase
@@ -58,22 +57,6 @@ final class CommunityImpactService {
         }
     }
 
-    // MARK: - Purchase Donation
-
-    /// Call after a credit pack or subscription purchase to donate a meal.
-    func recordPurchaseDonation() async {
-        do {
-            let result: PurchaseDonationResult = try await supabase
-                .rpc("record_purchase_meal_donation")
-                .execute()
-                .value
-
-            totalMealsDonated = result.totalMealsDonated
-            logger.info("Purchase donation recorded — now \(result.totalMealsDonated) meals")
-        } catch {
-            logger.error("Failed to record purchase donation: \(error.localizedDescription)")
-        }
-    }
 }
 
 // MARK: - DTOs
@@ -98,10 +81,3 @@ private struct IncrementResult: Decodable {
     }
 }
 
-private struct PurchaseDonationResult: Decodable {
-    let totalMealsDonated: Int
-
-    enum CodingKeys: String, CodingKey {
-        case totalMealsDonated = "total_meals_donated"
-    }
-}

@@ -71,6 +71,7 @@ struct RecipeCardView: View {
 
                     // TIER 2: The Essentials
                     descriptionSection
+                    donationDisclaimer
                     dietaryBadges
                     quickStatsStrip
                     ingredientsSection
@@ -224,6 +225,22 @@ struct RecipeCardView: View {
             .padding(.horizontal, 20)
             .padding(.top, 20)
             .padding(.bottom, 8)
+    }
+
+    // MARK: - Donation Disclaimer
+
+    private var donationDisclaimer: some View {
+        Text("Taste The Lens donates a portion of revenue to fight hunger.")
+            .font(.system(size: 12))
+            .foregroundStyle(Theme.textTertiary)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(Theme.cardSurface)
+            .overlay(
+                VStack { Spacer(); Theme.divider.frame(height: 1) }
+            )
     }
 
     // MARK: - Dietary Badges

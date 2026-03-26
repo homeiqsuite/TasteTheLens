@@ -140,9 +140,6 @@ final class StoreManager {
                 }
             }
 
-            // Donate a meal for every purchase
-            await CommunityImpactService.shared.recordPurchaseDonation()
-
             await transaction.finish()
             logger.info("Purchase successful: \(product.id)")
             return true
