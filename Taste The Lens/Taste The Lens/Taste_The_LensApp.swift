@@ -6,7 +6,7 @@ struct Taste_The_LensApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @State private var deepLinkedRecipeID: UUID?
     @State private var showDeepLinkedRecipe = false
-    @State private var resetCode: String?
+    @State private var resetURL: URL?
     @State private var showResetPassword = false
 
     var body: some Scene {
@@ -47,8 +47,8 @@ struct Taste_The_LensApp: App {
                                 object: nil,
                                 userInfo: ["inviteCode": code]
                             )
-                        case .resetCallback(let code):
-                            resetCode = code
+                        case .resetCallback:
+                            resetURL = url
                             showResetPassword = true
                         }
                     }
@@ -59,8 +59,8 @@ struct Taste_The_LensApp: App {
                     }
                 }
                 .sheet(isPresented: $showResetPassword) {
-                    if let code = resetCode {
-                        ResetPasswordView(code: code)
+                    if let url = resetURL {
+                        ResetPasswordView(callbackURL: url)
                     }
                 }
         }

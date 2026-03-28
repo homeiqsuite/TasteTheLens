@@ -243,7 +243,7 @@ struct SignInView: View {
         }
         do {
             try await authManager.resetPassword(email: email)
-            successMessage = "Password reset email sent. Check your inbox."
+            successMessage = "Reset link sent! Check your email and click the link to set a new password."
         } catch {
             errorMessage = error.localizedDescription
             logger.error("Password reset failed: \(error)")

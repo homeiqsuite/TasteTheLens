@@ -88,6 +88,14 @@ final class AuthManager {
         logger.info("Exchanged reset code for session — user: \(session.user.id)")
     }
 
+    /// Handle a callback URL (e.g. from password reset deep link).
+    /// Uses the SDK's built-in handler which includes the stored PKCE code_verifier.
+    func handleSessionFromURL(_ url: URL) async throws {
+        let session = try await supabase.auth.session(from: url)
+        currentUser = session.user
+        logger.info("Session restored from URL — user: \(session.user.id)")
+    }
+
     func updatePassword(_ newPassword: String) async throws {
         try await supabase.auth.update(user: .init(password: newPassword))
         logger.info("Password updated successfully")

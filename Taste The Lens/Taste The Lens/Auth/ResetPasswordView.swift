@@ -4,7 +4,7 @@ import os
 private let logger = makeLogger(category: "ResetPassword")
 
 struct ResetPasswordView: View {
-    let code: String
+    let callbackURL: URL
 
     @Environment(\.dismiss) private var dismiss
     @State private var newPassword = ""
@@ -12,6 +12,7 @@ struct ResetPasswordView: View {
     @State private var errorMessage: String?
     @State private var isLoading = false
     @State private var didReset = false
+    @State private var sessionReady = false
 
     private let authManager = AuthManager.shared
     private let gold = Theme.gold
@@ -38,7 +39,15 @@ struct ResetPasswordView: View {
 
                     Spacer().frame(height: 12)
 
-                    if didReset {
+                    if !sessionReady && errorMessage == nil {
+                        // Loading while establishing session
+                        ProgressView()
+                            .tint(gold)
+                            .padding()
+                        Text("Verifying link...")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.darkTextTertiary)
+                    } else if didReset {
                         VStack(spacing: 16) {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.system(size: 48))
@@ -61,7 +70,7 @@ struct ResetPasswordView: View {
                             }
                             .padding(.horizontal, 32)
                         }
-                    } else {
+                    } else if sessionReady {
                         VStack(spacing: 14) {
                             SecureField("New Password", text: $newPassword)
                                 .textFieldStyle(AuthTextFieldStyle())
@@ -116,16 +125,31 @@ struct ResetPasswordView: View {
             }
         }
         .task {
-            await exchangeCode()
+            await establishSession()
         }
     }
 
-    private func exchangeCode() async {
+    private func establishSession() async {
         do {
-            try await authManager.exchangeCodeForSession(code)
+            // Try the SDK's URL handler first (preserves PKCE code_verifier)
+            try await authManager.handleSessionFromURL(callbackURL)
+            sessionReady = true
         } catch {
-            errorMessage = "This reset link is invalid or expired. Please request a new one."
-            logger.error("Failed to exchange reset code: \(error)")
+            logger.warning("session(from:) failed: \(error), trying code exchange")
+            // Fallback: extract code and try direct exchange
+            if let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false),
+               let code = components.queryItems?.first(where: { $0.name == "code" })?.value {
+                do {
+                    try await authManager.exchangeCodeForSession(code)
+                    sessionReady = true
+                } catch {
+                    errorMessage = "This reset link is invalid or expired. Please request a new one from the app or tastethelens.com/reset-password"
+                    logger.error("Failed to exchange reset code: \(error)")
+                }
+            } else {
+                errorMessage = "This reset link is invalid or expired. Please request a new one from the app or tastethelens.com/reset-password"
+                logger.error("No code found in callback URL: \(callbackURL)")
+            }
         }
     }
 
