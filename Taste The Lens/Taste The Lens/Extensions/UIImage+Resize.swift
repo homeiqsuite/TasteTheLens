@@ -22,4 +22,11 @@ extension UIImage {
     func jpegDataForUpload(quality: CGFloat = 0.8, maxDimension: CGFloat = 1024) -> Data? {
         resizedForAPIUpload(maxDimension: maxDimension).jpegData(compressionQuality: quality)
     }
+
+    /// Compress existing JPEG Data for cloud upload (max 2048px, 0.8 quality).
+    /// Returns the original data if it's already small enough.
+    static func compressForCloudUpload(_ data: Data, maxBytes: Int = 5_000_000) -> Data {
+        guard data.count > maxBytes, let image = UIImage(data: data) else { return data }
+        return image.jpegDataForUpload(quality: 0.8, maxDimension: 2048) ?? data
+    }
 }

@@ -32,17 +32,19 @@ final class ChallengeService {
         let inspirationData = recipe.inspirationImageData
         if !inspirationData.isEmpty {
             let path = "\(userId)/\(recipeId)/inspiration.jpg"
+            let compressed = UIImage.compressForCloudUpload(inspirationData)
             try await supabase.storage
                 .from("challenge-photos")
-                .upload(path, data: inspirationData, options: .init(contentType: "image/jpeg", upsert: true))
+                .upload(path, data: compressed, options: .init(contentType: "image/jpeg", upsert: true))
             inspirationPath = path
         }
 
         if let dishData = recipe.generatedDishImageData {
             let path = "\(userId)/\(recipeId)/dish.jpg"
+            let compressed = UIImage.compressForCloudUpload(dishData)
             try await supabase.storage
                 .from("challenge-photos")
-                .upload(path, data: dishData, options: .init(contentType: "image/jpeg", upsert: true))
+                .upload(path, data: compressed, options: .init(contentType: "image/jpeg", upsert: true))
             dishPath = path
         }
 
@@ -124,11 +126,12 @@ final class ChallengeService {
             throw ChallengeError.notAuthenticated
         }
 
-        // Upload photo
+        // Upload photo (compressed for cloud storage)
         let path = "\(userId)/\(challengeId)/submission.jpg"
+        let compressed = UIImage.compressForCloudUpload(photoData)
         try await supabase.storage
             .from("challenge-photos")
-            .upload(path, data: photoData, options: .init(contentType: "image/jpeg", upsert: true))
+            .upload(path, data: compressed, options: .init(contentType: "image/jpeg", upsert: true))
 
         let photoUrl = try supabase.storage
             .from("challenge-photos")

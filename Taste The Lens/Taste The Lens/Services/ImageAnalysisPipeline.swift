@@ -42,6 +42,7 @@ final class ImageAnalysisPipeline: Identifiable {
     var partialDishName: String?
     var partialIngredients: [String] = []
     var startTime: Date?
+    var isFusion: Bool = false
 
     private let geminiClient = GeminiAPIClient()
 
@@ -59,8 +60,8 @@ final class ImageAnalysisPipeline: Identifiable {
         self.imageGenClient = ImageGenerationFactory.client(for: model)
     }
 
-    func process(image: UIImage, modelContext: ModelContext, excluding: [String] = [], budgetLimit: Double? = nil, courseType: String? = nil) async {
-        logger.info("Pipeline started — excluding: \(excluding), budget: \(budgetLimit?.description ?? "none"), courseType: \(courseType ?? "none")")
+    func process(image: UIImage, modelContext: ModelContext, hardExcluding: [String] = [], softAvoiding: [String] = [], budgetLimit: Double? = nil, courseType: String? = nil) async {
+        logger.info("Pipeline started — hardExclude: \(hardExcluding), softAvoid: \(softAvoiding.count) items, budget: \(budgetLimit?.description ?? "none"), courseType: \(courseType ?? "none")")
         startTime = Date()
         await LiveActivityManager.shared.startGeneration()
 
@@ -97,9 +98,17 @@ final class ImageAnalysisPipeline: Identifiable {
             logger.info("Calling Gemini API with chef: \(chef.displayName)...")
 
             var prompt = chef.systemPrompt
-            if !excluding.isEmpty {
-                let excludeList = excluding.joined(separator: ", ")
-                prompt += "\n\nIMPORTANT: Generate a completely different dish. Do NOT repeat any of these previously generated dishes: \(excludeList). Create something entirely new and distinct."
+            if !hardExcluding.isEmpty {
+                let excludeList = hardExcluding.joined(separator: ", ")
+                prompt += "\n\nIMPORTANT: Generate a completely different dish. Do NOT repeat any of these previously generated dishes: \(excludeList). Create something entirely new and distinct — different dish format, different flavor profile, different primary ingredients."
+            }
+            // Soft-avoid: history of recently generated dishes (encourages variety without hard-blocking)
+            let softList = softAvoiding.filter { name in
+                !hardExcluding.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame })
+            }
+            if !softList.isEmpty {
+                let avoidList = softList.joined(separator: ", ")
+                prompt += "\n\nVARIETY GUIDANCE: The user has recently generated these dishes: \(avoidList). Try to create something different in format and style — explore a different dish category, cooking method, or regional variation. You may revisit a similar dish only if the image strongly calls for it."
             }
             if let budgetLimit {
                 let formatted = budgetLimit.truncatingRemainder(dividingBy: 1) == 0
@@ -165,7 +174,9 @@ final class ImageAnalysisPipeline: Identifiable {
                 chefPersonality: chef.rawValue,
                 baseServings: recipeResponse.baseServings ?? 2,
                 estimatedCalories: recipeResponse.estimatedCalories,
-                nutrition: recipeResponse.nutrition
+                nutrition: recipeResponse.nutrition,
+                prepTime: recipeResponse.prepTime,
+                cookTime: recipeResponse.cookTime
             )
 
             completedRecipe = recipe
@@ -183,6 +194,156 @@ final class ImageAnalysisPipeline: Identifiable {
             await LiveActivityManager.shared.cancelGeneration()
         } catch {
             logger.error("Pipeline failed: \(error)")
+            state = .failed(error.localizedDescription)
+            await LiveActivityManager.shared.endGeneration(dishName: nil)
+        }
+    }
+
+    // MARK: - Fusion Mode
+
+    func processFusion(images: [UIImage], modelContext: ModelContext, hardExcluding: [String] = [], softAvoiding: [String] = [], budgetLimit: Double? = nil, courseType: String? = nil) async {
+        logger.info("Fusion pipeline started — \(images.count) images, hardExclude: \(hardExcluding), softAvoid: \(softAvoiding.count) items, budget: \(budgetLimit?.description ?? "none")")
+        isFusion = true
+        startTime = Date()
+        await LiveActivityManager.shared.startGeneration()
+
+        // Convert all images to JPEG data upfront
+        var allImageData: [Data] = []
+        for (index, image) in images.enumerated() {
+            guard let data = image.jpegData(compressionQuality: 0.9) else {
+                logger.error("Failed to convert fusion image \(index) to JPEG data")
+                state = .failed("Could not process one of the captured images.")
+                return
+            }
+            allImageData.append(data)
+        }
+        logger.info("All \(allImageData.count) fusion images converted to JPEG")
+
+        do {
+            // Step 0: Content screening — screen all images concurrently
+            state = .screeningImage
+            processingStatus = "Checking images..."
+            await LiveActivityManager.shared.updatePhase("Screening", progress: 0.1, status: "Checking images...")
+            logger.info("Screening \(images.count) images for content safety...")
+
+            let screening = try await withExponentialBackoff {
+                try await geminiClient.screenImages(images)
+            }
+            try Task.checkCancellation()
+            if !screening.safe {
+                logger.info("Fusion image rejected: \(screening.reason)")
+                state = .rejected(screening.reason)
+                return
+            }
+            logger.info("All fusion images passed screening")
+
+            // Step 1: Gemini analysis — send all images in one request
+            state = .analyzingImage
+            processingStatus = "Blending visual worlds..."
+            await LiveActivityManager.shared.updatePhase("Analyzing", progress: 0.35, status: "Fusing visual DNA...")
+            let chef = ChefPersonality.current
+            logger.info("Calling Gemini API with \(images.count) images, chef: \(chef.displayName)...")
+
+            var prompt = chef.systemPrompt
+            if !hardExcluding.isEmpty {
+                let excludeList = hardExcluding.joined(separator: ", ")
+                prompt += "\n\nIMPORTANT: Generate a completely different dish. Do NOT repeat any of these previously generated dishes: \(excludeList). Create something entirely new and distinct — different dish format, different flavor profile, different primary ingredients."
+            }
+            let softList = softAvoiding.filter { name in
+                !hardExcluding.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame })
+            }
+            if !softList.isEmpty {
+                let avoidList = softList.joined(separator: ", ")
+                prompt += "\n\nVARIETY GUIDANCE: The user has recently generated these dishes: \(avoidList). Try to create something different in format and style — explore a different dish category, cooking method, or regional variation. You may revisit a similar dish only if the image strongly calls for it."
+            }
+            if let budgetLimit {
+                let formatted = budgetLimit.truncatingRemainder(dividingBy: 1) == 0
+                    ? String(format: "$%.0f", budgetLimit)
+                    : String(format: "$%.2f", budgetLimit)
+                prompt += "\n\nBUDGET CONSTRAINT: The total cost of ALL ingredients combined must be under \(formatted). Choose affordable, budget-friendly ingredients. Prioritize pantry staples, in-season produce, and cost-effective proteins (chicken thighs, eggs, beans, lentils, ground meat). Avoid expensive ingredients like seafood, specialty cheeses, or premium cuts. The dish should taste great without breaking the bank."
+            }
+            if let courseType {
+                prompt += "\n\nCOURSE TYPE CONSTRAINT: Create this as a \(courseType). The dish format, portion size, presentation, and ingredient quantities should all match what you'd expect from a \(courseType). For example, appetizers should be small and shareable, desserts should be sweet, drinks should be beverages, etc."
+            }
+
+            let (recipeResponse, rawJSON) = try await withExponentialBackoff {
+                try await geminiClient.analyzeImages(images, systemPrompt: prompt)
+            }
+            try Task.checkCancellation()
+            logger.info("Gemini fusion response received — dish: \(recipeResponse.dishName)")
+
+            extractedColors = recipeResponse.colorPalette ?? []
+            partialDishName = recipeResponse.dishName
+            partialIngredients = recipeResponse.components.flatMap { $0.ingredients }
+            processingStatus = "Translating fusion..."
+
+            // Step 2: Image generation (non-fatal)
+            try Task.checkCancellation()
+            state = .generatingImage
+            processingStatus = "Plating concept..."
+            await LiveActivityManager.shared.updatePhase("Generating", progress: 0.65, status: "Plating concept...")
+            logger.info("Generating image with \(self.imageGenModel.displayName)...")
+
+            var generatedImageData: Data? = nil
+            var imageURL: String = ""
+            do {
+                let enhancedPrompt = recipeResponse.imageGenerationPrompt
+                    + " Professional editorial food photography, Michelin star presentation, warm inviting lighting, shallow depth of field, 85mm lens, appetizing and delicious."
+                let (data, url) = try await withExponentialBackoff {
+                    try await self.imageGenClient.generateImage(prompt: enhancedPrompt)
+                }
+                generatedImageData = data
+                imageURL = url
+                logger.info("\(self.imageGenModel.displayName) response — image: \(data.count) bytes, URL: \(url)")
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                logger.error("Image generation failed, continuing without image: \(error)")
+            }
+
+            // Step 3: Create Recipe with fusion data
+            let additionalData = allImageData.count > 1 ? Array(allImageData.dropFirst()) : nil
+            logger.info("Fusion recipe — additionalData count: \(additionalData?.count ?? 0), sizes: \(additionalData?.map { $0.count } ?? [])")
+
+            let recipe = Recipe(
+                dishName: recipeResponse.dishName,
+                recipeDescription: recipeResponse.description,
+                colorPalette: recipeResponse.colorPalette ?? [],
+                inspirationImageData: allImageData[0],
+                generatedDishImageData: generatedImageData,
+                generatedDishImageURL: imageURL,
+                translationMatrix: recipeResponse.translationMatrix,
+                components: recipeResponse.components,
+                cookingInstructions: recipeResponse.cookingInstructions ?? [],
+                platingSteps: recipeResponse.platingSteps,
+                sommelierPairing: recipeResponse.sommelierPairing,
+                sceneAnalysis: recipeResponse.sceneAnalysis,
+                claudeRawResponse: rawJSON,
+                chefPersonality: chef.rawValue,
+                baseServings: recipeResponse.baseServings ?? 2,
+                estimatedCalories: recipeResponse.estimatedCalories,
+                nutrition: recipeResponse.nutrition,
+                prepTime: recipeResponse.prepTime,
+                cookTime: recipeResponse.cookTime,
+                isFusion: true,
+                additionalInspirationImagesData: additionalData
+            )
+
+            completedRecipe = recipe
+            state = .complete
+            UsageTracker.shared.incrementUsage()
+            await CommunityImpactService.shared.recordGeneration()
+            if recipe.generatedDishImageData != nil {
+                updateWidgetData(recipe: recipe)
+            }
+            await LiveActivityManager.shared.endGeneration(dishName: recipe.dishName)
+            logger.info("Fusion pipeline complete — recipe ready")
+
+        } catch is CancellationError {
+            logger.info("Fusion pipeline cancelled")
+            await LiveActivityManager.shared.cancelGeneration()
+        } catch {
+            logger.error("Fusion pipeline failed: \(error)")
             state = .failed(error.localizedDescription)
             await LiveActivityManager.shared.endGeneration(dishName: nil)
         }

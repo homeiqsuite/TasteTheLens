@@ -31,7 +31,6 @@ struct DashboardView: View {
                 greetingSection
                 heroCard
                 recentRecipesSection
-                communityImpactCard
                 chefModeCard
                 if EntitlementManager.shared.hasAccess(to: .fullChallenges) {
                     challengesSection
@@ -46,6 +45,9 @@ struct DashboardView: View {
         }
         .background(chefTheme.dashboardBg.ignoresSafeArea())
         .animation(.easeInOut(duration: 0.4), value: selectedChef)
+        .refreshable {
+            await refreshDashboard()
+        }
         .sheet(item: $selectedRecipe) { recipe in
             NavigationStack {
                 RecipeCardView(recipe: recipe)
@@ -76,9 +78,6 @@ struct DashboardView: View {
                 }
                 .presentationDetents([.medium])
             }
-        }
-        .refreshable {
-            await refreshDashboard()
         }
         .task {
             await loadDashboardData()

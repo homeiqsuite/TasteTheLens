@@ -4,6 +4,7 @@ struct ProcessingView: View {
     let capturedImage: UIImage
     @Bindable var pipeline: ImageAnalysisPipeline
     var onCancel: (() -> Void)?
+    var additionalImages: [UIImage] = []
 
     // Colors extracted from the source image by the API
     private var displayColors: [String] {
@@ -48,6 +49,12 @@ struct ProcessingView: View {
                         .padding(.leading, 16)
                         .padding(.top, 8)
                         Spacer()
+                    }
+
+                    // Fusion badge
+                    if !additionalImages.isEmpty {
+                        FusionBadgeView(images: [capturedImage] + additionalImages)
+                            .padding(.top, 8)
                     }
 
                     Spacer()

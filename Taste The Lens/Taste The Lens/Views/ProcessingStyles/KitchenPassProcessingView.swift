@@ -4,6 +4,7 @@ struct KitchenPassProcessingView: View {
     let capturedImage: UIImage
     @Bindable var pipeline: ImageAnalysisPipeline
     var onCancel: (() -> Void)?
+    var additionalImages: [UIImage] = []
 
     @State private var ticketLines: [TicketLine] = []
     @State private var currentTypewriterText = ""
@@ -45,6 +46,12 @@ struct KitchenPassProcessingView: View {
                         }
                         .padding(.trailing, 16)
                         .padding(.top, 8)
+                    }
+
+                    // Fusion badge
+                    if !additionalImages.isEmpty {
+                        FusionBadgeView(images: [capturedImage] + additionalImages)
+                            .padding(.top, 8)
                     }
 
                     // Reference photo — pinned like a ticket on a pass

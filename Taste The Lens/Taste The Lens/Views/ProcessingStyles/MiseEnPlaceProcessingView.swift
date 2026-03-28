@@ -4,6 +4,7 @@ struct MiseEnPlaceProcessingView: View {
     let capturedImage: UIImage
     @Bindable var pipeline: ImageAnalysisPipeline
     var onCancel: (() -> Void)?
+    var additionalImages: [UIImage] = []
 
     @State private var scanLineOffset: CGFloat = 0
     @State private var showDishName = false
@@ -49,6 +50,12 @@ struct MiseEnPlaceProcessingView: View {
                             .padding(.leading, 16)
                             .padding(.top, 8)
                         Spacer()
+                    }
+
+                    // Fusion badge
+                    if !additionalImages.isEmpty {
+                        FusionBadgeView(images: [capturedImage] + additionalImages)
+                            .padding(.top, 8)
                     }
 
                     Spacer()

@@ -5,6 +5,7 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
     case dooby = "dooby"
     case beginner = "beginner"
     case grizzly = "grizzly"
+    case custom = "custom"
 
     var id: String { rawValue }
 
@@ -14,6 +15,7 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
         case .dooby: return "Dooby"
         case .beginner: return "The Beginner"
         case .grizzly: return "Grizzly"
+        case .custom: return "Custom Chef"
         }
     }
 
@@ -23,6 +25,13 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
         case .dooby: return "Munchie Master"
         case .beginner: return "Keep It Simple"
         case .grizzly: return "Field to Table"
+        case .custom:
+            if let config = CustomChefConfig.load() {
+                let skill = config.skillLevel.displayName
+                let cuisines = config.cuisines.prefix(3).map(\.displayName).joined(separator: ", ")
+                return cuisines.isEmpty ? skill : "\(skill) · \(cuisines)"
+            }
+            return "Tap to create"
         }
     }
 
@@ -36,6 +45,11 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
             return "A patient, encouraging guide for new cooks. Super simple recipes with basic ingredients, easy techniques, and no fancy equipment needed."
         case .grizzly:
             return "A rugged outdoor cook who honors the harvest. Grizzly teaches game meat preparation, nose-to-tail usage, and the role every animal plays in the ecosystem."
+        case .custom:
+            if let config = CustomChefConfig.load() {
+                return "A \(config.personality.displayName.lowercased())-style \(config.skillLevel.displayName.lowercased()) chef specializing in \(config.cuisines.isEmpty ? "global" : config.cuisines.prefix(3).map(\.displayName).joined(separator: ", ")) cuisine."
+            }
+            return "Build your own chef with custom skill level, cuisines, and personality."
         }
     }
 
@@ -45,6 +59,7 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
         case .dooby: return "moon.stars"
         case .beginner: return "leaf"
         case .grizzly: return "mountain.2"
+        case .custom: return "slider.horizontal.3"
         }
     }
 
@@ -55,6 +70,7 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
         case .dooby: return "chef-dooby"
         case .beginner: return "chef-beginner"
         case .grizzly: return "chef-grizzly"
+        case .custom: return "chef-custom"
         }
     }
 
@@ -65,17 +81,54 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
         case .dooby: return "Late-night cravings? I got you."
         case .beginner: return "No experience needed. Let's cook!"
         case .grizzly: return "Fire, smoke, and bold flavors."
+        case .custom: return "Your chef, your rules."
         }
     }
 
     // MARK: - System Prompt
 
     var systemPrompt: String {
-        var prompt = personalityPreamble + "\n\n" + sharedSceneAnalysis + "\n\n" + personalityGuidelines + "\n\n" + sharedResponseFormat
+        if self == .custom, let config = CustomChefConfig.load() {
+            return Self.buildCustomPrompt(config: config)
+        }
+        var prompt = personalityPreamble + "\n\n" + Self.sharedSceneAnalysisText + "\n\n" + personalityGuidelines + "\n\n" + Self.sharedResponseFormatText
         if let dietary = DietaryPreference.promptConstraint() {
             prompt += "\n\n" + dietary
         }
         return prompt
+    }
+
+    private static func buildCustomPrompt(config: CustomChefConfig) -> String {
+        var prompt = config.personality.promptPreamble
+        prompt += "\n\n" + sharedSceneAnalysisText
+        prompt += "\n\n" + buildCustomGuidelines(config: config)
+        prompt += "\n\n" + sharedResponseFormatText
+        if let dietary = DietaryPreference.promptConstraint() {
+            prompt += "\n\n" + dietary
+        }
+        return prompt
+    }
+
+    private static func buildCustomGuidelines(config: CustomChefConfig) -> String {
+        return """
+        STEP 4 — CREATE THE DISH:
+        #1 HIGHEST PRIORITY — COLOR FIDELITY:
+        The dominant colors in the source image are the MOST IMPORTANT factor in choosing ingredients (for visual-translation and hybrid approaches). The finished dish MUST visually mirror the source image's color palette. For ingredient-driven approaches, the actual ingredients take priority but still use color fidelity to guide supplementary ingredients and plating.
+
+        COLOR REMINDER: Re-check your ingredient choices against the source image colors before finalizing.
+
+        #2 \(config.skillLevel.promptDirectives)
+
+        #3 \(config.cuisineDirectives)
+
+        #4 \(config.personality.promptToneDirectives)
+
+        IMPORTANT GUIDELINES:
+        * The dish should be something people would genuinely want to eat — delicious, recognizable food with creative flair
+        * Cooking instructions should be detailed enough that someone could actually follow them
+        * For each ingredient, suggest 1-2 common substitutes that would work in this recipe
+        * The "original" field in each substitution MUST exactly match the corresponding string in the "ingredients" array
+        """
     }
 
     // MARK: - Personality-Specific Preamble
@@ -127,12 +180,15 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
             * OUTDOOR COOKING METHODS — favor techniques that work outdoors: smoking, grilling over wood coals, cast iron cooking, Dutch oven baking, spit roasting, plank grilling, ember roasting. You can use a kitchen too, but your heart is outside.
             * FORAGED & WILD INGREDIENTS — incorporate wild-harvested elements when thematic (wild mushrooms, ramps, juniper berries, wild rice, sumac, pine nuts, fiddlehead ferns) but always provide grocery store alternatives.
             """
+        case .custom:
+            // Custom chef uses early return in systemPrompt; fallback to classic preamble
+            return CustomChefConfig.load()?.personality.promptPreamble ?? ChefPersonality.defaultChef.personalityPreamble
         }
     }
 
     // MARK: - Shared Scene Analysis (Steps 0-3)
 
-    private var sharedSceneAnalysis: String {
+    static var sharedSceneAnalysisText: String {
         return """
         STEP 0 — SCENE UNDERSTANDING (do this FIRST):
         Before any creative translation, carefully identify EVERYTHING visible in the image:
@@ -322,14 +378,20 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
             * The "original" field in each substitution MUST exactly match the corresponding string in the "ingredients" array
             * Beverage pairings should lean rustic — bold reds, whiskey-based cocktails, craft beer styles, black coffee, or warm cider for non-alcoholic
             """
+        case .custom:
+            // Custom chef uses early return in systemPrompt; fallback to default guidelines
+            if let config = CustomChefConfig.load() {
+                return Self.buildCustomGuidelines(config: config)
+            }
+            return ChefPersonality.defaultChef.personalityGuidelines
         }
     }
 
     // MARK: - Shared JSON Response Format
 
-    private var sharedResponseFormat: String {
+    static var sharedResponseFormatText: String {
         return """
-        Return ONLY valid JSON in this exact structure, no other text: { "scene_analysis": { "detected_items": ["list every object, ingredient, and notable element you can see in the image"], "detected_text": ["any text, labels, brand names, or signage visible — empty array if none"], "setting": "brief description of the environment/context", "approach": "ingredient-driven OR visual-translation OR hybrid" }, "dish_name": "A creative, evocative dish name that hints at the visual inspiration", "description": "2-3 sentences connecting the visual inspiration to the flavor profile. If ingredients were detected, mention how they inspired the dish. Should feel inviting and make the reader hungry.", "base_servings": 2 (integer — how many servings this recipe makes as written), "color_palette": ["#hex1", "#hex2", "#hex3", "#hex4"] (the 3-5 dominant colors extracted from the source image as hex codes), "image_generation_prompt": "Write a highly detailed prompt for a photorealistic editorial food photograph of this dish. CRITICAL: The overall color palette of the plated dish MUST match the dominant colors from the source image. If the source was mostly white, the dish in the photo must appear predominantly white/cream-colored. Include: specific plating on elegant tableware, warm soft lighting, shallow depth of field, visible texture details. Think Bon Appétit photography. The dish must look delicious and edible above all else.", "translation_matrix": [ { "visual": "Describe the visual element (color, shape, mood) — or the detected ingredient", "culinary": "The culinary equivalent ingredient or technique" } ], "components": [ { "name": "Component name (e.g. Herb-Crusted Salmon)", "ingredients": ["2 tbsp butter", "1/2 cup flour", "3 chicken breasts"] (IMPORTANT: every ingredient MUST start with a numeric quantity and unit so servings can be scaled — e.g. '2 tbsp butter' not just 'butter', '1/2 cup flour' not 'flour', '3 cloves garlic' not 'garlic'), "substitutions": [ { "original": "2 tbsp butter", "substitutes": ["2 tbsp olive oil"] }, { "original": "1/2 cup flour", "substitutes": ["1/2 cup almond flour"] } ], "method": "Detailed cooking instruction in 2-3 sentences. Be specific with temperatures, times, and techniques so someone could actually make this." } ], "cooking_instructions": [ "Step-by-step instructions for making the complete dish from start to finish. Each step should be clear and actionable.", "Include timing, temperatures, and sensory cues (e.g. 'until golden brown' or 'until fragrant').", "Order the steps logically — what to prep first, what to cook in parallel, and how to bring it all together." ], "plating_steps": [ "Step 1: ...", "Step 2: ...", "Step 3: ..." ], "sommelier_pairing": { "wine": "Specific wine recommendation with region and tasting notes", "cocktail": "Creative cocktail pairing with brief description", "nonalcoholic": "Thoughtful non-alcoholic option" }, "estimated_calories": 450 (integer — estimated total calories per serving. Be realistic based on ingredients and portion sizes. This is a rough estimate to help users plan meals.), "nutrition": { "calories": 450, "protein": 30, "carbs": 45, "fat": 18, "fiber": 6, "sugar": 8 } (all integers in grams except calories which is kcal — estimated macronutrients per serving. Be realistic based on actual ingredients and portions.) }
+        Return ONLY valid JSON in this exact structure, no other text: { "scene_analysis": { "detected_items": ["list every object, ingredient, and notable element you can see in the image"], "detected_text": ["any text, labels, brand names, or signage visible — empty array if none"], "setting": "brief description of the environment/context", "approach": "ingredient-driven OR visual-translation OR hybrid" }, "dish_name": "A creative, evocative dish name that hints at the visual inspiration", "description": "2-3 sentences connecting the visual inspiration to the flavor profile. If ingredients were detected, mention how they inspired the dish. Should feel inviting and make the reader hungry.", "base_servings": 2 (integer — how many servings this recipe makes as written), "prep_time": "15 mins" (string — estimated hands-on preparation time before cooking, e.g. "10 mins", "30 mins", "1 hr"), "cook_time": "25 mins" (string — estimated active cooking/baking time, e.g. "20 mins", "1 hr", "45 mins"), "color_palette": ["#hex1", "#hex2", "#hex3", "#hex4"] (the 3-5 dominant colors extracted from the source image as hex codes), "image_generation_prompt": "Write a highly detailed prompt for a photorealistic editorial food photograph of this dish. CRITICAL: The overall color palette of the plated dish MUST match the dominant colors from the source image. If the source was mostly white, the dish in the photo must appear predominantly white/cream-colored. Include: specific plating on elegant tableware, warm soft lighting, shallow depth of field, visible texture details. Think Bon Appétit photography. The dish must look delicious and edible above all else.", "translation_matrix": [ { "visual": "Describe the visual element (color, shape, mood) — or the detected ingredient", "culinary": "The culinary equivalent ingredient or technique" } ], "components": [ { "name": "Component name (e.g. Herb-Crusted Salmon)", "ingredients": ["2 tbsp butter", "1/2 cup flour", "3 chicken breasts"] (IMPORTANT: every ingredient MUST start with a numeric quantity and unit so servings can be scaled — e.g. '2 tbsp butter' not just 'butter', '1/2 cup flour' not 'flour', '3 cloves garlic' not 'garlic'), "substitutions": [ { "original": "2 tbsp butter", "substitutes": ["2 tbsp olive oil"] }, { "original": "1/2 cup flour", "substitutes": ["1/2 cup almond flour"] } ], "method": "Detailed cooking instruction in 2-3 sentences. Be specific with temperatures, times, and techniques so someone could actually make this." } ], "cooking_instructions": [ "Step-by-step instructions for making the complete dish from start to finish. Each step should be clear and actionable.", "Include timing, temperatures, and sensory cues (e.g. 'until golden brown' or 'until fragrant').", "Order the steps logically — what to prep first, what to cook in parallel, and how to bring it all together." ], "plating_steps": [ "Step 1: ...", "Step 2: ...", "Step 3: ..." ], "sommelier_pairing": { "wine": "Specific wine recommendation with region and tasting notes", "cocktail": "Creative cocktail pairing with brief description", "nonalcoholic": "Thoughtful non-alcoholic option" }, "estimated_calories": 450 (integer — estimated total calories per serving. Be realistic based on ingredients and portion sizes. This is a rough estimate to help users plan meals.), "nutrition": { "calories": 450, "protein": 30, "carbs": 45, "fat": 18, "fiber": 6, "sugar": 8 } (all integers in grams except calories which is kcal — estimated macronutrients per serving. Be realistic based on actual ingredients and portions.) }
         """
     }
 
@@ -341,6 +403,7 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
         case .dooby: return .dooby
         case .beginner: return .beginner
         case .grizzly: return .grizzly
+        case .custom: return .custom
         }
     }
 

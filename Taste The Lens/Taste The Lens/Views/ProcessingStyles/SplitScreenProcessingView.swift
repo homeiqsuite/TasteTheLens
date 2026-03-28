@@ -4,6 +4,7 @@ struct SplitScreenProcessingView: View {
     let capturedImage: UIImage
     @Bindable var pipeline: ImageAnalysisPipeline
     var onCancel: (() -> Void)?
+    var additionalImages: [UIImage] = []
 
     @State private var localColors: [String] = []
     @State private var colorBarsAppeared = false
@@ -62,6 +63,13 @@ struct SplitScreenProcessingView: View {
                             .padding(.top, 8)
                         Spacer()
                     }
+
+                    // Fusion badge
+                    if !additionalImages.isEmpty {
+                        FusionBadgeView(images: [capturedImage] + additionalImages)
+                            .padding(.top, 8)
+                    }
+
                     Spacer()
 
                     // Status + timeout (full width at bottom)

@@ -3,14 +3,13 @@ import SwiftUI
 struct ChefSelectionView: View {
     @AppStorage("selectedChef") private var selectedChef = "default"
     @State private var showPaywall = false
-
-    private let gold = Theme.gold
+    @State private var showCustomChefEditor = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Your Chef")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.textSecondary)
+                .foregroundStyle(Theme.darkTextSecondary)
                 .textCase(.uppercase)
                 .tracking(1.2)
 
@@ -25,6 +24,9 @@ struct ChefSelectionView: View {
         .sheet(isPresented: $showPaywall) {
             PaywallView(context: .featureGated(.chefPersonalities))
         }
+        .sheet(isPresented: $showCustomChefEditor) {
+            CustomChefEditorView()
+        }
         .onAppear {
             // Reset to default if user lost subscription and had a premium chef selected
             if EntitlementManager.shared.requiresUpgrade(for: .chefPersonalities) && selectedChef != "default" {
@@ -36,56 +38,96 @@ struct ChefSelectionView: View {
     private func chefCard(_ chef: ChefPersonality) -> some View {
         let isSelected = selectedChef == chef.rawValue
         let isLocked = chef != .defaultChef && EntitlementManager.shared.requiresUpgrade(for: .chefPersonalities)
+        let chefTheme = chef.theme
 
         return Button {
             if isLocked {
                 HapticManager.light()
                 showPaywall = true
+            } else if chef == .custom {
+                // Custom chef: always open editor (to create or edit)
+                if !CustomChefConfig.isConfigured {
+                    HapticManager.light()
+                    showCustomChefEditor = true
+                } else {
+                    HapticManager.light()
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedChef = chef.rawValue
+                    }
+                }
             } else {
                 let generator = UIImpactFeedbackGenerator(style: .light)
                 generator.impactOccurred()
-                selectedChef = chef.rawValue
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedChef = chef.rawValue
+                }
             }
         } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Image(systemName: chef.icon)
-                        .font(.system(size: 18))
-                        .foregroundStyle(isSelected ? gold : Theme.textTertiary)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    // Chef icon in a tinted circle
+                    Circle()
+                        .fill(chefTheme.accent.opacity(isSelected ? 0.20 : 0.10))
+                        .frame(width: 36, height: 36)
+                        .overlay(
+                            Image(systemName: chef.icon)
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(chefTheme.accent)
+                        )
 
-                    Text(chef.displayName)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(isSelected ? Theme.textPrimary : Theme.textPrimary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(chef.displayName)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(isSelected ? Color.white : Theme.darkTextPrimary)
+
+                        Text(chef.subtitle)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(isSelected ? chefTheme.accent : Theme.darkTextTertiary)
+                    }
+
+                    Spacer(minLength: 0)
 
                     if isLocked {
-                        Spacer()
                         Image(systemName: "lock.fill")
-                            .font(.system(size: 12))
-                            .foregroundStyle(Theme.textTertiary)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.darkTextHint)
+                    } else if chef == .custom && isSelected && CustomChefConfig.isConfigured {
+                        // Edit affordance for configured custom chef
+                        Button {
+                            showCustomChefEditor = true
+                        } label: {
+                            Image(systemName: "pencil.circle.fill")
+                                .font(.system(size: 18))
+                                .foregroundStyle(chefTheme.accent)
+                        }
                     }
                 }
 
-                Text(chef.subtitle)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(isSelected ? gold : Theme.textSecondary)
-
                 Text(chef.description)
                     .font(.system(size: 12))
-                    .foregroundStyle(Theme.textSecondary)
+                    .foregroundStyle(isSelected ? Theme.darkTextSecondary : Theme.darkTextTertiary)
                     .lineLimit(3)
                     .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(14)
-            .frame(width: 200, alignment: .leading)
+            .frame(width: 210, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(isSelected ? Theme.primaryLight : Theme.cardSurface)
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(isSelected ? chefTheme.accent.opacity(0.08) : Theme.darkCardSurface)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(isSelected ? gold : Theme.cardBorder, lineWidth: isSelected ? 1.5 : 0.5)
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(
+                        isSelected ? chefTheme.accent.opacity(0.6) : Theme.darkCardBorder,
+                        lineWidth: isSelected ? 1.5 : 0.5
+                    )
             )
-            .opacity(isLocked ? 0.7 : 1.0)
+            .shadow(
+                color: isSelected ? chefTheme.accent.opacity(0.15) : .clear,
+                radius: 8, y: 2
+            )
+            .opacity(isLocked ? 0.55 : 1.0)
         }
         .buttonStyle(.plain)
     }

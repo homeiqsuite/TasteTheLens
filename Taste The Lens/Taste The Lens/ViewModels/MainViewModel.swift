@@ -4,10 +4,68 @@ import os
 
 private let logger = makeLogger(category: "MainViewModel")
 
+// MARK: - Cross-Session Dish History (per-chef, time-decayed)
+
+enum DishHistory {
+    private static let storageKey = "dishHistoryV2"
+    private static let maxEntriesPerChef = 20
+    /// Entries older than this are dropped automatically.
+    private static let maxAgeDays: Double = 30
+
+    private struct Entry: Codable {
+        let name: String
+        let date: Date
+    }
+
+    // Internal storage: [chefRawValue: [Entry]]
+    private static func loadAll() -> [String: [Entry]] {
+        guard let data = UserDefaults.standard.data(forKey: storageKey),
+              let decoded = try? JSONDecoder().decode([String: [Entry]].self, from: data) else {
+            return [:]
+        }
+        return decoded
+    }
+
+    private static func saveAll(_ store: [String: [Entry]]) {
+        if let data = try? JSONEncoder().encode(store) {
+            UserDefaults.standard.set(data, forKey: storageKey)
+        }
+    }
+
+    /// Returns recent dish names for the given chef, pruning expired entries.
+    static func recent(for chef: ChefPersonality) -> [String] {
+        var store = loadAll()
+        let key = chef.rawValue
+        let cutoff = Date().addingTimeInterval(-maxAgeDays * 86400)
+        // Prune expired
+        let entries = (store[key] ?? []).filter { $0.date > cutoff }
+        store[key] = entries
+        saveAll(store)
+        return entries.map(\.name)
+    }
+
+    /// Records a dish name for the given chef.
+    static func add(_ dishName: String, for chef: ChefPersonality) {
+        var store = loadAll()
+        let key = chef.rawValue
+        let cutoff = Date().addingTimeInterval(-maxAgeDays * 86400)
+        var entries = (store[key] ?? []).filter { $0.date > cutoff }
+        // Remove duplicates (case-insensitive)
+        entries.removeAll { $0.name.caseInsensitiveCompare(dishName) == .orderedSame }
+        entries.insert(Entry(name: dishName, date: Date()), at: 0)
+        if entries.count > maxEntriesPerChef {
+            entries = Array(entries.prefix(maxEntriesPerChef))
+        }
+        store[key] = entries
+        saveAll(store)
+    }
+}
+
 @Observable @MainActor
 final class MainViewModel {
     var currentScreen: AppScreen = .dashboard
     var capturedImage: UIImage?
+    var capturedImages: [UIImage]?
     var pipeline = ImageAnalysisPipeline()
     var showSavedRecipes = false
     var showSettings = false
@@ -16,7 +74,8 @@ final class MainViewModel {
     var showChallengeFeed = false
     var showTastingMenus = false
     var deepLinkedInviteCode: String?
-    var excludedDishNames: [String] = []
+    var dishHistoryNames: [String] = []
+    var hardExcludedDishNames: [String] = []
     var budgetLimit: Double?
     var courseType: String?
     var errorMessage: String?
@@ -47,7 +106,8 @@ final class MainViewModel {
         if UsageTracker.shared.canGenerate {
             logger.info("Photo received — transitioning to processing. pendingMenuCourse: \(String(describing: self.pendingMenuCourse))")
             capturedImage = image
-            excludedDishNames = []
+            dishHistoryNames = DishHistory.recent(for: .current)
+            hardExcludedDishNames = []
             courseType = nil
             pipeline = ImageAnalysisPipeline()
             lastGenerationStartTime = Date()
@@ -65,6 +125,38 @@ final class MainViewModel {
         if let image = pendingCapturedImage {
             pendingCapturedImage = nil
             handlePhotoCaptured(image)
+        }
+    }
+
+    // MARK: - Fusion Photo Capture
+
+    func handleFusionPhotoCaptured(_ images: [UIImage]) {
+        if !hasSeenPrivacyNotice {
+            // For fusion, store the first image as pending and show privacy notice
+            pendingCapturedImage = images.first
+            showPrivacyNotice = true
+            return
+        }
+
+        if let last = lastGenerationStartTime, Date().timeIntervalSince(last) < 10 {
+            showTemporaryError("Please wait a moment before generating another recipe.")
+            return
+        }
+
+        if UsageTracker.shared.canGenerate {
+            logger.info("Fusion photos received (\(images.count) images) — transitioning to processing")
+            capturedImages = images
+            capturedImage = images.first
+            dishHistoryNames = DishHistory.recent(for: .current)
+            hardExcludedDishNames = []
+            courseType = nil
+            pipeline = ImageAnalysisPipeline()
+            lastGenerationStartTime = Date()
+            currentScreen = .processing
+        } else {
+            logger.info("Usage limit reached — showing paywall")
+            paywallContext = .outOfGenerations
+            showPaywall = true
         }
     }
 
@@ -97,11 +189,19 @@ final class MainViewModel {
                 logger.info("App backgrounded — started background task id: \(backgroundTaskID.rawValue)")
             }
 
-            await pipeline.process(image: image, modelContext: modelContext, excluding: excludedDishNames, budgetLimit: budgetLimit, courseType: courseType)
+            // Route to fusion pipeline if multiple images captured
+            if let fusionImages = capturedImages, fusionImages.count >= 2 {
+                await pipeline.processFusion(images: fusionImages, modelContext: modelContext, hardExcluding: hardExcludedDishNames, softAvoiding: dishHistoryNames, budgetLimit: budgetLimit, courseType: courseType)
+            } else {
+                await pipeline.process(image: image, modelContext: modelContext, hardExcluding: hardExcludedDishNames, softAvoiding: dishHistoryNames, budgetLimit: budgetLimit, courseType: courseType)
+            }
 
             logger.info("Pipeline finished — state: \(String(describing: self.pipeline.state))")
 
             if pipeline.state == .complete {
+                if let dishName = pipeline.completedRecipe?.dishName {
+                    DishHistory.add(dishName, for: .current)
+                }
                 logger.info("Pipeline complete — pendingMenuCourse: \(String(describing: self.pendingMenuCourse)), completedRecipe: \(self.pipeline.completedRecipe?.dishName ?? "nil")")
 
                 // If there's a pending menu course, auto-add the recipe to the menu
@@ -203,6 +303,7 @@ final class MainViewModel {
         processingTask = nil
         pipeline = ImageAnalysisPipeline()
         pendingMenuCourse = nil
+        capturedImages = nil
         currentScreen = .camera
         logger.info("Processing cancelled by user")
     }
@@ -221,7 +322,12 @@ final class MainViewModel {
               let imageData = notification.userInfo?["inspirationImageData"] as? Data,
               let image = UIImage(data: imageData) else { return }
 
-        excludedDishNames.append(dishName)
+        // Hard-exclude the current dish + any previously hard-excluded dishes
+        if !hardExcludedDishNames.contains(where: { $0.caseInsensitiveCompare(dishName) == .orderedSame }) {
+            hardExcludedDishNames.append(dishName)
+        }
+        // Refresh history for the current chef (dish was already added on completion)
+        dishHistoryNames = DishHistory.recent(for: .current)
         capturedImage = image
         courseType = notification.userInfo?["courseType"] as? String
         if let budget = notification.userInfo?["budgetLimit"] as? Double {
@@ -257,7 +363,9 @@ final class MainViewModel {
         processingTask = nil
         currentScreen = .dashboard
         capturedImage = nil
-        excludedDishNames = []
+        capturedImages = nil
+        dishHistoryNames = []
+        hardExcludedDishNames = []
         budgetLimit = nil
         courseType = nil
         lastGenerationStartTime = nil

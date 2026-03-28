@@ -4,6 +4,7 @@ struct ColorToIngredientProcessingView: View {
     let capturedImage: UIImage
     @Bindable var pipeline: ImageAnalysisPipeline
     var onCancel: (() -> Void)?
+    var additionalImages: [UIImage] = []
 
     @State private var localColors: [String] = []
     @State private var appeared = false
@@ -38,6 +39,12 @@ struct ColorToIngredientProcessingView: View {
                             .padding(.leading, 16)
                             .padding(.top, 8)
                         Spacer()
+                    }
+
+                    // Fusion badge
+                    if !additionalImages.isEmpty {
+                        FusionBadgeView(images: [capturedImage] + additionalImages)
+                            .padding(.top, 8)
                     }
 
                     Spacer()

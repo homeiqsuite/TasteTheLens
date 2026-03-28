@@ -30,7 +30,7 @@ struct ChefOnboardingView: View {
 
                 // Chef cards
                 VStack(spacing: 14) {
-                    ForEach(ChefPersonality.allCases) { chef in
+                    ForEach(ChefPersonality.allCases.filter { $0 != .custom }) { chef in
                         chefCard(chef)
                     }
                 }

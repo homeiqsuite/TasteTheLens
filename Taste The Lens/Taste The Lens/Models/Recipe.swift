@@ -1,5 +1,6 @@
 import SwiftData
 import Foundation
+import UIKit
 
 @Model
 final class Recipe {
@@ -29,6 +30,12 @@ final class Recipe {
     var baseServings: Int = 2
     var estimatedCalories: Int?
     var nutrition: NutritionInfo?
+    var prepTime: String?
+    var cookTime: String?
+
+    // Fusion Mode
+    var isFusion: Bool = false
+    var additionalInspirationImagesData: [Data]?
 
     init(
         id: UUID = UUID(),
@@ -48,7 +55,11 @@ final class Recipe {
         chefPersonality: String? = nil,
         baseServings: Int = 2,
         estimatedCalories: Int? = nil,
-        nutrition: NutritionInfo? = nil
+        nutrition: NutritionInfo? = nil,
+        prepTime: String? = nil,
+        cookTime: String? = nil,
+        isFusion: Bool = false,
+        additionalInspirationImagesData: [Data]? = nil
     ) {
         self.id = id
         self.dishName = dishName
@@ -70,6 +81,19 @@ final class Recipe {
         self.baseServings = baseServings
         self.estimatedCalories = estimatedCalories
         self.nutrition = nutrition
+        self.prepTime = prepTime
+        self.cookTime = cookTime
+        self.isFusion = isFusion
+        self.additionalInspirationImagesData = additionalInspirationImagesData
+    }
+
+    var allInspirationImages: [UIImage] {
+        var images: [UIImage] = []
+        if let img = UIImage(data: inspirationImageData) { images.append(img) }
+        if let additional = additionalInspirationImagesData {
+            images += additional.compactMap { UIImage(data: $0) }
+        }
+        return images
     }
 }
 

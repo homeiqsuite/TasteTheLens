@@ -144,11 +144,17 @@ struct ContentView: View {
 
     private var cameraScreen: some View {
         ZStack {
-            CameraView { image in
-                vm.handlePhotoCaptured(image)
-            } onChefTapped: {
-                showChefPicker = true
-            }
+            CameraView(
+                onPhotoCaptured: { image in
+                    vm.handlePhotoCaptured(image)
+                },
+                onFusionPhotoCaptured: { images in
+                    vm.handleFusionPhotoCaptured(images)
+                },
+                onChefTapped: {
+                    showChefPicker = true
+                }
+            )
 
             // Top bar: back to dashboard (left), budget (right)
             VStack {
@@ -308,18 +314,19 @@ struct ContentView: View {
     @ViewBuilder
     private func processingScreen(image: UIImage) -> some View {
         let style = ProcessingStyle(rawValue: processingStyleRaw) ?? .kitchenPass
+        let fusionExtras = (vm.capturedImages?.dropFirst()).map(Array.init) ?? []
         Group {
             switch style {
             case .classic:
-                ProcessingView(capturedImage: image, pipeline: vm.pipeline, onCancel: { vm.cancelProcessing() })
+                ProcessingView(capturedImage: image, pipeline: vm.pipeline, onCancel: { vm.cancelProcessing() }, additionalImages: fusionExtras)
             case .miseEnPlace:
-                MiseEnPlaceProcessingView(capturedImage: image, pipeline: vm.pipeline, onCancel: { vm.cancelProcessing() })
+                MiseEnPlaceProcessingView(capturedImage: image, pipeline: vm.pipeline, onCancel: { vm.cancelProcessing() }, additionalImages: fusionExtras)
             case .colorToIngredient:
-                ColorToIngredientProcessingView(capturedImage: image, pipeline: vm.pipeline, onCancel: { vm.cancelProcessing() })
+                ColorToIngredientProcessingView(capturedImage: image, pipeline: vm.pipeline, onCancel: { vm.cancelProcessing() }, additionalImages: fusionExtras)
             case .kitchenPass:
-                KitchenPassProcessingView(capturedImage: image, pipeline: vm.pipeline, onCancel: { vm.cancelProcessing() })
+                KitchenPassProcessingView(capturedImage: image, pipeline: vm.pipeline, onCancel: { vm.cancelProcessing() }, additionalImages: fusionExtras)
             case .splitScreen:
-                SplitScreenProcessingView(capturedImage: image, pipeline: vm.pipeline, onCancel: { vm.cancelProcessing() })
+                SplitScreenProcessingView(capturedImage: image, pipeline: vm.pipeline, onCancel: { vm.cancelProcessing() }, additionalImages: fusionExtras)
             }
         }
         .task(id: vm.pipeline.id) {

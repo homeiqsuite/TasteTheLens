@@ -21,7 +21,10 @@ Taste The Lens/Taste The Lens/
 │   ├── ImageAnalysisPipeline.swift  # Observable pipeline: analyze → generate
 │   ├── GeminiAPIClient.swift        # Primary: Gemini 2.5 Flash
 │   ├── ClaudeAPIClient.swift        # Alternative: Claude Sonnet
-│   └── FalAPIClient.swift           # Image gen: Flux Pro v1.1
+│   └── FalAPIClient.swift           # Image gen: Flux Pro v1.1 (legacy, not default)
+├── ViewModels/
+│   ├── MainViewModel.swift           # App state management
+│   └── FusionModeState.swift         # Multi-shot fusion state
 ├── Views/
 │   ├── CameraView.swift
 │   ├── ProcessingView.swift
@@ -29,22 +32,33 @@ Taste The Lens/Taste The Lens/
 │   ├── SavedRecipesView.swift
 │   ├── SplashView.swift
 │   ├── SideBySideExportView.swift   # Share card (ImageRenderer only)
-│   └── Components/                  # ShutterButton, GlassCard, ProcessingAnimations
+│   └── Components/                  # ShutterButton, GlassCard, ProcessingAnimations,
+│       │                            # FusionTrayView, FusionTooltip, FusionBadgeView
 └── Extensions/UIImage+Resize.swift  # Image compression for API uploads
 ```
 
 ### User Flow
 
-1. **CameraView** — Capture a photo of anything
+1. **CameraView** — Capture a photo of anything (single shot or multi-shot fusion via long-press)
 2. **ProcessingView** — AR-style overlay with animated color swatches while pipeline runs
 3. **RecipeCardView** — Full recipe display with hero image, translation matrix, components, instructions, pairings
 4. **SavedRecipesView** — Browse saved recipes (SwiftData persistence)
 
+#### Multi-Shot Fusion Mode
+
+Long-press the shutter button to enter Fusion Mode. Capture 2-3 photos, then tap "Fuse" to generate a single recipe that blends the visual DNA of all images. Key files:
+- `FusionModeState.swift` — Observable state for fusion mode (images, active state)
+- `FusionTrayView.swift` — Film strip UI with 3 slots + Fuse button
+- `FusionTooltip.swift` — First-time tooltip (uses `@AppStorage("hasSeenFusionTooltip")`)
+- `FusionBadgeView.swift` — Shared badge component shown in processing views
+
 ### API Pipeline (ImageAnalysisPipeline)
 
 1. Analyze image with Gemini (or Claude) → returns recipe JSON
-2. Generate dish image with Fal.ai Flux Pro → returns food photo
+2. Generate dish image with **Imagen 4** (default, via Gemini API) → returns food photo
 3. Transition to RecipeCardView
+
+**Image Generation:** Default provider is Google Imagen 4 (`imagen-4.0-generate-001`), configurable via debug menu. Fal.ai Flux Pro/Schnell available as alternatives. All providers implement `ImageGenerationProviding` protocol via `ImageGenerationFactory`.
 
 ## UI Conventions
 

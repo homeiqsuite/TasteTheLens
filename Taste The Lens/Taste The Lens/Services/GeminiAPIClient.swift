@@ -170,6 +170,74 @@ struct GeminiAPIClient: ImageAnalysisProvider, Sendable {
         }
     }
 
+    // MARK: - Multi-Image Analysis (Fusion Mode)
+
+    nonisolated func analyzeImages(_ images: [UIImage], systemPrompt: String = ChefPersonality.current.systemPrompt) async throws -> (ClaudeRecipeResponse, String) {
+        logger.info("Preparing \(images.count) images for Gemini Fusion analysis...")
+
+        var parts: [[String: Any]] = []
+        for (index, image) in images.enumerated() {
+            guard let imageData = image.jpegDataForUpload() else {
+                logger.error("Failed to create JPEG data from fusion image \(index)")
+                throw GeminiAPIError.invalidImage
+            }
+            let base64Image = imageData.base64EncodedString()
+            logger.info("Fusion image \(index) encoded: \(imageData.count) bytes")
+            parts.append([
+                "inline_data": [
+                    "mime_type": "image/jpeg",
+                    "data": base64Image
+                ]
+            ])
+        }
+
+        parts.append([
+            "text": "Analyze ALL of these images together. Identify everything visible in each — objects, ingredients, text, settings. Create ONE cohesive, delicious, home-cookable dish that FUSES the visual DNA of all images. Blend colors, textures, moods, and any real ingredients you spot across all photos. The dish should feel like a creative fusion of these visual worlds. Use only common grocery store ingredients. Return ONLY the JSON, no markdown code fences."
+        ])
+
+        let requestBody: [String: Any] = [
+            "system_instruction": [
+                "parts": [
+                    ["text": systemPrompt]
+                ]
+            ],
+            "contents": [
+                ["parts": parts]
+            ],
+            "generationConfig": [
+                "temperature": 0.9,
+                "maxOutputTokens": 8192,
+                "responseMimeType": "application/json"
+            ]
+        ]
+
+        let data = try await sendGeminiRequest(requestBody, timeout: 90)
+        return try parseRecipeResponse(from: data)
+    }
+
+    // MARK: - Multi-Image Screening (Fusion Mode)
+
+    nonisolated func screenImages(_ images: [UIImage]) async throws -> ContentScreeningResult {
+        logger.info("Screening \(images.count) images for content safety...")
+
+        return try await withThrowingTaskGroup(of: ContentScreeningResult.self) { group in
+            for image in images {
+                group.addTask {
+                    try await self.screenImage(image)
+                }
+            }
+
+            for try await result in group {
+                if !result.safe {
+                    group.cancelAll()
+                    return result
+                }
+            }
+
+            return ContentScreeningResult(safe: true, reason: "All images passed screening")
+        }
+    }
+
     // MARK: - Content Screening
 
     nonisolated func screenImage(_ image: UIImage) async throws -> ContentScreeningResult {
@@ -248,6 +316,80 @@ struct GeminiAPIClient: ImageAnalysisProvider, Sendable {
         } catch {
             logger.warning("Could not decode screening result, allowing image through: \(error)")
             return ContentScreeningResult(safe: true, reason: "Screening unavailable")
+        }
+    }
+
+    // MARK: - Shared Helpers
+
+    private nonisolated func sendGeminiRequest(_ requestBody: [String: Any], timeout: TimeInterval = 60) async throws -> Data {
+        var request = URLRequest(url: Self.endpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        request.timeoutInterval = timeout
+
+        logger.info("Sending request to Gemini API...")
+        do {
+            let (responseData, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                logger.error("Response is not HTTPURLResponse")
+                throw GeminiAPIError.invalidResponse
+            }
+            logger.info("Gemini HTTP status: \(httpResponse.statusCode)")
+            if httpResponse.statusCode != 200 {
+                let errorBody = String(data: responseData, encoding: .utf8) ?? "Unknown error"
+                logger.error("Gemini API error: \(errorBody)")
+                throw GeminiAPIError.apiError("Gemini API error (\(httpResponse.statusCode)): \(errorBody)")
+            }
+            return responseData
+        } catch let error as GeminiAPIError {
+            throw error
+        } catch {
+            logger.error("Network error calling Gemini: \(error)")
+            throw GeminiAPIError.networkError(error)
+        }
+    }
+
+    private nonisolated func parseRecipeResponse(from data: Data) throws -> (ClaudeRecipeResponse, String) {
+        guard let envelope = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let candidates = envelope["candidates"] as? [[String: Any]],
+              let firstCandidate = candidates.first,
+              let content = firstCandidate["content"] as? [String: Any],
+              let parts = content["parts"] as? [[String: Any]],
+              let firstPart = parts.first,
+              let text = firstPart["text"] as? String else {
+            let rawResponse = String(data: data, encoding: .utf8) ?? "non-UTF8"
+            logger.error("Failed to parse Gemini envelope. Raw: \(rawResponse.prefix(500))")
+            throw GeminiAPIError.invalidResponse
+        }
+
+        logger.info("Gemini text response length: \(text.count) chars")
+        logger.debug("Gemini raw text: \(text.prefix(200))...")
+
+        // Strip markdown code fences if present
+        var jsonText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if jsonText.hasPrefix("```json") {
+            jsonText = String(jsonText.dropFirst(7))
+        } else if jsonText.hasPrefix("```") {
+            jsonText = String(jsonText.dropFirst(3))
+        }
+        if jsonText.hasSuffix("```") {
+            jsonText = String(jsonText.dropLast(3))
+        }
+        jsonText = jsonText.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let jsonData = jsonText.data(using: .utf8) else {
+            throw GeminiAPIError.jsonParseError("Could not encode response text")
+        }
+
+        do {
+            let recipe = try JSONDecoder().decode(ClaudeRecipeResponse.self, from: jsonData)
+            logger.info("Successfully decoded recipe: \(recipe.dishName)")
+            return (recipe, jsonText)
+        } catch {
+            logger.error("JSON decode error: \(error)")
+            logger.error("Raw JSON that failed to parse: \(jsonText.prefix(500))")
+            throw GeminiAPIError.jsonParseError(error.localizedDescription)
         }
     }
 }

@@ -45,53 +45,126 @@ struct AIReasoningView: View {
 
     private var whatISawSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            // Inspiration image with floating tags
-            ZStack(alignment: .topLeading) {
-                if let uiImage = UIImage(data: recipe.inspirationImageData) {
-                    Color.clear
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 240)
-                        .overlay {
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        }
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
-                        .overlay(
-                            LinearGradient(
-                                colors: [.clear, .black.opacity(0.6)],
-                                startPoint: .center,
-                                endPoint: .bottom
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                        )
-                }
-
-                // Floating detected items
-                if let analysis = recipe.sceneAnalysis {
-                    VStack(alignment: .leading) {
-                        Spacer()
-                        FlowLayout(spacing: 6) {
-                            ForEach(Array(analysis.detectedItems.enumerated()), id: \.offset) { index, item in
-                                if index < revealedItems {
-                                    Text(item)
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundStyle(Theme.darkTextPrimary)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Theme.visual.opacity(0.5))
-                                        .clipShape(Capsule())
-                                        .transition(.scale.combined(with: .opacity))
-                                }
-                            }
-                        }
-                        .padding(12)
-                    }
-                    .frame(height: 240)
-                }
+            if recipe.isFusion {
+                fusionImagesSection
+            } else {
+                singleImageSection
             }
 
             sectionTitle("What I Saw", icon: "eye")
+        }
+    }
+
+    // MARK: - Single Image (existing behavior)
+
+    private var singleImageSection: some View {
+        ZStack(alignment: .topLeading) {
+            if let uiImage = UIImage(data: recipe.inspirationImageData) {
+                Color.clear
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 240)
+                    .overlay {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        LinearGradient(
+                            colors: [.clear, .black.opacity(0.6)],
+                            startPoint: .center,
+                            endPoint: .bottom
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                    )
+            }
+
+            // Floating detected items
+            if let analysis = recipe.sceneAnalysis {
+                VStack(alignment: .leading) {
+                    Spacer()
+                    FlowLayout(spacing: 6) {
+                        ForEach(Array(analysis.detectedItems.enumerated()), id: \.offset) { index, item in
+                            if index < revealedItems {
+                                Text(item)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(Theme.darkTextPrimary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Theme.visual.opacity(0.5))
+                                    .clipShape(Capsule())
+                                    .transition(.scale.combined(with: .opacity))
+                            }
+                        }
+                    }
+                    .padding(12)
+                }
+                .frame(height: 240)
+            }
+        }
+    }
+
+    // MARK: - Fusion Image Carousel
+
+    private var fusionImagesSection: some View {
+        let allImages = recipe.allInspirationImages
+
+        return VStack(alignment: .leading, spacing: 12) {
+            // Fusion badge
+            FusionBadgeView(images: allImages)
+
+            // Horizontal scrolling carousel of all source images
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(Array(allImages.enumerated()), id: \.offset) { index, img in
+                        Color.clear
+                            .frame(width: 200, height: 240)
+                            .overlay {
+                                Image(uiImage: img)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            }
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(Theme.gold.opacity(0.3), lineWidth: 1)
+                            )
+                            .overlay(
+                                LinearGradient(
+                                    colors: [.clear, .black.opacity(0.4)],
+                                    startPoint: .center,
+                                    endPoint: .bottom
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                            )
+                            .overlay(alignment: .bottomLeading) {
+                                Text("Photo \(index + 1)")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.8))
+                                    .padding(8)
+                            }
+                    }
+                }
+                .padding(.horizontal, 4)
+            }
+
+            // Detected items below carousel (holistic across all images)
+            if let analysis = recipe.sceneAnalysis {
+                FlowLayout(spacing: 6) {
+                    ForEach(Array(analysis.detectedItems.enumerated()), id: \.offset) { index, item in
+                        if index < revealedItems {
+                            Text(item)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Theme.darkTextPrimary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Theme.visual.opacity(0.5))
+                                .clipShape(Capsule())
+                                .transition(.scale.combined(with: .opacity))
+                        }
+                    }
+                }
+            }
         }
     }
 

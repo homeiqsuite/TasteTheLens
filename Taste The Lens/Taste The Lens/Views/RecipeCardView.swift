@@ -64,7 +64,7 @@ struct RecipeCardView: View {
         ZStack(alignment: .bottom) {
             Theme.background.ignoresSafeArea()
 
-            ScrollView {
+            ScrollView(.vertical, showsIndicators: true) {
                 VStack(spacing: 0) {
                     // TIER 1: The Hero
                     heroImageSection
@@ -83,8 +83,9 @@ struct RecipeCardView: View {
 
                     Spacer().frame(height: 100)
                 }
+                .frame(maxWidth: .infinity)
             }
-            .clipped()
+            .scrollBounceBehavior(.basedOnSize, axes: .vertical)
 
             actionBar
         }
@@ -188,8 +189,46 @@ struct RecipeCardView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
 
-            // Source PIP thumbnail (top-right)
-            if let uiImage = UIImage(data: recipe.inspirationImageData) {
+            // Source PIP thumbnail(s) (top-right)
+            if recipe.isFusion {
+                // Fusion: show all source images with badge
+                let allImages = recipe.allInspirationImages
+                if !allImages.isEmpty {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 4) {
+                                HStack(spacing: -10) {
+                                    ForEach(Array(allImages.enumerated()), id: \.offset) { index, img in
+                                        Image(uiImage: img)
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(width: 44, height: 44)
+                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .stroke(Theme.gold, lineWidth: 1.5)
+                                            )
+                                            .shadow(color: .black.opacity(0.3), radius: 4)
+                                            .zIndex(Double(allImages.count - index))
+                                    }
+                                }
+                                HStack(spacing: 3) {
+                                    Image(systemName: "sparkles")
+                                        .font(.system(size: 8))
+                                    Text("Fusion")
+                                        .font(.system(size: 10, weight: .bold))
+                                }
+                                .foregroundStyle(Theme.gold)
+                            }
+                            .padding(.trailing, 16)
+                            .padding(.top, 16)
+                        }
+                        Spacer()
+                    }
+                    .frame(height: 380)
+                }
+            } else if let uiImage = UIImage(data: recipe.inspirationImageData) {
                 VStack {
                     HStack {
                         Spacer()
@@ -344,6 +383,42 @@ struct RecipeCardView: View {
                     .foregroundStyle(Theme.textTertiary)
             }
             .frame(maxWidth: .infinity)
+
+            // Prep time
+            if let prep = recipe.prepTime, !prep.isEmpty {
+                dividerLine
+
+                VStack(spacing: 1) {
+                    Image(systemName: "hands.sparkles")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Theme.visual)
+                    Text(prep)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textTertiary)
+                    Text("prep")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.textQuaternary)
+                }
+                .frame(maxWidth: .infinity)
+            }
+
+            // Cook time
+            if let cook = recipe.cookTime, !cook.isEmpty {
+                dividerLine
+
+                VStack(spacing: 1) {
+                    Image(systemName: "flame")
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(Theme.culinary)
+                    Text(cook)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textTertiary)
+                    Text("cook")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.textQuaternary)
+                }
+                .frame(maxWidth: .infinity)
+            }
 
             // Estimated calories (from nutrition or standalone)
             if let cals = recipe.nutrition?.calories ?? recipe.estimatedCalories {
@@ -613,10 +688,40 @@ struct RecipeCardView: View {
                 detailRow(
                     icon: "eye",
                     iconColor: Theme.visual,
-                    title: "How AI read your photo",
+                    title: recipe.isFusion ? "How AI read your photos" : "How AI read your photo",
                     sectionKey: "scene"
                 ) {
                     VStack(alignment: .leading, spacing: 10) {
+                        // Fusion: show all source image thumbnails
+                        if recipe.isFusion {
+                            let allImages = recipe.allInspirationImages
+                            if allImages.count > 1 {
+                                HStack(spacing: -8) {
+                                    ForEach(Array(allImages.enumerated()), id: \.offset) { index, img in
+                                        Image(uiImage: img)
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(width: 32, height: 32)
+                                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 6)
+                                                    .stroke(Theme.gold, lineWidth: 1)
+                                            )
+                                            .zIndex(Double(allImages.count - index))
+                                    }
+
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "sparkles")
+                                            .font(.system(size: 8))
+                                        Text("Fused")
+                                            .font(.system(size: 10, weight: .bold))
+                                    }
+                                    .foregroundStyle(Theme.gold)
+                                    .padding(.leading, 12)
+                                }
+                            }
+                        }
+
                         FlowLayout(spacing: 6) {
                             ForEach(analysis.detectedItems, id: \.self) { item in
                                 Text(item)

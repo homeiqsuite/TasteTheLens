@@ -200,4 +200,45 @@ extension ChefTheme {
         heroSubtitle: "Capture the wild, cook the feast",
         prefersDarkMode: true
     )
+
+    /// Custom Chef — neutral slate/teal, dark theme
+    static let custom = ChefTheme(
+        dashboardBg: Color(red: 0.071, green: 0.078, blue: 0.098),             // #121419
+        cardBg: Color(red: 0.110, green: 0.122, blue: 0.149),                  // #1C1F26
+        cardShadow: Color(red: 0.482, green: 0.620, blue: 0.659).opacity(0.08),
+        cardBorder: Color.white.opacity(0.08),
+        accent: Color(red: 0.482, green: 0.620, blue: 0.659),                  // #7B9EA8
+        accentDeep: Color(red: 0.345, green: 0.482, blue: 0.533),              // #587B88
+        accentOrange: Color(red: 0.557, green: 0.729, blue: 0.769),            // #8EBAC4
+        impactColor: Color(red: 0.482, green: 0.620, blue: 0.659),             // #7B9EA8
+        heroGradient: LinearGradient(
+            colors: [
+                Color(red: 0.482, green: 0.620, blue: 0.659),                  // #7B9EA8
+                Color(red: 0.345, green: 0.482, blue: 0.533),                  // #587B88
+                Color(red: 0.255, green: 0.376, blue: 0.431),                  // #41606E
+            ],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        ),
+        ctaGradient: LinearGradient(
+            colors: [
+                Color(red: 0.482, green: 0.620, blue: 0.659),
+                Color(red: 0.345, green: 0.482, blue: 0.533),
+            ],
+            startPoint: .leading, endPoint: .trailing
+        ),
+        impactGradient: LinearGradient(
+            colors: [
+                Color(red: 0.557, green: 0.729, blue: 0.769),
+                Color(red: 0.482, green: 0.620, blue: 0.659),
+            ],
+            startPoint: .leading, endPoint: .trailing
+        ),
+        textPrimary: Color(red: 0.922, green: 0.933, blue: 0.949),             // #EBEEF2
+        textSecondary: Color(red: 0.729, green: 0.761, blue: 0.800),           // #BAC2CC
+        textTertiary: Color(red: 0.533, green: 0.573, blue: 0.627),            // #8892A0
+        textQuaternary: Color(red: 0.373, green: 0.408, blue: 0.455),          // #5F6874
+        heroIcon: "slider.horizontal.3",
+        heroSubtitle: "Your chef, your rules",
+        prefersDarkMode: true
+    )
 }

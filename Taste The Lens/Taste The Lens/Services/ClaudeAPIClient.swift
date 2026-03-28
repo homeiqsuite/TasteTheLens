@@ -18,6 +18,8 @@ struct ClaudeRecipeResponse: Codable, Sendable {
     let baseServings: Int?
     let estimatedCalories: Int?
     let nutrition: NutritionInfo?
+    let prepTime: String?
+    let cookTime: String?
 
     enum CodingKeys: String, CodingKey {
         case dishName = "dish_name"
@@ -33,6 +35,8 @@ struct ClaudeRecipeResponse: Codable, Sendable {
         case baseServings = "base_servings"
         case estimatedCalories = "estimated_calories"
         case nutrition
+        case prepTime = "prep_time"
+        case cookTime = "cook_time"
     }
 }
 

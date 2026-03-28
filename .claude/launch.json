@@ -4,8 +4,8 @@
     {
       "name": "landing-page",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8000", "--directory", "LandingPage"],
-      "port": 8000
+      "runtimeArgs": ["-m", "http.server", "8090", "--directory", "LandingPage"],
+      "port": 8090
     }
   ]
 }

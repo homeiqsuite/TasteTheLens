@@ -9,6 +9,10 @@ enum HapticManager {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
 
+    static func heavy() {
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+    }
+
     static func success() {
         UINotificationFeedbackGenerator().notificationOccurred(.success)
     }

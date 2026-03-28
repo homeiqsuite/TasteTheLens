@@ -525,7 +525,7 @@ struct OnboardingView: View {
 
             // Chef cards
             VStack(spacing: 14) {
-                ForEach(Array(ChefPersonality.allCases.enumerated()), id: \.element.id) { index, chef in
+                ForEach(Array(ChefPersonality.allCases.filter { $0 != .custom }.enumerated()), id: \.element.id) { index, chef in
                     chefCard(chef)
                         .opacity(chefCardVisible[index] ? 1 : 0)
                         .offset(y: chefCardVisible[index] ? 0 : 20)

@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import SwiftData
 import Supabase
 import os
@@ -29,19 +30,21 @@ final class SyncManager {
         recipe.userId = userId
 
         do {
-            // Upload inspiration image
+            // Upload inspiration image (compressed for cloud storage)
             let inspirationPath = "\(userId)/\(recipe.id.uuidString)/inspiration.jpg"
+            let compressedInspiration = UIImage.compressForCloudUpload(recipe.inspirationImageData)
             try await supabase.storage
                 .from("inspiration-images")
-                .upload(inspirationPath, data: recipe.inspirationImageData, options: .init(upsert: true))
+                .upload(inspirationPath, data: compressedInspiration, options: .init(upsert: true))
 
-            // Upload dish image if available
+            // Upload dish image if available (compressed for cloud storage)
             var dishImagePath: String? = nil
             if let dishData = recipe.generatedDishImageData {
                 dishImagePath = "\(userId)/\(recipe.id.uuidString)/dish.jpg"
+                let compressedDish = UIImage.compressForCloudUpload(dishData)
                 try await supabase.storage
                     .from("dish-images")
-                    .upload(dishImagePath!, data: dishData, options: .init(upsert: true))
+                    .upload(dishImagePath!, data: compressedDish, options: .init(upsert: true))
             }
 
             // Upsert recipe row
