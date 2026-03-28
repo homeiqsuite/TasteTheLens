@@ -202,15 +202,20 @@ final class ImageAnalysisPipeline: Identifiable {
     // MARK: - Fusion Mode
 
     func processFusion(images: [UIImage], modelContext: ModelContext, hardExcluding: [String] = [], softAvoiding: [String] = [], budgetLimit: Double? = nil, courseType: String? = nil) async {
+        guard !images.isEmpty else {
+            logger.error("Fusion pipeline called with no images")
+            state = .failed("No images provided for fusion.")
+            return
+        }
         logger.info("Fusion pipeline started — \(images.count) images, hardExclude: \(hardExcluding), softAvoid: \(softAvoiding.count) items, budget: \(budgetLimit?.description ?? "none")")
         isFusion = true
         startTime = Date()
         await LiveActivityManager.shared.startGeneration()
 
-        // Convert all images to JPEG data upfront
+        // Convert images to JPEG data one at a time to reduce peak memory
         var allImageData: [Data] = []
         for (index, image) in images.enumerated() {
-            guard let data = image.jpegData(compressionQuality: 0.9) else {
+            guard let data = image.jpegDataForUpload() else {
                 logger.error("Failed to convert fusion image \(index) to JPEG data")
                 state = .failed("Could not process one of the captured images.")
                 return
@@ -302,6 +307,11 @@ final class ImageAnalysisPipeline: Identifiable {
             }
 
             // Step 3: Create Recipe with fusion data
+            guard let primaryImageData = allImageData.first else {
+                logger.error("No image data available for fusion recipe")
+                state = .failed("Could not process the captured images.")
+                return
+            }
             let additionalData = allImageData.count > 1 ? Array(allImageData.dropFirst()) : nil
             logger.info("Fusion recipe — additionalData count: \(additionalData?.count ?? 0), sizes: \(additionalData?.map { $0.count } ?? [])")
 
@@ -309,7 +319,7 @@ final class ImageAnalysisPipeline: Identifiable {
                 dishName: recipeResponse.dishName,
                 recipeDescription: recipeResponse.description,
                 colorPalette: recipeResponse.colorPalette ?? [],
-                inspirationImageData: allImageData[0],
+                inspirationImageData: primaryImageData,
                 generatedDishImageData: generatedImageData,
                 generatedDishImageURL: imageURL,
                 translationMatrix: recipeResponse.translationMatrix,

@@ -62,11 +62,17 @@ struct ClaudeAPIClient: ImageAnalysisProvider, Sendable {
     private static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
     private static let model = "claude-sonnet-4-20250514"
 
+    // Use Gemini for content screening even when Claude is the analysis provider
+    private let screener = GeminiAPIClient()
+
     // System prompt is now provided by ChefPersonality
 
     nonisolated func screenImage(_ image: UIImage) async throws -> ContentScreeningResult {
-        // Claude doesn't have a separate screening endpoint — allow through
-        return ContentScreeningResult(safe: true, reason: "Screening not available via Claude")
+        try await screener.screenImage(image)
+    }
+
+    nonisolated func screenImages(_ images: [UIImage]) async throws -> ContentScreeningResult {
+        try await screener.screenImages(images)
     }
 
     nonisolated func analyzeImage(_ image: UIImage, systemPrompt: String = ChefPersonality.current.systemPrompt) async throws -> (ClaudeRecipeResponse, String) {
@@ -148,8 +154,8 @@ struct ClaudeAPIClient: ImageAnalysisProvider, Sendable {
         logger.info("Claude text response length: \(text.count) chars")
         logger.debug("Claude raw text: \(text.prefix(200))...")
 
-        // Parse the recipe JSON from the text content
-        let rawJSON = text
+        // Strip markdown fences and parse the recipe JSON
+        let rawJSON = GeminiAPIClient.stripMarkdownFences(text)
         guard let jsonData = rawJSON.data(using: .utf8) else {
             throw ClaudeAPIError.jsonParseError("Could not encode response text")
         }
@@ -161,6 +167,95 @@ struct ClaudeAPIClient: ImageAnalysisProvider, Sendable {
         } catch {
             logger.error("JSON decode error: \(error)")
             logger.error("Raw JSON that failed to parse: \(rawJSON.prefix(500))")
+            throw ClaudeAPIError.jsonParseError(error.localizedDescription)
+        }
+    }
+
+    // MARK: - Multi-Image Analysis (Fusion Mode)
+
+    nonisolated func analyzeImages(_ images: [UIImage], systemPrompt: String = ChefPersonality.current.systemPrompt) async throws -> (ClaudeRecipeResponse, String) {
+        logger.info("Preparing \(images.count) images for Claude Fusion analysis...")
+
+        var contentParts: [[String: Any]] = []
+        for (index, image) in images.enumerated() {
+            guard let imageData = image.jpegDataForUpload() else {
+                logger.error("Failed to create JPEG data from fusion image \(index)")
+                throw ClaudeAPIError.invalidImage
+            }
+            let base64Image = imageData.base64EncodedString()
+            logger.info("Fusion image \(index) encoded: \(imageData.count) bytes")
+            contentParts.append([
+                "type": "image",
+                "source": [
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": base64Image
+                ]
+            ])
+        }
+
+        contentParts.append([
+            "type": "text",
+            "text": "Analyze ALL of these images together. Identify everything visible in each — objects, ingredients, text, settings. Create ONE cohesive, delicious, home-cookable dish that FUSES the visual DNA of all images. Blend colors, textures, moods, and any real ingredients you spot across all photos. The dish should feel like a creative fusion of these visual worlds. Use only common grocery store ingredients."
+        ])
+
+        let requestBody: [String: Any] = [
+            "model": Self.model,
+            "max_tokens": 8192,
+            "temperature": 1.0,
+            "system": systemPrompt,
+            "messages": [
+                [
+                    "role": "user",
+                    "content": contentParts
+                ]
+            ]
+        ]
+
+        var request = URLRequest(url: Self.endpoint)
+        request.httpMethod = "POST"
+        request.setValue(AppConfig.anthropicAPIKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
+        request.timeoutInterval = 90
+
+        logger.info("Sending fusion request to Claude API...")
+        let data: Data
+        do {
+            let (responseData, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw ClaudeAPIError.invalidResponse
+            }
+            if httpResponse.statusCode != 200 {
+                let errorBody = String(data: responseData, encoding: .utf8) ?? "Unknown error"
+                throw ClaudeAPIError.apiError("Claude API error (\(httpResponse.statusCode)): \(errorBody)")
+            }
+            data = responseData
+        } catch let error as ClaudeAPIError {
+            throw error
+        } catch {
+            throw ClaudeAPIError.networkError(error)
+        }
+
+        guard let envelope = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let content = envelope["content"] as? [[String: Any]],
+              let firstContent = content.first,
+              let text = firstContent["text"] as? String else {
+            throw ClaudeAPIError.invalidResponse
+        }
+
+        let rawJSON = GeminiAPIClient.stripMarkdownFences(text)
+        guard let jsonData = rawJSON.data(using: .utf8) else {
+            throw ClaudeAPIError.jsonParseError("Could not encode response text")
+        }
+
+        do {
+            let recipe = try JSONDecoder().decode(ClaudeRecipeResponse.self, from: jsonData)
+            logger.info("Successfully decoded fusion recipe: \(recipe.dishName)")
+            return (recipe, rawJSON)
+        } catch {
+            logger.error("Fusion JSON decode error: \(error)")
             throw ClaudeAPIError.jsonParseError(error.localizedDescription)
         }
     }

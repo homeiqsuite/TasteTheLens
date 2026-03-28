@@ -121,6 +121,15 @@ struct NutritionInfo: Codable, Hashable {
     var fat: Int
     var fiber: Int
     var sugar: Int
+
+    init(calories: Int, protein: Int, carbs: Int, fat: Int, fiber: Int, sugar: Int) {
+        self.calories = max(0, calories)
+        self.protein = max(0, protein)
+        self.carbs = max(0, carbs)
+        self.fat = max(0, fat)
+        self.fiber = max(0, fiber)
+        self.sugar = max(0, sugar)
+    }
 }
 
 struct SommelierPairing: Codable, Hashable {

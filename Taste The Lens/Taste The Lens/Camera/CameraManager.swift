@@ -13,6 +13,8 @@ final class CameraManager: NSObject {
     nonisolated(unsafe) private let photoOutput = AVCapturePhotoOutput()
     private let sessionQueue = DispatchQueue(label: "com.tastethelens.camera")
     private var continuation: CheckedContinuation<UIImage, Error>?
+    /// Prevents overwriting an in-flight continuation if capturePhoto() is called twice rapidly.
+    private var isCaptureInFlight = false
 
     override init() {
         super.init()
@@ -20,7 +22,7 @@ final class CameraManager: NSObject {
 
     func checkPermission() async {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized:
+        case .authorized, .limited:
             permissionGranted = true
         case .notDetermined:
             permissionGranted = await AVCaptureDevice.requestAccess(for: .video)
@@ -47,7 +49,11 @@ final class CameraManager: NSObject {
     }
 
     func capturePhoto() async throws -> UIImage {
-        try await withCheckedThrowingContinuation { continuation in
+        guard !isCaptureInFlight else {
+            throw CameraError.captureInProgress
+        }
+        isCaptureInFlight = true
+        return try await withCheckedThrowingContinuation { continuation in
             self.continuation = continuation
             let settings = AVCapturePhotoSettings()
             settings.flashMode = .auto
@@ -92,6 +98,8 @@ extension CameraManager: AVCapturePhotoCaptureDelegate {
         error: Error?
     ) {
         Task { @MainActor in
+            defer { self.isCaptureInFlight = false }
+
             if let error {
                 self.continuation?.resume(throwing: error)
                 self.continuation = nil
@@ -115,11 +123,13 @@ extension CameraManager: AVCapturePhotoCaptureDelegate {
 enum CameraError: LocalizedError {
     case captureFailure
     case permissionDenied
+    case captureInProgress
 
     var errorDescription: String? {
         switch self {
         case .captureFailure: return "Failed to capture photo. Please try again."
         case .permissionDenied: return "Camera access is required to use Taste The Lens."
+        case .captureInProgress: return "A photo is already being captured. Please wait a moment."
         }
     }
 }

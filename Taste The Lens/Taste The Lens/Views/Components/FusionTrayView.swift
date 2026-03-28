@@ -38,6 +38,7 @@ struct FusionTrayView: View {
                     .background(Theme.ctaGradient, in: Capsule())
                     .shadow(color: Theme.gold.opacity(0.4), radius: 8, x: 0, y: 4)
                 }
+                .accessibilityLabel("Fuse \(images.count) images into one recipe")
                 .transition(.scale.combined(with: .opacity))
             }
         }
@@ -64,11 +65,16 @@ struct FusionTrayView: View {
                 HapticManager.light()
                 onRemove(index)
             }
+            .accessibilityLabel("Fusion image \(index + 1)")
+            .accessibilityHint("Tap to remove")
+            .accessibilityAddTraits(.isButton)
     }
 
     private var emptySlot: some View {
         Circle()
             .strokeBorder(Theme.darkTextHint.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
             .frame(width: 48, height: 48)
+            .accessibilityLabel("Empty slot")
+            .accessibilityHint("Capture a photo to fill this slot")
     }
 }

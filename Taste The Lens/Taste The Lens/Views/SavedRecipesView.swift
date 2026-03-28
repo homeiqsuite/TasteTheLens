@@ -33,16 +33,18 @@ struct SavedRecipesView: View {
         if searchText.isEmpty {
             filtered = Array(recipes)
         } else {
+            let query = searchText
             filtered = recipes.filter {
-                $0.dishName.localizedCaseInsensitiveContains(searchText)
+                $0.dishName.localizedCaseInsensitiveContains(query)
             }
         }
 
         switch sortOrder {
         case .newest:
-            return filtered.sorted { $0.createdAt > $1.createdAt }
+            // @Query already sorts by createdAt descending
+            return filtered
         case .oldest:
-            return filtered.sorted { $0.createdAt < $1.createdAt }
+            return filtered.reversed()
         case .alphabetical:
             return filtered.sorted { $0.dishName.localizedCaseInsensitiveCompare($1.dishName) == .orderedAscending }
         }
@@ -76,7 +78,17 @@ struct SavedRecipesView: View {
             .navigationBarTitleDisplayMode(.large)
             .searchable(text: $searchText, prompt: "Search dishes")
             .refreshable {
-                await SyncManager.shared.syncAll(modelContext: modelContext)
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        await SyncManager.shared.syncAll(modelContext: modelContext)
+                    }
+                    group.addTask {
+                        try? await Task.sleep(for: .seconds(15))
+                    }
+                    // Return as soon as either sync completes or timeout fires
+                    await group.next()
+                    group.cancelAll()
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -112,6 +124,7 @@ struct SavedRecipesView: View {
                             .font(.system(size: 14))
                             .foregroundStyle(Theme.primary)
                     }
+                    .accessibilityLabel(viewMode == .grid ? "Switch to list view" : "Switch to grid view")
                 }
             }
             .sheet(isPresented: $showSignIn) {

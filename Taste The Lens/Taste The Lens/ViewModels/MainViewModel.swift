@@ -189,6 +189,15 @@ final class MainViewModel {
                 logger.info("App backgrounded — started background task id: \(backgroundTaskID.rawValue)")
             }
 
+            // Ensure observer and background task are always cleaned up, even on cancellation
+            defer {
+                NotificationCenter.default.removeObserver(observer)
+                if backgroundTaskID != .invalid {
+                    logger.info("Ending background task — id: \(backgroundTaskID.rawValue)")
+                    UIApplication.shared.endBackgroundTask(backgroundTaskID)
+                }
+            }
+
             // Route to fusion pipeline if multiple images captured
             if let fusionImages = capturedImages, fusionImages.count >= 2 {
                 await pipeline.processFusion(images: fusionImages, modelContext: modelContext, hardExcluding: hardExcludedDishNames, softAvoiding: dishHistoryNames, budgetLimit: budgetLimit, courseType: courseType)
@@ -288,13 +297,6 @@ final class MainViewModel {
                 showTemporaryError(message)
             }
 
-            // Clean up background task observer and end any active background task
-            NotificationCenter.default.removeObserver(observer)
-            if backgroundTaskID != .invalid {
-                logger.info("Ending background task — id: \(backgroundTaskID.rawValue)")
-                UIApplication.shared.endBackgroundTask(backgroundTaskID)
-                backgroundTaskID = .invalid
-            }
         }
     }
 
@@ -374,11 +376,15 @@ final class MainViewModel {
 
     // MARK: - Private
 
+    private var errorDismissTask: Task<Void, Never>?
+
     private func showTemporaryError(_ message: String) {
+        errorDismissTask?.cancel()
         errorMessage = message
         showError = true
-        Task {
+        errorDismissTask = Task {
             try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
             withAnimation { showError = false }
             currentScreen = .dashboard
         }

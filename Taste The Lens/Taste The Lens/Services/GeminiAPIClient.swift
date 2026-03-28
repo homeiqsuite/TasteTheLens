@@ -143,17 +143,7 @@ struct GeminiAPIClient: ImageAnalysisProvider, Sendable {
         logger.info("Gemini text response length: \(text.count) chars")
         logger.debug("Gemini raw text: \(text.prefix(200))...")
 
-        // Strip markdown code fences if present
-        var jsonText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if jsonText.hasPrefix("```json") {
-            jsonText = String(jsonText.dropFirst(7))
-        } else if jsonText.hasPrefix("```") {
-            jsonText = String(jsonText.dropFirst(3))
-        }
-        if jsonText.hasSuffix("```") {
-            jsonText = String(jsonText.dropLast(3))
-        }
-        jsonText = jsonText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let jsonText = Self.stripMarkdownFences(text)
 
         guard let jsonData = jsonText.data(using: .utf8) else {
             throw GeminiAPIError.jsonParseError("Could not encode response text")
@@ -286,15 +276,15 @@ struct GeminiAPIClient: ImageAnalysisProvider, Sendable {
         do {
             let (responseData, response) = try await URLSession.shared.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                // If screening fails, allow the image through rather than blocking
-                logger.warning("Screening API returned non-200, allowing image through")
-                return ContentScreeningResult(safe: true, reason: "Screening unavailable")
+                // If screening API fails, reject by default for safety
+                logger.warning("Screening API returned non-200, rejecting image for safety")
+                return ContentScreeningResult(safe: false, reason: "Content screening is temporarily unavailable. Please try again in a moment.")
             }
             data = responseData
         } catch {
-            // If screening fails due to network, allow through
-            logger.warning("Screening network error, allowing image through: \(error)")
-            return ContentScreeningResult(safe: true, reason: "Screening unavailable")
+            // If screening fails due to network, reject for safety
+            logger.warning("Screening network error, rejecting image for safety: \(error)")
+            return ContentScreeningResult(safe: false, reason: "Content screening is temporarily unavailable. Please check your connection and try again.")
         }
 
         guard let envelope = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -305,8 +295,8 @@ struct GeminiAPIClient: ImageAnalysisProvider, Sendable {
               let firstPart = parts.first,
               let text = firstPart["text"] as? String,
               let jsonData = text.data(using: .utf8) else {
-            logger.warning("Could not parse screening response, allowing image through")
-            return ContentScreeningResult(safe: true, reason: "Screening unavailable")
+            logger.warning("Could not parse screening response, rejecting image for safety")
+            return ContentScreeningResult(safe: false, reason: "Content screening is temporarily unavailable. Please try again.")
         }
 
         do {
@@ -314,8 +304,8 @@ struct GeminiAPIClient: ImageAnalysisProvider, Sendable {
             logger.info("Screening result: safe=\(result.safe), reason=\(result.reason)")
             return result
         } catch {
-            logger.warning("Could not decode screening result, allowing image through: \(error)")
-            return ContentScreeningResult(safe: true, reason: "Screening unavailable")
+            logger.warning("Could not decode screening result, rejecting image for safety: \(error)")
+            return ContentScreeningResult(safe: false, reason: "Content screening is temporarily unavailable. Please try again.")
         }
     }
 
@@ -350,6 +340,20 @@ struct GeminiAPIClient: ImageAnalysisProvider, Sendable {
         }
     }
 
+    /// Strips markdown code fences (```, ~~~) from LLM response text.
+    static func stripMarkdownFences(_ text: String) -> String {
+        var result = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Strip opening fence: ```json, ```JSON, ~~~json, ``` or ~~~
+        if let range = result.range(of: #"^(`{3,}|~{3,})\w*\s*"#, options: .regularExpression) {
+            result = String(result[range.upperBound...])
+        }
+        // Strip closing fence
+        if let range = result.range(of: #"\s*(`{3,}|~{3,})\s*$"#, options: .regularExpression) {
+            result = String(result[result.startIndex..<range.lowerBound])
+        }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private nonisolated func parseRecipeResponse(from data: Data) throws -> (ClaudeRecipeResponse, String) {
         guard let envelope = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let candidates = envelope["candidates"] as? [[String: Any]],
@@ -366,17 +370,7 @@ struct GeminiAPIClient: ImageAnalysisProvider, Sendable {
         logger.info("Gemini text response length: \(text.count) chars")
         logger.debug("Gemini raw text: \(text.prefix(200))...")
 
-        // Strip markdown code fences if present
-        var jsonText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if jsonText.hasPrefix("```json") {
-            jsonText = String(jsonText.dropFirst(7))
-        } else if jsonText.hasPrefix("```") {
-            jsonText = String(jsonText.dropFirst(3))
-        }
-        if jsonText.hasSuffix("```") {
-            jsonText = String(jsonText.dropLast(3))
-        }
-        jsonText = jsonText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let jsonText = Self.stripMarkdownFences(text)
 
         guard let jsonData = jsonText.data(using: .utf8) else {
             throw GeminiAPIError.jsonParseError("Could not encode response text")

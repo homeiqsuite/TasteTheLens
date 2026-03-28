@@ -171,6 +171,7 @@ struct ContentView: View {
                             .background(Color.black.opacity(0.3))
                             .clipShape(Circle())
                     }
+                    .accessibilityLabel("Back to dashboard")
                     .padding(.leading, 16)
                     .padding(.top, 8)
 
@@ -193,6 +194,8 @@ struct ContentView: View {
                         .background(Color.black.opacity(0.3))
                         .clipShape(Capsule())
                     }
+                    .accessibilityLabel("\(UsageTracker.shared.remainingGenerations) credits remaining")
+                    .accessibilityHint("Tap to view credit options")
                     .padding(.top, 8)
 
                     Button {
@@ -376,6 +379,12 @@ struct ContentView: View {
             )
             .padding(.horizontal, 24)
             .padding(.top, 60)
+            .onTapGesture {
+                withAnimation { vm.showError = false }
+            }
+            .accessibilityLabel("Error: \(message)")
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Tap to dismiss")
 
             Spacer()
         }

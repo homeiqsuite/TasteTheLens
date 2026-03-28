@@ -46,6 +46,7 @@ struct ProcessingView: View {
                                 .background(Color.black.opacity(0.3))
                                 .clipShape(Circle())
                         }
+                        .accessibilityLabel("Cancel recipe generation")
                         .padding(.leading, 16)
                         .padding(.top, 8)
                         Spacer()
@@ -141,6 +142,8 @@ struct ProgressStepsView: View {
                 }
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Processing step \(min(currentStep + 1, steps.count)) of \(steps.count): \(currentStep >= 0 && currentStep < steps.count ? steps[currentStep] : "waiting")")
     }
 
     @ViewBuilder
@@ -180,6 +183,7 @@ struct PulsingDot: View {
             .opacity(isPulsing ? 0.6 : 1.0)
             .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isPulsing)
             .onAppear { isPulsing = true }
+            .accessibilityHidden(true)
     }
 }
 
@@ -193,9 +197,9 @@ struct TimeoutWarningView: View {
         TimelineView(.periodic(from: .now, by: 1)) { timeline in
             let elapsed = Int(timeline.date.timeIntervalSince(startTime))
             Group {
-                if elapsed >= 90 {
+                if elapsed >= 30 {
                     VStack(spacing: 8) {
-                        Text("Still working. You can cancel and try again.")
+                        Text(elapsed >= 60 ? "Still working. You can cancel and try again." : "Taking longer than usual...")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(Theme.darkTextSecondary)
                         Button {
@@ -209,11 +213,8 @@ struct TimeoutWarningView: View {
                                 .background(Theme.darkTextHint)
                                 .clipShape(Capsule())
                         }
+                        .accessibilityLabel("Cancel recipe generation")
                     }
-                } else if elapsed >= 45 {
-                    Text("Taking longer than usual...")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Theme.darkTextTertiary)
                 }
             }
         }

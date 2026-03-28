@@ -2,6 +2,7 @@ import UIKit
 
 extension UIImage {
     func resizedForAPIUpload(maxDimension: CGFloat = 1024) -> UIImage {
+        guard size.width > 0, size.height > 0, maxDimension > 0 else { return self }
         let aspectRatio = size.width / size.height
         let newSize: CGSize
 

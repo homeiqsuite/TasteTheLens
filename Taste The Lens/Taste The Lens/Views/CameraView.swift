@@ -10,6 +10,8 @@ struct CameraView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var fusionState = FusionModeState()
     @State private var showFusionTooltip = false
+    @State private var cameraError: String?
+    @State private var showCameraError = false
     @AppStorage("selectedChef") private var selectedChef = "default"
     @AppStorage("hasSeenFusionTooltip") private var hasSeenFusionTooltip = false
 
@@ -87,6 +89,7 @@ struct CameraView: View {
                             .background(Color.black.opacity(0.3))
                             .clipShape(Circle())
                     }
+                    .accessibilityLabel("Pick photo from library")
                     .disabled(fusionState.isActive)
                     .opacity(fusionState.isActive ? 0.3 : 1)
 
@@ -102,6 +105,8 @@ struct CameraView: View {
                         isFusionMode: fusionState.isActive,
                         shotLabel: fusionState.isActive ? fusionState.shotLabel : nil
                     )
+                    .accessibilityLabel(fusionState.isActive ? "Capture fusion shot, \(fusionState.shotLabel)" : "Capture photo")
+                    .accessibilityHint(fusionState.isActive ? "Tap to capture. Long press to exit fusion mode." : "Tap to capture. Long press for fusion mode.")
 
                     Spacer()
 
@@ -157,6 +162,8 @@ struct CameraView: View {
                     onPhotoCaptured(image)
                 } else {
                     logger.error("Failed to load image from PhotosPicker")
+                    cameraError = "Could not load the selected photo. Please try a different image."
+                    showCameraError = true
                 }
                 selectedPhotoItem = nil
             }
@@ -170,6 +177,11 @@ struct CameraView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("You have \(fusionState.shotCount) photo\(fusionState.shotCount == 1 ? "" : "s") captured. Discard them?")
+        }
+        .alert("Capture Error", isPresented: $showCameraError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(cameraError ?? "An unexpected error occurred.")
         }
     }
 
@@ -203,6 +215,8 @@ struct CameraView: View {
                 onPhotoCaptured(image)
             } catch {
                 logger.error("Photo capture failed: \(error.localizedDescription)")
+                cameraError = error.localizedDescription
+                showCameraError = true
             }
         }
     }
@@ -253,6 +267,8 @@ struct CameraView: View {
                 // Camera stays running — do NOT stop session
             } catch {
                 logger.error("Fusion photo capture failed: \(error.localizedDescription)")
+                cameraError = error.localizedDescription
+                showCameraError = true
             }
         }
     }

@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let logger = Logger(subsystem: "com.eightgates.TasteTheLens", category: "AppConfig")
 
 enum AppConfig {
     static var anthropicAPIKey: String {
@@ -8,7 +11,8 @@ enum AppConfig {
         if let key = Bundle.main.infoDictionary?["ANTHROPIC_API_KEY"] as? String, !key.isEmpty {
             return key
         }
-        fatalError("ANTHROPIC_API_KEY not set. Add it to Secrets.xcconfig or scheme environment variables.")
+        logger.error("ANTHROPIC_API_KEY not set. Add it to Secrets.xcconfig or scheme environment variables.")
+        return ""
     }
 
     static var geminiAPIKey: String {
@@ -18,7 +22,8 @@ enum AppConfig {
         if let key = Bundle.main.infoDictionary?["GEMINI_API_KEY"] as? String, !key.isEmpty {
             return key
         }
-        fatalError("GEMINI_API_KEY not set. Add it to Secrets.xcconfig or scheme environment variables.")
+        logger.error("GEMINI_API_KEY not set. Add it to Secrets.xcconfig or scheme environment variables.")
+        return ""
     }
 
     static var falAPIKey: String {
@@ -28,7 +33,8 @@ enum AppConfig {
         if let key = Bundle.main.infoDictionary?["FAL_API_KEY"] as? String, !key.isEmpty {
             return key
         }
-        fatalError("FAL_API_KEY not set. Add it to Secrets.xcconfig or scheme environment variables.")
+        logger.error("FAL_API_KEY not set. Add it to Secrets.xcconfig or scheme environment variables.")
+        return ""
     }
 
     static var supabaseURL: String {
@@ -38,7 +44,8 @@ enum AppConfig {
         if let url = Bundle.main.infoDictionary?["SUPABASE_URL"] as? String, !url.isEmpty {
             return url
         }
-        fatalError("SUPABASE_URL not set. Add it to Secrets.xcconfig or scheme environment variables.")
+        logger.error("SUPABASE_URL not set. Add it to Secrets.xcconfig or scheme environment variables.")
+        return ""
     }
 
     static var supabaseAnonKey: String {
@@ -48,6 +55,12 @@ enum AppConfig {
         if let key = Bundle.main.infoDictionary?["SUPABASE_ANON_KEY"] as? String, !key.isEmpty {
             return key
         }
-        fatalError("SUPABASE_ANON_KEY not set. Add it to Secrets.xcconfig or scheme environment variables.")
+        logger.error("SUPABASE_ANON_KEY not set. Add it to Secrets.xcconfig or scheme environment variables.")
+        return ""
+    }
+
+    /// Returns true if the minimum required API keys are configured.
+    static var isConfigured: Bool {
+        !geminiAPIKey.isEmpty
     }
 }
