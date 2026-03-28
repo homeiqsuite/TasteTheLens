@@ -352,8 +352,10 @@ final class MainViewModel {
             logger.error("handleAddMenuCourse — missing menuId or courseOrder in notification")
             return
         }
-        logger.info("handleAddMenuCourse — menuId: \(menuId), courseOrder: \(courseOrder)")
+        let courseType = notification.userInfo?["courseType"] as? String
+        logger.info("handleAddMenuCourse — menuId: \(menuId), courseOrder: \(courseOrder), courseType: \(courseType ?? "none")")
         pendingMenuCourse = (menuId: menuId, courseOrder: courseOrder)
+        self.courseType = courseType
         // Dismiss tasting menus sheet and navigate to camera
         showTastingMenus = false
         currentScreen = .camera

@@ -7,6 +7,8 @@ enum AppNotificationType {
     case challengeAccepted(challengeTitle: String)
     case submissionReceived(challengeTitle: String)
     case submissionUpvoted(count: Int)
+    case menuInvitation(menuTheme: String)
+    case menuCourseAdded(menuTheme: String)
 }
 
 struct AppNotification: Identifiable {
@@ -22,6 +24,10 @@ struct AppNotification: Identifiable {
             "New submission on your \"\(title)\" challenge!"
         case .submissionUpvoted(let count):
             "Your submission got \(count) new upvotes!"
+        case .menuInvitation(let theme):
+            "You've been invited to the \"\(theme)\" tasting menu!"
+        case .menuCourseAdded(let theme):
+            "A new course was added to \"\(theme)\""
         }
     }
 
@@ -30,6 +36,8 @@ struct AppNotification: Identifiable {
         case .challengeAccepted: "flame.fill"
         case .submissionReceived: "photo.fill"
         case .submissionUpvoted: "arrow.up.circle.fill"
+        case .menuInvitation: "envelope.fill"
+        case .menuCourseAdded: "menucard.fill"
         }
     }
 }

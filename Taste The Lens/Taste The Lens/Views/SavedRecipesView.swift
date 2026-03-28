@@ -283,8 +283,9 @@ struct SavedRecipesView: View {
 
     private func deleteRecipe(_ recipe: Recipe) {
         withAnimation {
-            modelContext.delete(recipe)
-            try? modelContext.save()
+            Task {
+                await SyncManager.shared.deleteRecipeRemotely(recipe, modelContext: modelContext)
+            }
         }
         recipeToDelete = nil
     }

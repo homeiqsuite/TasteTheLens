@@ -13,6 +13,7 @@ struct SignInView: View {
     @State private var password = ""
     @State private var displayName = ""
     @State private var errorMessage: String?
+    @State private var successMessage: String?
     @State private var currentNonce: String?
 
     private let bg = Theme.darkBg
@@ -95,6 +96,15 @@ struct SignInView: View {
                             .padding(.horizontal, 32)
                     }
 
+                    // Success message
+                    if let success = successMessage {
+                        Text(success)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.green.opacity(0.8))
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 32)
+                    }
+
                     Spacer()
                 }
             }
@@ -151,6 +161,16 @@ struct SignInView: View {
             .background(gold)
             .cornerRadius(12)
             .disabled(authManager.isLoading)
+
+            if !isSignUp {
+                Button {
+                    Task { await handleForgotPassword() }
+                } label: {
+                    Text("Forgot Password?")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.gold)
+                }
+            }
 
             Button {
                 withAnimation { isSignUp.toggle() }
@@ -211,6 +231,22 @@ struct SignInView: View {
         } catch {
             errorMessage = error.localizedDescription
             logger.error("Email auth failed: \(error)")
+        }
+    }
+
+    private func handleForgotPassword() async {
+        errorMessage = nil
+        successMessage = nil
+        guard !email.isEmpty else {
+            errorMessage = "Enter your email address first."
+            return
+        }
+        do {
+            try await authManager.resetPassword(email: email)
+            successMessage = "Password reset email sent. Check your inbox."
+        } catch {
+            errorMessage = error.localizedDescription
+            logger.error("Password reset failed: \(error)")
         }
     }
 

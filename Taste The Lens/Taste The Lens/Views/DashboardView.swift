@@ -13,6 +13,15 @@ struct DashboardView: View {
     @State private var showChefPicker = false
     @State private var progressAnimated = false
     @State private var heroGlowPulse = false
+
+    // Hero card animations
+    @State private var particlesAnimating = false
+    @State private var gradientBreathing = false
+    @State private var shimmerOffset: CGFloat = -200
+    @State private var cardAppeared = false
+    @State private var iconAppeared = false
+    @State private var textAppeared = false
+    @State private var ctaAppeared = false
     @AppStorage("selectedChef") private var selectedChef = "default"
 
     private let authManager = AuthManager.shared
@@ -151,9 +160,27 @@ struct DashboardView: View {
             vm.navigateToCamera()
         } label: {
             ZStack {
-                // Themed gradient background
+                // Breathing gradient background
                 RoundedRectangle(cornerRadius: 28)
                     .fill(chefTheme.heroGradient)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 28)
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.12),
+                                        Color.clear,
+                                        Color.white.opacity(0.06),
+                                    ],
+                                    startPoint: gradientBreathing ? .topLeading : .bottomTrailing,
+                                    endPoint: gradientBreathing ? .bottomTrailing : .topLeading
+                                )
+                            )
+                            .animation(
+                                .easeInOut(duration: 6.0).repeatForever(autoreverses: true),
+                                value: gradientBreathing
+                            )
+                    )
 
                 // Sparkle/glow overlay
                 RoundedRectangle(cornerRadius: 28)
@@ -170,16 +197,15 @@ struct DashboardView: View {
                         )
                     )
 
-                // Subtle light particles
+                // Floating animated particles
                 GeometryReader { geo in
-                    ForEach(0..<6, id: \.self) { i in
-                        Circle()
-                            .fill(Color.white.opacity(Double.random(in: 0.15...0.35)))
-                            .frame(width: CGFloat.random(in: 3...8))
-                            .position(
-                                x: CGFloat.random(in: 20...geo.size.width - 20),
-                                y: CGFloat.random(in: 20...geo.size.height - 20)
-                            )
+                    ForEach(0..<8, id: \.self) { i in
+                        FloatingParticle(
+                            index: i,
+                            containerSize: geo.size,
+                            isAnimating: particlesAnimating,
+                            particleColor: chefTheme.accent
+                        )
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 28))
@@ -203,6 +229,8 @@ struct DashboardView: View {
                             .foregroundStyle(.white)
                             .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
                     }
+                    .offset(y: iconAppeared ? 0 : -20)
+                    .opacity(iconAppeared ? 1 : 0)
 
                     VStack(spacing: 6) {
                         Text("Snap a Photo")
@@ -215,8 +243,10 @@ struct DashboardView: View {
                             .foregroundStyle(.white.opacity(0.85))
                             .lineSpacing(2)
                     }
+                    .opacity(textAppeared ? 1 : 0)
+                    .offset(y: textAppeared ? 0 : 8)
 
-                    // CTA button
+                    // CTA button with shimmer
                     Text("Snap a Photo")
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(chefTheme.accentDeep)
@@ -227,6 +257,24 @@ struct DashboardView: View {
                                 .fill(.white)
                                 .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
                         )
+                        .overlay(
+                            Capsule()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.clear,
+                                            Color.white.opacity(0.4),
+                                            Color.clear,
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .offset(x: shimmerOffset)
+                                .mask(Capsule())
+                        )
+                        .opacity(ctaAppeared ? 1 : 0)
+                        .offset(y: ctaAppeared ? 0 : 12)
                 }
                 .padding(.vertical, 32)
                 .padding(.horizontal, 24)
@@ -234,9 +282,50 @@ struct DashboardView: View {
             .frame(maxWidth: .infinity)
             .frame(minHeight: 260)
             .shadow(color: chefTheme.accent.opacity(0.35), radius: 20, y: 10)
+            .scaleEffect(cardAppeared ? 1.0 : 0.95)
+            .opacity(cardAppeared ? 1 : 0)
         }
         .buttonStyle(PremiumCardButtonStyle())
-        .onAppear { heroGlowPulse = true }
+        .onAppear {
+            heroGlowPulse = true
+            particlesAnimating = true
+            gradientBreathing = true
+            startEntranceAnimation()
+            startShimmerLoop()
+        }
+    }
+
+    private func startEntranceAnimation() {
+        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+            cardAppeared = true
+        }
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.15)) {
+            iconAppeared = true
+        }
+        withAnimation(.easeOut(duration: 0.4).delay(0.3)) {
+            textAppeared = true
+        }
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.75).delay(0.45)) {
+            ctaAppeared = true
+        }
+    }
+
+    private func startShimmerLoop() {
+        // Initial delay before first shimmer
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            runShimmer()
+        }
+    }
+
+    private func runShimmer() {
+        shimmerOffset = -200
+        withAnimation(.easeInOut(duration: 0.8)) {
+            shimmerOffset = 200
+        }
+        // Repeat every 4 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+            runShimmer()
+        }
     }
 
     // MARK: - Chef Mode
@@ -710,6 +799,48 @@ struct PremiumCardButtonStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .opacity(configuration.isPressed ? 0.9 : 1.0)
             .animation(.easeOut(duration: 0.2), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Floating Particle
+
+/// A single animated particle that drifts upward and fades in/out on a loop.
+/// Each particle has a unique phase offset, speed, and size for organic movement.
+private struct FloatingParticle: View {
+    let index: Int
+    let containerSize: CGSize
+    let isAnimating: Bool
+    let particleColor: Color
+
+    // Deterministic per-particle values based on index
+    private var seed: Double { Double(index) * 137.508 } // golden angle
+    private var size: CGFloat { CGFloat(3 + (seed.truncatingRemainder(dividingBy: 6))) }
+    private var startX: CGFloat {
+        let fraction = (seed * 0.618).truncatingRemainder(dividingBy: 1.0)
+        return 30 + CGFloat(fraction) * (containerSize.width - 60)
+    }
+    private var startY: CGFloat {
+        let fraction = (seed * 0.382).truncatingRemainder(dividingBy: 1.0)
+        return 40 + CGFloat(fraction) * (containerSize.height - 80)
+    }
+    private var driftX: CGFloat { CGFloat(((seed * 2.3).truncatingRemainder(dividingBy: 20)) - 10) }
+    private var duration: Double { 3.0 + (seed.truncatingRemainder(dividingBy: 3.0)) }
+    private var delay: Double { Double(index) * 0.5 }
+
+    var body: some View {
+        Circle()
+            .fill(particleColor.opacity(isAnimating ? 0.0 : 0.35))
+            .frame(width: size, height: size)
+            .position(
+                x: startX + (isAnimating ? driftX : 0),
+                y: startY + (isAnimating ? -30 : 0)
+            )
+            .animation(
+                .easeInOut(duration: duration)
+                .repeatForever(autoreverses: true)
+                .delay(delay),
+                value: isAnimating
+            )
     }
 }
 

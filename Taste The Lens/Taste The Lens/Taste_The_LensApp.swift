@@ -3,8 +3,11 @@ import SwiftData
 
 @main
 struct Taste_The_LensApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @State private var deepLinkedRecipeID: UUID?
     @State private var showDeepLinkedRecipe = false
+    @State private var resetCode: String?
+    @State private var showResetPassword = false
 
     var body: some Scene {
         WindowGroup {
@@ -22,7 +25,11 @@ struct Taste_The_LensApp: App {
                         if let container = try? ModelContainer(for: Recipe.self) {
                             let context = ModelContext(container)
                             await SyncManager.shared.claimLocalRecipes(modelContext: context)
+                            await SyncManager.shared.syncAll(modelContext: context)
                         }
+                        // Request push notification permission and register token
+                        await PushNotificationService.shared.requestPermission()
+                        await PushNotificationService.shared.loadPreferences()
                     }
                 }
                 .onOpenURL { url in
@@ -40,12 +47,20 @@ struct Taste_The_LensApp: App {
                                 object: nil,
                                 userInfo: ["inviteCode": code]
                             )
+                        case .resetCallback(let code):
+                            resetCode = code
+                            showResetPassword = true
                         }
                     }
                 }
                 .sheet(isPresented: $showDeepLinkedRecipe) {
                     if let recipeID = deepLinkedRecipeID {
                         DeepLinkedRecipeView(recipeID: recipeID)
+                    }
+                }
+                .sheet(isPresented: $showResetPassword) {
+                    if let code = resetCode {
+                        ResetPasswordView(code: code)
                     }
                 }
         }

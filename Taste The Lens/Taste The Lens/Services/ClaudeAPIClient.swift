@@ -13,6 +13,7 @@ struct ClaudeRecipeResponse: Codable, Sendable {
     let translationMatrix: [TranslationItem]
     let components: [RecipeComponent]
     let cookingInstructions: [String]?
+    let cookingSteps: [CookingStep]?
     let platingSteps: [String]
     let sommelierPairing: SommelierPairing
     let baseServings: Int?
@@ -30,6 +31,7 @@ struct ClaudeRecipeResponse: Codable, Sendable {
         case translationMatrix = "translation_matrix"
         case components
         case cookingInstructions = "cooking_instructions"
+        case cookingSteps = "cooking_steps"
         case platingSteps = "plating_steps"
         case sommelierPairing = "sommelier_pairing"
         case baseServings = "base_servings"

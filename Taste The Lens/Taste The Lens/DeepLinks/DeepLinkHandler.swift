@@ -4,6 +4,7 @@ enum DeepLink {
     case recipe(UUID)
     case challenge(String)
     case tastingMenu(String)
+    case resetCallback(String)
 }
 
 struct DeepLinkHandler {
@@ -37,6 +38,14 @@ struct DeepLinkHandler {
         if url.host == "menu" {
             if let code = pathComponents.first {
                 return .tastingMenu(code)
+            }
+        }
+
+        // tastethelens://reset-callback?code={code}
+        if url.host == "reset-callback" {
+            if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+               let code = components.queryItems?.first(where: { $0.name == "code" })?.value {
+                return .resetCallback(code)
             }
         }
 

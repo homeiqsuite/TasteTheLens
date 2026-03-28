@@ -168,6 +168,26 @@ final class SyncManager {
         logger.info("Full sync complete")
     }
 
+    // MARK: - Delete Recipe (Soft-Delete on Server)
+
+    /// Soft-delete a recipe on Supabase (sets `is_deleted = true`), then hard-delete locally.
+    @MainActor
+    func deleteRecipeRemotely(_ recipe: Recipe, modelContext: ModelContext) async {
+        if let remoteId = recipe.remoteId {
+            do {
+                try await supabase.from("recipes")
+                    .update(["is_deleted": true])
+                    .eq("id", value: remoteId)
+                    .execute()
+                logger.info("Marked recipe as deleted on server: \(recipe.dishName)")
+            } catch {
+                logger.error("Failed to delete recipe remotely: \(error)")
+            }
+        }
+        modelContext.delete(recipe)
+        try? modelContext.save()
+    }
+
     // MARK: - Claim Local Recipes
 
     /// On first sign-in, assign unowned local recipes to the current user.

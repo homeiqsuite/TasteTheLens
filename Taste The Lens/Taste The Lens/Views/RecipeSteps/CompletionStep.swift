@@ -1,0 +1,366 @@
+import SwiftUI
+
+struct CompletionStep: View {
+    let recipe: Recipe
+    @State private var exportImage: UIImage?
+    @State private var showAuthPrompt = false
+    @State private var showCreateChallenge = false
+    @State private var isCreatingChallenge = false
+    @State private var challengeError: String?
+    @State private var showBudgetInput = false
+    @State private var budgetAmount: Double = 15
+
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 16) {
+                Spacer().frame(height: 20)
+
+                // Completion header
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 48))
+                    .foregroundStyle(Theme.gold)
+
+                Text("Ready to Plate!")
+                    .font(.system(size: 24, weight: .bold, design: .serif))
+                    .foregroundStyle(Theme.textPrimary)
+
+                Text("You've completed all the steps. Share your creation or try something new.")
+                    .font(.system(size: 15))
+                    .foregroundStyle(Theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+
+                Spacer().frame(height: 12)
+
+                // Action buttons
+                VStack(spacing: 12) {
+                    // Share Image
+                    Button {
+                        shareRecipeImage()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "photo")
+                                .font(.system(size: 14))
+                            Text("Share Image")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                        .foregroundStyle(Theme.darkTextPrimary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(Theme.primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+
+                    // Share PDF
+                    Button {
+                        shareRecipePDF()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "doc")
+                                .font(.system(size: 14))
+                            Text("Share PDF")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                        .foregroundStyle(Theme.textPrimary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(Theme.buttonBg)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+
+                    // Reimagine
+                    Menu {
+                        Button {
+                            reimagineRecipe()
+                        } label: {
+                            Label("Something New", systemImage: "sparkles")
+                        }
+                        Divider()
+                        ForEach(ReimagineCourseType.allCases) { course in
+                            Button {
+                                reimagineRecipe(as: course.rawValue)
+                            } label: {
+                                Label(course.label, systemImage: course.icon)
+                            }
+                        }
+                        Divider()
+                        Button {
+                            showBudgetInput = true
+                        } label: {
+                            Label("On a Budget", systemImage: "dollarsign.circle")
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.trianglehead.2.clockwise")
+                                .font(.system(size: 14))
+                            Text("Reimagine")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                        .foregroundStyle(Theme.textPrimary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(Theme.buttonBg)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+
+                    // Throw the Gauntlet
+                    Button {
+                        throwTheGauntlet()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "flag.checkered")
+                                .font(.system(size: 14))
+                            Text("Throw the Gauntlet")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                        .foregroundStyle(Theme.gold)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(Theme.gold.opacity(0.12))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(Theme.gold.opacity(0.3), lineWidth: 1)
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                }
+                .padding(.horizontal, 20)
+
+                Spacer().frame(height: 20)
+            }
+        }
+        .scrollBounceBehavior(.basedOnSize, axes: .vertical)
+        .sheet(isPresented: $showAuthPrompt) {
+            AuthPromptSheet()
+        }
+        .sheet(isPresented: $showCreateChallenge) {
+            challengeConfirmationSheet
+        }
+        .sheet(isPresented: $showBudgetInput) {
+            budgetInputSheet
+        }
+    }
+
+    // MARK: - Actions
+
+    private func reimagineRecipe(as courseType: String? = nil, budgetLimit: Double? = nil) {
+        guard EntitlementManager.shared.hasAccess(to: .reimagination) else {
+            NotificationCenter.default.post(name: .reimagineRecipe, object: nil, userInfo: [
+                "showPaywall": true,
+                "paywallContext": "reimagination"
+            ])
+            return
+        }
+        guard UsageTracker.shared.canGenerate else {
+            NotificationCenter.default.post(name: .reimagineRecipe, object: nil, userInfo: ["showPaywall": true])
+            return
+        }
+        var userInfo: [String: Any] = [
+            "excludeDishName": recipe.dishName,
+            "inspirationImageData": recipe.inspirationImageData
+        ]
+        if let courseType {
+            userInfo["courseType"] = courseType
+        }
+        if let budgetLimit {
+            userInfo["budgetLimit"] = budgetLimit
+        }
+        NotificationCenter.default.post(
+            name: .reimagineRecipe,
+            object: nil,
+            userInfo: userInfo
+        )
+    }
+
+    private func throwTheGauntlet() {
+        guard AuthManager.shared.isAuthenticated else {
+            showAuthPrompt = true
+            return
+        }
+        showCreateChallenge = true
+    }
+
+    private func renderExportImage() {
+        let renderer = ImageRenderer(content:
+            SideBySideExportView(recipe: recipe)
+                .frame(width: 1080, height: 1080)
+        )
+        renderer.scale = 3.0
+        exportImage = renderer.uiImage
+    }
+
+    private func shareRecipeImage() {
+        if exportImage == nil { renderExportImage() }
+        guard let exportImage else { return }
+        presentShareSheet(items: [exportImage])
+    }
+
+    private func shareRecipePDF() {
+        let pdfData = PDFExporter.generatePDF(for: recipe)
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(recipe.dishName).pdf")
+        try? pdfData.write(to: tempURL)
+        presentShareSheet(items: [tempURL])
+    }
+
+    private func presentShareSheet(items: [Any]) {
+        let activityVC = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootVC = windowScene.keyWindow?.rootViewController else { return }
+        var presenter = rootVC
+        while let presented = presenter.presentedViewController {
+            presenter = presented
+        }
+        activityVC.popoverPresentationController?.sourceView = presenter.view
+        presenter.present(activityVC, animated: true)
+    }
+
+    // MARK: - Sheets
+
+    private var challengeConfirmationSheet: some View {
+        NavigationStack {
+            ZStack {
+                Theme.darkBg.ignoresSafeArea()
+
+                VStack(spacing: 24) {
+                    Image(systemName: "flag.checkered")
+                        .font(.system(size: 48))
+                        .foregroundStyle(Theme.gold)
+
+                    Text("Throw the Gauntlet")
+                        .font(.system(size: 22, weight: .bold, design: .serif))
+                        .foregroundStyle(Theme.darkTextPrimary)
+
+                    Text("Challenge the community to cook **\(recipe.dishName)** and photograph their real-world attempt.")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.darkTextSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+
+                    if let challengeError {
+                        Text(challengeError)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.red)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+                    }
+
+                    Button {
+                        Task {
+                            isCreatingChallenge = true
+                            challengeError = nil
+                            do {
+                                _ = try await ChallengeService.shared.createChallenge(recipe: recipe)
+                                HapticManager.success()
+                                showCreateChallenge = false
+                            } catch {
+                                challengeError = error.localizedDescription
+                                HapticManager.error()
+                            }
+                            isCreatingChallenge = false
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            if isCreatingChallenge {
+                                ProgressView().tint(Theme.darkBg)
+                            }
+                            Text(isCreatingChallenge ? "Publishing..." : "Publish Challenge")
+                                .font(.system(size: 16, weight: .bold))
+                        }
+                        .foregroundStyle(Theme.darkBg)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Theme.gold)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                    .disabled(isCreatingChallenge)
+                    .padding(.horizontal, 16)
+
+                    Spacer()
+                }
+                .padding(.top, 40)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Theme.darkBg, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { showCreateChallenge = false }
+                        .foregroundStyle(Theme.gold)
+                }
+            }
+            .presentationDetents([.medium])
+        }
+    }
+
+    private var budgetInputSheet: some View {
+        NavigationStack {
+            ZStack {
+                Theme.darkBg.ignoresSafeArea()
+
+                VStack(spacing: 24) {
+                    Image(systemName: "dollarsign.circle")
+                        .font(.system(size: 48))
+                        .foregroundStyle(Theme.gold)
+
+                    Text("Budget Reimagine")
+                        .font(.system(size: 22, weight: .bold, design: .serif))
+                        .foregroundStyle(Theme.darkTextPrimary)
+
+                    Text("Generate a new version of this dish that costs less than your budget.")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.darkTextSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+
+                    VStack(spacing: 12) {
+                        Text(String(format: "$%.0f", budgetAmount))
+                            .font(.system(size: 40, weight: .bold, design: .rounded))
+                            .foregroundStyle(Theme.gold)
+
+                        Slider(value: $budgetAmount, in: 5...50, step: 5)
+                            .tint(Theme.gold)
+                            .padding(.horizontal, 32)
+
+                        HStack {
+                            Text("$5")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.darkTextSecondary)
+                            Spacer()
+                            Text("$50")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.darkTextSecondary)
+                        }
+                        .padding(.horizontal, 36)
+                    }
+
+                    Button {
+                        showBudgetInput = false
+                        reimagineRecipe(budgetLimit: budgetAmount)
+                    } label: {
+                        Text("Reimagine Under \(String(format: "$%.0f", budgetAmount))")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(Theme.darkBg)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Theme.gold)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                    .padding(.horizontal, 16)
+
+                    Spacer()
+                }
+                .padding(.top, 40)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Theme.darkBg, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { showBudgetInput = false }
+                        .foregroundStyle(Theme.gold)
+                }
+            }
+            .presentationDetents([.medium])
+        }
+    }
+}

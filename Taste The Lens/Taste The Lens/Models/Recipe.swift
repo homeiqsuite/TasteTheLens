@@ -33,6 +33,9 @@ final class Recipe {
     var prepTime: String?
     var cookTime: String?
 
+    // Step-based cooking
+    var cookingSteps: [CookingStep] = []
+
     // Fusion Mode
     var isFusion: Bool = false
     var additionalInspirationImagesData: [Data]?
@@ -58,6 +61,7 @@ final class Recipe {
         nutrition: NutritionInfo? = nil,
         prepTime: String? = nil,
         cookTime: String? = nil,
+        cookingSteps: [CookingStep] = [],
         isFusion: Bool = false,
         additionalInspirationImagesData: [Data]? = nil
     ) {
@@ -83,8 +87,16 @@ final class Recipe {
         self.nutrition = nutrition
         self.prepTime = prepTime
         self.cookTime = cookTime
+        self.cookingSteps = cookingSteps
         self.isFusion = isFusion
         self.additionalInspirationImagesData = additionalInspirationImagesData
+    }
+
+    var effectiveCookingSteps: [CookingStep] {
+        if !cookingSteps.isEmpty {
+            return cookingSteps
+        }
+        return cookingInstructions.map { CookingStep(instruction: $0, ingredientsUsed: []) }
     }
 
     var allInspirationImages: [UIImage] {
@@ -112,6 +124,16 @@ struct RecipeComponent: Codable, Hashable {
     var ingredients: [String]
     var method: String
     var substitutions: [IngredientSubstitution]?
+}
+
+struct CookingStep: Codable, Hashable {
+    var instruction: String
+    var ingredientsUsed: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case instruction
+        case ingredientsUsed = "ingredients_used"
+    }
 }
 
 struct NutritionInfo: Codable, Hashable {

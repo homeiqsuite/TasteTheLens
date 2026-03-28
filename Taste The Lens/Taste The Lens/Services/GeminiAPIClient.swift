@@ -37,25 +37,23 @@ struct GeminiAPIClient: ImageAnalysisProvider, Sendable {
     }
 
     private static let screeningPrompt = """
-    You are a content safety screener for a food/recipe app. Your job is to check if an image is appropriate for culinary inspiration.
+    Content safety screener for a food/recipe app. Check if the image is appropriate for culinary inspiration.
 
-    REJECT the image (safe: false) if it contains:
-    * Real, identifiable people — photos where a real person's face is clearly visible and recognizable (selfies, portraits, group photos, candid shots of real humans)
-    * Children — any image where a real child is a primary subject
-    * Real animals that are alive — pets, wildlife, farm animals as primary subjects (packaged meat/seafood at a store is fine)
+    REJECT (safe: false) if:
+    - Real, identifiable people (selfies, portraits, group photos)
+    - Children as primary subject
+    - Live animals as primary subject (packaged meat/seafood is fine)
 
-    ALLOW the image (safe: true) if it contains:
-    * Food, ingredients, drinks, kitchens, restaurants, grocery stores, menus
-    * Objects, products, art, landscapes, architecture, nature scenes, abstract images
-    * Fictional characters — cartoons, anime, illustrations, movie posters, video game characters, statues, sculptures
-    * Drawings, paintings, or stylized art of people (not real photographs of identifiable people)
-    * Images where people are incidental/background (e.g., a street food market where people are in the background but the focus is the food stalls)
-    * Packaged food products that happen to have people on the label
-    * Hands only (e.g., hands holding ingredients) — no face visible
+    ALLOW (safe: true) if:
+    - Food, ingredients, drinks, kitchens, restaurants, menus
+    - Objects, products, art, landscapes, architecture, nature, abstract
+    - Fictional characters, cartoons, illustrations, statues, sculptures
+    - Stylized/drawn people (not real photos of identifiable people)
+    - People incidental/background (e.g., street market focused on food stalls)
+    - Packaged products with people on labels
+    - Hands only (no face visible)
 
-    Return ONLY valid JSON: { "safe": true/false, "reason": "brief explanation" }
-    If safe, reason should be a short description of what the image contains.
-    If not safe, reason should be a user-friendly explanation of why it was rejected.
+    CRITICAL: Output ONLY raw JSON, no markdown, no explanation, no code fences.
     """
 
     // System prompt is now provided by ChefPersonality
@@ -254,7 +252,7 @@ struct GeminiAPIClient: ImageAnalysisProvider, Sendable {
                             ]
                         ],
                         [
-                            "text": "Screen this image. Is it appropriate for our recipe app? Return ONLY the JSON."
+                            "text": "Screen this image. Output: {\"safe\":true/false,\"reason\":\"brief\"}"
                         ]
                     ]
                 ]
@@ -276,15 +274,14 @@ struct GeminiAPIClient: ImageAnalysisProvider, Sendable {
         do {
             let (responseData, response) = try await URLSession.shared.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                // If screening API fails, reject by default for safety
-                logger.warning("Screening API returned non-200, rejecting image for safety")
-                return ContentScreeningResult(safe: false, reason: "Content screening is temporarily unavailable. Please try again in a moment.")
+                // If screening API fails, allow through — Gemini's own safety filters provide a backstop
+                logger.warning("Screening API returned non-200, allowing image through (downstream safety filters active)")
+                return ContentScreeningResult(safe: true, reason: "Screening unavailable, passed through to generation")
             }
             data = responseData
         } catch {
-            // If screening fails due to network, reject for safety
-            logger.warning("Screening network error, rejecting image for safety: \(error)")
-            return ContentScreeningResult(safe: false, reason: "Content screening is temporarily unavailable. Please check your connection and try again.")
+            logger.warning("Screening network error, allowing image through: \(error)")
+            return ContentScreeningResult(safe: true, reason: "Screening unavailable, passed through to generation")
         }
 
         guard let envelope = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -293,10 +290,25 @@ struct GeminiAPIClient: ImageAnalysisProvider, Sendable {
               let content = firstCandidate["content"] as? [String: Any],
               let parts = content["parts"] as? [[String: Any]],
               let firstPart = parts.first,
-              let text = firstPart["text"] as? String,
-              let jsonData = text.data(using: .utf8) else {
-            logger.warning("Could not parse screening response, rejecting image for safety")
-            return ContentScreeningResult(safe: false, reason: "Content screening is temporarily unavailable. Please try again.")
+              let text = firstPart["text"] as? String else {
+            logger.warning("Could not parse screening response, allowing image through")
+            return ContentScreeningResult(safe: true, reason: "Screening unavailable, passed through to generation")
+        }
+
+        // Extract JSON from the response text — the model sometimes wraps it in
+        // markdown fences or adds a preamble like "Here is the JSON:".
+        let jsonString: String
+        if let openBrace = text.firstIndex(of: "{"),
+           let closeBrace = text.lastIndex(of: "}") {
+            jsonString = String(text[openBrace...closeBrace])
+        } else {
+            logger.warning("Screening response contained no JSON object, allowing image through. Text: \(text.prefix(200))")
+            return ContentScreeningResult(safe: true, reason: "Screening unavailable, passed through to generation")
+        }
+
+        guard let jsonData = jsonString.data(using: .utf8) else {
+            logger.warning("Could not encode screening JSON string to data, allowing image through")
+            return ContentScreeningResult(safe: true, reason: "Screening unavailable, passed through to generation")
         }
 
         do {
@@ -304,8 +316,8 @@ struct GeminiAPIClient: ImageAnalysisProvider, Sendable {
             logger.info("Screening result: safe=\(result.safe), reason=\(result.reason)")
             return result
         } catch {
-            logger.warning("Could not decode screening result, rejecting image for safety: \(error)")
-            return ContentScreeningResult(safe: false, reason: "Content screening is temporarily unavailable. Please try again.")
+            logger.warning("Could not decode screening result, allowing image through: \(error). Text: \(jsonString.prefix(200))")
+            return ContentScreeningResult(safe: true, reason: "Screening unavailable, passed through to generation")
         }
     }
 

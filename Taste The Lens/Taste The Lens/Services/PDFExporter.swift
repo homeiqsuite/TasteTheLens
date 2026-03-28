@@ -144,12 +144,17 @@ struct PDFExporter {
                 y += methodH + 12
             }
 
-            // Cooking Instructions
-            if !recipe.cookingInstructions.isEmpty {
-                drawSection("Cooking Instructions")
-                for (i, step) in recipe.cookingInstructions.enumerated() {
+            // Cooking Steps
+            let steps = recipe.effectiveCookingSteps
+            if !steps.isEmpty {
+                drawSection("Cooking Steps")
+                for (i, step) in steps.enumerated() {
                     ensureSpace(30)
-                    let h = drawText("\(i + 1). \(step)", font: bodyFont)
+                    var stepText = "\(i + 1). \(step.instruction)"
+                    if !step.ingredientsUsed.isEmpty {
+                        stepText += " [Uses: \(step.ingredientsUsed.joined(separator: ", "))]"
+                    }
+                    let h = drawText(stepText, font: bodyFont)
                     y += h + 6
                 }
                 y += 10

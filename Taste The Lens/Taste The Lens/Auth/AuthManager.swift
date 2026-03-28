@@ -43,6 +43,7 @@ final class AuthManager {
         )
         currentUser = session.user
         logger.info("Signed in with Apple — user: \(session.user.id)")
+        await PushNotificationService.shared.requestPermission()
     }
 
     // MARK: - Email Auth
@@ -58,6 +59,7 @@ final class AuthManager {
         )
         currentUser = response.user
         logger.info("Signed up with email — user: \(response.user.id)")
+        await PushNotificationService.shared.requestPermission()
     }
 
     func signInWithEmail(email: String, password: String) async throws {
@@ -67,11 +69,34 @@ final class AuthManager {
         let session = try await supabase.auth.signIn(email: email, password: password)
         currentUser = session.user
         logger.info("Signed in with email — user: \(session.user.id)")
+        await PushNotificationService.shared.requestPermission()
+    }
+
+    // MARK: - Forgot Password
+
+    func resetPassword(email: String) async throws {
+        try await supabase.auth.resetPasswordForEmail(
+            email,
+            redirectTo: URL(string: "https://tastethelens.com/reset-password")
+        )
+        logger.info("Password reset email sent to \(email)")
+    }
+
+    func exchangeCodeForSession(_ code: String) async throws {
+        let session = try await supabase.auth.exchangeCodeForSession(authCode: code)
+        currentUser = session.user
+        logger.info("Exchanged reset code for session — user: \(session.user.id)")
+    }
+
+    func updatePassword(_ newPassword: String) async throws {
+        try await supabase.auth.update(user: .init(password: newPassword))
+        logger.info("Password updated successfully")
     }
 
     // MARK: - Sign Out
 
     func signOut() async {
+        await PushNotificationService.shared.unregisterToken()
         do {
             try await supabase.auth.signOut()
             currentUser = nil

@@ -17,6 +17,7 @@ struct DataExporter {
         let translationMatrix: [TranslationItem]
         let components: [RecipeComponent]
         let cookingInstructions: [String]
+        let cookingSteps: [CookingStep]
         let platingSteps: [String]
         let sommelierPairing: SommelierPairing
         let sceneAnalysis: SceneAnalysis?
@@ -45,6 +46,7 @@ struct DataExporter {
                 translationMatrix: recipe.translationMatrix,
                 components: recipe.components,
                 cookingInstructions: recipe.cookingInstructions,
+                cookingSteps: recipe.cookingSteps,
                 platingSteps: recipe.platingSteps,
                 sommelierPairing: recipe.sommelierPairing,
                 sceneAnalysis: recipe.sceneAnalysis,

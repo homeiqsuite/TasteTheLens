@@ -102,6 +102,32 @@ struct SettingsView: View {
                         }
                     }
 
+                    // Notifications Section (authenticated only)
+                    if authManager.isAuthenticated {
+                        settingsSection("Notifications") {
+                            NavigationLink {
+                                NotificationSettingsView()
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "bell")
+                                        .font(.system(size: 15))
+                                        .foregroundStyle(Theme.textPrimary)
+                                        .frame(width: 24)
+                                    Text("Push Notifications")
+                                        .font(.system(size: 15))
+                                        .foregroundStyle(Theme.textPrimary)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(Theme.textQuaternary)
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 13)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
                     // App Section
                     settingsSection("App") {
                         VStack(spacing: 0) {

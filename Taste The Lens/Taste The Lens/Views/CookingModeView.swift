@@ -34,8 +34,8 @@ struct CookingModeView: View {
 
     private var allSteps: [(String, String)] {
         var steps: [(String, String)] = []
-        for step in recipe.cookingInstructions {
-            steps.append(("Cooking", step))
+        for step in recipe.effectiveCookingSteps {
+            steps.append(("Cooking", step.instruction))
         }
         for step in recipe.platingSteps {
             steps.append(("Plating", step))

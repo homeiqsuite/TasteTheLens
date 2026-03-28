@@ -11,6 +11,7 @@ struct SupabaseRecipeDTO: Codable {
     let translationMatrix: [TranslationItem]?
     let components: [RecipeComponent]?
     let cookingInstructions: [String]?
+    let cookingSteps: [CookingStep]?
     let platingSteps: [String]?
     let sommelierPairing: SommelierPairing?
     let sceneAnalysis: SceneAnalysis?
@@ -31,6 +32,7 @@ struct SupabaseRecipeDTO: Codable {
         case translationMatrix = "translation_matrix"
         case components
         case cookingInstructions = "cooking_instructions"
+        case cookingSteps = "cooking_steps"
         case platingSteps = "plating_steps"
         case sommelierPairing = "sommelier_pairing"
         case sceneAnalysis = "scene_analysis"
@@ -54,6 +56,7 @@ struct SupabaseRecipeDTO: Codable {
             translationMatrix: recipe.translationMatrix,
             components: recipe.components,
             cookingInstructions: recipe.cookingInstructions,
+            cookingSteps: recipe.cookingSteps,
             platingSteps: recipe.platingSteps,
             sommelierPairing: recipe.sommelierPairing,
             sceneAnalysis: recipe.sceneAnalysis,
@@ -83,7 +86,8 @@ struct SupabaseRecipeDTO: Codable {
             sommelierPairing: sommelierPairing ?? SommelierPairing(wine: "", cocktail: "", nonalcoholic: ""),
             sceneAnalysis: sceneAnalysis,
             claudeRawResponse: rawResponse ?? "",
-            chefPersonality: chefPersonality
+            chefPersonality: chefPersonality,
+            cookingSteps: cookingSteps ?? []
         )
         recipe.remoteId = id
         recipe.syncStatus = "synced"

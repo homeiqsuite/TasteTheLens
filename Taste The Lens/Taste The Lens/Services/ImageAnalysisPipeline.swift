@@ -117,7 +117,7 @@ final class ImageAnalysisPipeline: Identifiable {
                 prompt += "\n\nBUDGET CONSTRAINT: The total cost of ALL ingredients combined must be under \(formatted). Choose affordable, budget-friendly ingredients. Prioritize pantry staples, in-season produce, and cost-effective proteins (chicken thighs, eggs, beans, lentils, ground meat). Avoid expensive ingredients like seafood, specialty cheeses, or premium cuts. The dish should taste great without breaking the bank."
             }
             if let courseType {
-                prompt += "\n\nCOURSE TYPE CONSTRAINT: Create this as a \(courseType). The dish format, portion size, presentation, and ingredient quantities should all match what you'd expect from a \(courseType). For example, appetizers should be small and shareable, desserts should be sweet, drinks should be beverages, etc."
+                prompt += "\n\nCOURSE TYPE CONSTRAINT (MANDATORY): You MUST create a \(courseType) dish. This is non-negotiable — the dish category must be a \(courseType) regardless of what the image contains. Use the image purely for visual inspiration (colors, textures, mood), but the resulting dish MUST belong to the \(courseType) category. Specifically: Appetizers must be small, shareable starters. Soups must be liquid-based. Salads must be vegetable/grain-forward cold or warm salads. Main Courses must be hearty, protein-centered entrées. Desserts MUST be sweet — cakes, tarts, ice cream, pastries, puddings, cookies, chocolate creations, fruit desserts, etc. NEVER generate a savory dish for a Dessert course. Amuse-Bouche must be single-bite palate teasers. If the image shows something savory but the course is Dessert, find a creative sweet interpretation inspired by the image's colors and textures."
             }
 
             let (recipeResponse, rawJSON) = try await withExponentialBackoff {
@@ -176,7 +176,8 @@ final class ImageAnalysisPipeline: Identifiable {
                 estimatedCalories: recipeResponse.estimatedCalories,
                 nutrition: recipeResponse.nutrition,
                 prepTime: recipeResponse.prepTime,
-                cookTime: recipeResponse.cookTime
+                cookTime: recipeResponse.cookTime,
+                cookingSteps: recipeResponse.cookingSteps ?? []
             )
 
             completedRecipe = recipe
@@ -268,7 +269,7 @@ final class ImageAnalysisPipeline: Identifiable {
                 prompt += "\n\nBUDGET CONSTRAINT: The total cost of ALL ingredients combined must be under \(formatted). Choose affordable, budget-friendly ingredients. Prioritize pantry staples, in-season produce, and cost-effective proteins (chicken thighs, eggs, beans, lentils, ground meat). Avoid expensive ingredients like seafood, specialty cheeses, or premium cuts. The dish should taste great without breaking the bank."
             }
             if let courseType {
-                prompt += "\n\nCOURSE TYPE CONSTRAINT: Create this as a \(courseType). The dish format, portion size, presentation, and ingredient quantities should all match what you'd expect from a \(courseType). For example, appetizers should be small and shareable, desserts should be sweet, drinks should be beverages, etc."
+                prompt += "\n\nCOURSE TYPE CONSTRAINT (MANDATORY): You MUST create a \(courseType) dish. This is non-negotiable — the dish category must be a \(courseType) regardless of what the image contains. Use the image purely for visual inspiration (colors, textures, mood), but the resulting dish MUST belong to the \(courseType) category. Specifically: Appetizers must be small, shareable starters. Soups must be liquid-based. Salads must be vegetable/grain-forward cold or warm salads. Main Courses must be hearty, protein-centered entrées. Desserts MUST be sweet — cakes, tarts, ice cream, pastries, puddings, cookies, chocolate creations, fruit desserts, etc. NEVER generate a savory dish for a Dessert course. Amuse-Bouche must be single-bite palate teasers. If the image shows something savory but the course is Dessert, find a creative sweet interpretation inspired by the image's colors and textures."
             }
 
             let (recipeResponse, rawJSON) = try await withExponentialBackoff {
@@ -335,6 +336,7 @@ final class ImageAnalysisPipeline: Identifiable {
                 nutrition: recipeResponse.nutrition,
                 prepTime: recipeResponse.prepTime,
                 cookTime: recipeResponse.cookTime,
+                cookingSteps: recipeResponse.cookingSteps ?? [],
                 isFusion: true,
                 additionalInspirationImagesData: additionalData
             )

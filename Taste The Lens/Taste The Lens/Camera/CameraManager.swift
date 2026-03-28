@@ -22,7 +22,7 @@ final class CameraManager: NSObject {
 
     func checkPermission() async {
         switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized, .limited:
+        case .authorized:
             permissionGranted = true
         case .notDetermined:
             permissionGranted = await AVCaptureDevice.requestAccess(for: .video)

@@ -45,6 +45,8 @@ struct OnboardingView: View {
     @State private var ring2Scale: CGFloat = 1.0
     @State private var ring2Opacity: Double = 0.3
 
+    @State private var showSignIn = false
+
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -72,6 +74,14 @@ struct OnboardingView: View {
                     }
                 }
                 .frame(maxHeight: .infinity)
+            }
+        }
+        .sheet(isPresented: $showSignIn) {
+            SignInView()
+        }
+        .onChange(of: AuthManager.shared.isAuthenticated) { _, isAuth in
+            if isAuth {
+                isPresented = false
             }
         }
         .onAppear {
@@ -355,8 +365,7 @@ struct OnboardingView: View {
                 welcomeCTAButton { advance() }
 
                 Button {
-                    // Navigate to sign in
-                    dismiss()
+                    showSignIn = true
                 } label: {
                     HStack(spacing: 4) {
                         Text("Already have an account?")

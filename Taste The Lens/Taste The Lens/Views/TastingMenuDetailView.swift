@@ -332,7 +332,7 @@ struct TastingMenuDetailView: View {
         NotificationCenter.default.post(
             name: .addMenuCourse,
             object: nil,
-            userInfo: ["menuId": menu.id, "courseOrder": course.courseOrder]
+            userInfo: ["menuId": menu.id, "courseOrder": course.courseOrder, "courseType": course.courseType]
         )
     }
 
