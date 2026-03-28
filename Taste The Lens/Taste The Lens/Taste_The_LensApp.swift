@@ -4,10 +4,7 @@ import SwiftData
 @main
 struct Taste_The_LensApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @State private var deepLinkedRecipeID: UUID?
-    @State private var showDeepLinkedRecipe = false
-    @State private var resetURL: URL?
-    @State private var showResetPassword = false
+    @State private var activeSheet: AppSheet?
 
     var body: some Scene {
         WindowGroup {
@@ -36,8 +33,7 @@ struct Taste_The_LensApp: App {
                     if let deepLink = DeepLinkHandler.parse(url) {
                         switch deepLink {
                         case .recipe(let id):
-                            deepLinkedRecipeID = id
-                            showDeepLinkedRecipe = true
+                            activeSheet = .deepLinkedRecipe(id)
                         case .challenge:
                             // Handled via ChallengeFeedView
                             break
@@ -48,23 +44,34 @@ struct Taste_The_LensApp: App {
                                 userInfo: ["inviteCode": code]
                             )
                         case .resetCallback:
-                            resetURL = url
-                            showResetPassword = true
+                            activeSheet = .resetPassword(url)
                         }
                     }
                 }
-                .sheet(isPresented: $showDeepLinkedRecipe) {
-                    if let recipeID = deepLinkedRecipeID {
-                        DeepLinkedRecipeView(recipeID: recipeID)
-                    }
-                }
-                .sheet(isPresented: $showResetPassword) {
-                    if let url = resetURL {
+                .sheet(item: $activeSheet) { sheet in
+                    switch sheet {
+                    case .deepLinkedRecipe(let id):
+                        DeepLinkedRecipeView(recipeID: id)
+                    case .resetPassword(let url):
                         ResetPasswordView(callbackURL: url)
                     }
                 }
         }
         .modelContainer(for: Recipe.self)
+    }
+}
+
+// MARK: - App-Level Sheet
+
+enum AppSheet: Identifiable {
+    case deepLinkedRecipe(UUID)
+    case resetPassword(URL)
+
+    var id: String {
+        switch self {
+        case .deepLinkedRecipe(let uuid): return "recipe-\(uuid)"
+        case .resetPassword(let url): return "reset-\(url.absoluteString)"
+        }
     }
 }
 
