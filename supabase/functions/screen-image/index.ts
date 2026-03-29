@@ -105,35 +105,33 @@ Deno.serve(async (req) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  // Verify authentication
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) {
-    return Response.json({ error: "Missing authorization" }, { status: 401 });
-  }
-
+  // Authenticate user (optional for guests)
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-  const token = authHeader.replace("Bearer ", "");
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser(token);
+  let userId: string | null = null;
 
-  if (authError || !user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const authHeader = req.headers.get("Authorization");
+  if (authHeader) {
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (!authError && user) {
+      userId = user.id;
+    }
   }
 
-  // Per-user rate limiting: 15 requests per minute
-  const { data: allowed } = await supabase.rpc("check_rate_limit", {
-    p_user_id: user.id,
-    p_function_name: "screen-image",
-    p_window_minutes: 1,
-    p_max_requests: 15,
-  });
-  if (allowed === false) {
-    return Response.json(
-      { error: "rate_limited", message: "Too many requests. Please wait a moment." },
-      { status: 429 }
-    );
+  // Per-user rate limiting (authenticated users only)
+  if (userId) {
+    const { data: allowed } = await supabase.rpc("check_rate_limit", {
+      p_user_id: userId,
+      p_function_name: "screen-image",
+      p_window_minutes: 1,
+      p_max_requests: 15,
+    });
+    if (allowed === false) {
+      return Response.json(
+        { error: "rate_limited", message: "Too many requests. Please wait a moment." },
+        { status: 429 }
+      );
+    }
   }
 
   try {

@@ -13,8 +13,17 @@ struct CameraView: View {
     @State private var cameraError: String?
     @State private var showCameraError = false
     @State private var isCapturing = false
+    @State private var currentTipIndex = 0
+    @State private var tipRotationTask: Task<Void, Never>?
+    private let cameraTips = [
+        "Point at anything. Art, architecture, a sunset. Tap to taste.",
+        "Good lighting helps AI see more detail",
+        "Try interesting textures and colors",
+    ]
     @AppStorage("selectedChef") private var selectedChef = "default"
     @AppStorage("hasSeenFusionTooltip") private var hasSeenFusionTooltip = false
+    @AppStorage("hasSeenChefTooltip") private var hasSeenChefTooltip = false
+    @State private var showChefTooltip = false
 
     var onPhotoCaptured: (UIImage) -> Void
     var onFusionPhotoCaptured: (([UIImage]) -> Void)?
@@ -57,10 +66,12 @@ struct CameraView: View {
                         Text("Fusion Mode — capture 2-3 shots")
                             .foregroundStyle(Theme.gold)
                     } else {
-                        Text("Point at anything. Art, architecture, a sunset. Tap to taste.")
+                        Text(cameraTips[currentTipIndex])
                             .foregroundStyle(Theme.darkTextSecondary)
                             .opacity(isPulsing ? 1 : 0.5)
                             .animation(.easeInOut(duration: 2).repeatForever(autoreverses: true), value: isPulsing)
+                            .id(currentTipIndex)
+                            .transition(.opacity)
                     }
                 }
                 .font(.system(size: 15, weight: .medium))
@@ -70,61 +81,84 @@ struct CameraView: View {
 
                 Spacer().frame(height: 24)
 
-                // Fusion tooltip (positioned above shutter)
-                if showFusionTooltip {
-                    FusionTooltip {
-                        showFusionTooltip = false
-                        hasSeenFusionTooltip = true
+                // Bottom controls: shutter + tooltips (overlay so shutter never moves)
+                ZStack(alignment: .bottom) {
+                    // Shutter + side buttons (fixed position, never moves)
+                    HStack {
+                        // Photo library picker
+                        PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
+                            Image(systemName: "photo.on.rectangle")
+                                .font(.system(size: 22, weight: .medium))
+                                .foregroundStyle(Theme.darkTextSecondary)
+                                .frame(width: 50, height: 50)
+                                .background(Color.black.opacity(0.3))
+                                .clipShape(Circle())
+                        }
+                        .accessibilityLabel("Pick photo from library")
+                        .disabled(fusionState.isActive)
+                        .opacity(fusionState.isActive ? 0.3 : 1)
+
+                        Spacer()
+
+                        ShutterButton(
+                            action: {
+                                fusionState.isActive ? captureFusionShot() : capturePhoto()
+                            },
+                            onLongPress: {
+                                toggleFusionMode()
+                            },
+                            isFusionMode: fusionState.isActive,
+                            shotLabel: fusionState.isActive ? fusionState.shotLabel : nil
+                        )
+                        .accessibilityLabel(fusionState.isActive ? "Capture fusion shot, \(fusionState.shotLabel)" : "Capture photo")
+                        .accessibilityHint(fusionState.isActive ? "Tap to capture. Long press to exit fusion mode." : "Tap to capture. Long press for fusion mode.")
+
+                        Spacer()
+
+                        // Chef picker
+                        VStack(spacing: 4) {
+                            if showChefTooltip {
+                                CoachTooltip(
+                                    text: "Your chef shapes recipe style and ingredients",
+                                    icon: "person.crop.circle",
+                                    pointer: .down
+                                ) {
+                                    showChefTooltip = false
+                                    hasSeenChefTooltip = true
+                                }
+                                .transition(.opacity)
+                            }
+
+                            Button {
+                                onChefTapped()
+                            } label: {
+                                let chef = ChefPersonality(rawValue: selectedChef) ?? .defaultChef
+                                Image(systemName: chef.icon)
+                                    .font(.system(size: 22, weight: .medium))
+                                    .foregroundStyle(Theme.darkTextSecondary)
+                                    .frame(width: 50, height: 50)
+                                    .background(Color.black.opacity(0.3))
+                                    .clipShape(Circle())
+                            }
+                        }
                     }
-                    .transition(.opacity)
-                    .padding(.bottom, 4)
+                    .padding(.horizontal, 32)
+
+                    // Fusion tooltip (overlaid above shutter, doesn't affect layout)
+                    VStack(spacing: 0) {
+                        if showFusionTooltip {
+                            FusionTooltip {
+                                showFusionTooltip = false
+                                hasSeenFusionTooltip = true
+                            }
+                            .transition(.opacity)
+                            .padding(.bottom, 8)
+                        }
+
+                        Spacer()
+                    }
                 }
-
-                HStack {
-                    // Photo library picker
-                    PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                        Image(systemName: "photo.on.rectangle")
-                            .font(.system(size: 22, weight: .medium))
-                            .foregroundStyle(Theme.darkTextSecondary)
-                            .frame(width: 50, height: 50)
-                            .background(Color.black.opacity(0.3))
-                            .clipShape(Circle())
-                    }
-                    .accessibilityLabel("Pick photo from library")
-                    .disabled(fusionState.isActive)
-                    .opacity(fusionState.isActive ? 0.3 : 1)
-
-                    Spacer()
-
-                    ShutterButton(
-                        action: {
-                            fusionState.isActive ? captureFusionShot() : capturePhoto()
-                        },
-                        onLongPress: {
-                            toggleFusionMode()
-                        },
-                        isFusionMode: fusionState.isActive,
-                        shotLabel: fusionState.isActive ? fusionState.shotLabel : nil
-                    )
-                    .accessibilityLabel(fusionState.isActive ? "Capture fusion shot, \(fusionState.shotLabel)" : "Capture photo")
-                    .accessibilityHint(fusionState.isActive ? "Tap to capture. Long press to exit fusion mode." : "Tap to capture. Long press for fusion mode.")
-
-                    Spacer()
-
-                    // Chef picker
-                    Button {
-                        onChefTapped()
-                    } label: {
-                        let chef = ChefPersonality(rawValue: selectedChef) ?? .defaultChef
-                        Image(systemName: chef.icon)
-                            .font(.system(size: 22, weight: .medium))
-                            .foregroundStyle(Theme.darkTextSecondary)
-                            .frame(width: 50, height: 50)
-                            .background(Color.black.opacity(0.3))
-                            .clipShape(Circle())
-                    }
-                }
-                .padding(.horizontal, 32)
+                .frame(height: 120)
 
                 Spacer().frame(height: 40)
             }
@@ -146,8 +180,19 @@ struct CameraView: View {
                     withAnimation { showFusionTooltip = true }
                 }
             }
+            // Show chef tooltip on first camera open (independent of fusion tooltip)
+            if !hasSeenChefTooltip {
+                Task {
+                    try? await Task.sleep(for: .seconds(1.5))
+                    withAnimation { showChefTooltip = true }
+                }
+            }
+            // Rotate camera tips every 6 seconds
+            startTipRotation()
         }
         .onDisappear {
+            tipRotationTask?.cancel()
+            tipRotationTask = nil
             cameraManager.stopSession()
             if fusionState.isActive {
                 fusionState.reset()
@@ -199,6 +244,23 @@ struct CameraView: View {
             Text("Open Settings to grant camera permission.")
                 .font(.system(size: 14))
                 .foregroundStyle(Theme.darkTextTertiary)
+        }
+    }
+
+    // MARK: - Tip Rotation
+
+    private func startTipRotation() {
+        tipRotationTask?.cancel()
+        tipRotationTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(6))
+                guard !Task.isCancelled, !fusionState.isActive else { continue }
+                await MainActor.run {
+                    withAnimation(.easeInOut(duration: 0.5)) {
+                        currentTipIndex = (currentTipIndex + 1) % cameraTips.count
+                    }
+                }
+            }
         }
     }
 

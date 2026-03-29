@@ -76,9 +76,11 @@ final class EntitlementManager {
         case .generation:
             // Generation access is handled by UsageTracker (credits/free gens)
             return true
-        case .chefPersonalities, .reimagination, .cloudSync, .cleanExport,
+        case .chefPersonalities, .reimagination, .cloudSync,
              .unlimitedSaves, .fullDashboard, .fullTastingMenus, .fullChallenges:
             return isSubscriber
+        case .cleanExport:
+            return isSubscriber || UsageTracker.shared.hasPurchasedClassicOrHigher
         case .bulkExport:
             return tier == .atelier
         }

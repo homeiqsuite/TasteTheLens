@@ -58,6 +58,46 @@ final class UsageTracker {
         didSet { UserDefaults.standard.set(rolledOverCredits, forKey: "rolledOverCredits") }
     }
 
+    // MARK: - Purchase Tracking (for upgrade nudge)
+
+    /// Number of credit pack purchases made (for subscription upgrade nudge)
+    private(set) var creditPackPurchaseCount: Int = UserDefaults.standard.integer(forKey: "creditPackPurchaseCount") {
+        didSet { UserDefaults.standard.set(creditPackPurchaseCount, forKey: "creditPackPurchaseCount") }
+    }
+
+    /// Cumulative spend on credit packs (for upgrade nudge messaging)
+    private(set) var creditPackTotalSpend: Double = UserDefaults.standard.double(forKey: "creditPackTotalSpend") {
+        didSet { UserDefaults.standard.set(creditPackTotalSpend, forKey: "creditPackTotalSpend") }
+    }
+
+    /// Whether the user has purchased a Classic or higher credit pack (unlocks clean exports)
+    var hasPurchasedClassicOrHigher: Bool {
+        get { UserDefaults.standard.bool(forKey: "hasPurchasedClassicOrHigher") }
+        set { UserDefaults.standard.set(newValue, forKey: "hasPurchasedClassicOrHigher") }
+    }
+
+    /// Whether the user has dismissed the subscription nudge
+    var hasSeenSubscriptionNudge: Bool {
+        get { UserDefaults.standard.bool(forKey: "hasSeenSubscriptionNudge") }
+        set { UserDefaults.standard.set(newValue, forKey: "hasSeenSubscriptionNudge") }
+    }
+
+    /// Track a credit pack purchase for nudge logic
+    func trackCreditPackPurchase(price: Decimal) {
+        creditPackPurchaseCount += 1
+        creditPackTotalSpend += NSDecimalNumber(decimal: price).doubleValue
+        logger.info("Credit pack purchase tracked: count=\(self.creditPackPurchaseCount), total=\(self.creditPackTotalSpend)")
+    }
+
+    /// Whether the subscription upgrade nudge should be shown
+    var shouldShowSubscriptionNudge: Bool {
+        creditPackPurchaseCount >= 3
+            && !EntitlementManager.shared.isSubscriber
+            && !hasSeenSubscriptionNudge
+    }
+
+    // MARK: - Subscription Credit Reset
+
     private var subscriptionCreditResetDate: Date? {
         get {
             let interval = UserDefaults.standard.double(forKey: "subscriptionCreditResetDate")
@@ -76,6 +116,9 @@ final class UsageTracker {
     var totalAvailableCredits: Int {
         purchasedCredits + subscriptionCredits + rolledOverCredits
     }
+
+    /// The date when subscription credits reset (for notification scheduling)
+    var creditResetDate: Date? { subscriptionCreditResetDate }
 
     /// Days until subscription credits refresh
     var daysUntilCreditRefresh: Int? {
@@ -182,6 +225,10 @@ final class UsageTracker {
         )
 
         logger.info("Subscription credits refreshed: \(tier.monthlyCredits) new, \(self.rolledOverCredits) rolled over")
+
+        Task { @MainActor in
+            CreditExpiryNotificationService.shared.scheduleExpiryNotificationIfNeeded()
+        }
     }
 
     /// Clear subscription credits (when subscription lapses)
@@ -190,6 +237,10 @@ final class UsageTracker {
         rolledOverCredits = 0
         subscriptionCreditResetDate = nil
         logger.info("Subscription credits cleared")
+
+        Task { @MainActor in
+            CreditExpiryNotificationService.shared.cancelNotification()
+        }
     }
 
     // MARK: - Usage Increment

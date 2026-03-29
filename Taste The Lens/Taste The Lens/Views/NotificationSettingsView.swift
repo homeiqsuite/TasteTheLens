@@ -93,7 +93,7 @@ struct NotificationSettingsView: View {
             VStack(spacing: 0) {
                 preferenceToggle(
                     "Challenge Activity",
-                    subtitle: "Submissions and upvotes on your challenges",
+                    subtitle: "Get notified when someone submits to or upvotes your challenges",
                     icon: "flame",
                     isOn: Binding(
                         get: { pushService.preferences.challengeActivity },
@@ -108,7 +108,7 @@ struct NotificationSettingsView: View {
 
                 preferenceToggle(
                     "Tasting Menu Updates",
-                    subtitle: "Invitations and new courses added",
+                    subtitle: "Know when friends invite you or add courses to shared menus",
                     icon: "menucard",
                     isOn: Binding(
                         get: { pushService.preferences.tastingMenuUpdates },
@@ -123,7 +123,7 @@ struct NotificationSettingsView: View {
 
                 preferenceToggle(
                     "Weekly Inspiration",
-                    subtitle: "Creative nudges and seasonal challenges",
+                    subtitle: "Seasonal recipe ideas and creative prompts to keep your menu fresh",
                     icon: "sparkles",
                     isOn: Binding(
                         get: { pushService.preferences.weeklyInspiration },

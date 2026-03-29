@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import os
 
 private let logger = makeLogger(category: "DebugMenu")
@@ -6,7 +7,11 @@ private let logger = makeLogger(category: "DebugMenu")
 struct DebugMenuView: View {
     @AppStorage("debug_imageGenModel") private var selectedModelRaw = ImageGenerationModel.imagen4.rawValue
     @AppStorage("debug_processingStyle") private var selectedStyleRaw = ProcessingStyle.kitchenPass.rawValue
+    @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+    @State private var isClearing = false
+    @State private var showClearConfirmation = false
 
     private var selectedModel: ImageGenerationModel {
         get { ImageGenerationModel(rawValue: selectedModelRaw) ?? .imagen4 }
@@ -32,6 +37,8 @@ struct DebugMenuView: View {
                         processingStyleSection
 
                         currentConfigSection
+
+                        cacheSection
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
@@ -233,6 +240,84 @@ struct DebugMenuView: View {
                     .stroke(Theme.darkStroke, lineWidth: 1)
             )
         }
+    }
+
+    // MARK: - Cache Clearing
+
+    private var cacheSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Local Data")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.darkTextTertiary)
+                .textCase(.uppercase)
+                .tracking(0.5)
+
+            Button {
+                showClearConfirmation = true
+            } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Theme.culinary)
+                        .frame(width: 24)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Clear Local Cache")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(Theme.darkTextPrimary)
+
+                        Text("Removes all saved recipes and resets onboarding")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.darkTextTertiary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.darkTextHint)
+                }
+                .padding(14)
+                .background(Theme.darkSurface)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Theme.darkStroke, lineWidth: 1)
+                )
+            }
+            .confirmationDialog("Clear Local Cache?", isPresented: $showClearConfirmation, titleVisibility: .visible) {
+                Button("Clear Cache", role: .destructive) {
+                    Task { await clearCache() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will delete all saved recipes from this device and reset onboarding. You will need to sign in again.")
+            }
+        }
+    }
+
+    private func clearCache() async {
+        isClearing = true
+
+        // Delete all recipes from SwiftData
+        do {
+            let descriptor = FetchDescriptor<Recipe>()
+            let recipes = try modelContext.fetch(descriptor)
+            for recipe in recipes {
+                modelContext.delete(recipe)
+            }
+            try modelContext.save()
+            logger.info("Cleared \(recipes.count) recipes from SwiftData")
+        } catch {
+            logger.error("Failed to clear SwiftData: \(error)")
+        }
+
+        // Reset onboarding flag
+        hasSeenOnboarding = false
+        logger.info("Reset hasSeenOnboarding to false")
+
+        isClearing = false
+        dismiss()
     }
 
     private func configRow(label: String, value: String) -> some View {

@@ -25,6 +25,11 @@ enum RetryableError {
             }
         }
 
+        // Direct edge function errors
+        if let edgeError = error as? EdgeFunctionError {
+            return edgeError.isRetryable
+        }
+
         // API errors with 5xx status codes
         let description = error.localizedDescription
         if description.contains("error (5") { return true }
@@ -37,6 +42,9 @@ enum RetryableError {
         if let functionsError = error as? FunctionsError,
            case .httpError(let code, _) = functionsError {
             return code == 429
+        }
+        if let edgeError = error as? EdgeFunctionError {
+            return edgeError.isRateLimit
         }
         return false
     }
@@ -76,4 +84,29 @@ func withExponentialBackoff<T>(
     }
 
     throw lastError!
+}
+
+/// Error thrown when an operation exceeds its timeout.
+struct TimeoutError: LocalizedError {
+    let seconds: TimeInterval
+    var errorDescription: String? { "Request timed out after \(Int(seconds)) seconds. Please check your connection and try again." }
+}
+
+/// Wraps an async operation with a timeout. Throws `TimeoutError` if the timeout expires.
+func withTimeout<T>(seconds: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
+    try await withThrowingTaskGroup(of: T.self) { group in
+        group.addTask {
+            try await operation()
+        }
+        group.addTask {
+            try await Task.sleep(for: .seconds(seconds))
+            throw TimeoutError(seconds: seconds)
+        }
+        // Return whichever finishes first; cancel the other
+        guard let result = try await group.next() else {
+            throw TimeoutError(seconds: seconds)
+        }
+        group.cancelAll()
+        return result
+    }
 }

@@ -68,7 +68,7 @@ struct ContentView: View {
 
             case .recipeCard:
                 if let recipe = vm.pipeline.completedRecipe {
-                    recipeCardScreen(recipe: recipe)
+                    recipeCardScreen(recipe: recipe, isOnboardingFlow: vm.isOnboardingFlow)
                         .transition(.opacity)
                 } else {
                     Color.clear.onAppear {
@@ -102,6 +102,10 @@ struct ContentView: View {
                 // After onboarding, take user straight to camera
                 withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) {
                     vm.currentScreen = .camera
+                }
+                // Mark that next recipe is from onboarding flow (with delay to avoid timing issues)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    vm.isOnboardingFlow = true
                 }
             }
         }
@@ -170,6 +174,8 @@ struct ContentView: View {
 
     @State private var showBudgetPicker = false
     @State private var showChefPicker = false
+    @State private var showBudgetTooltip = false
+    @AppStorage("hasSeenBudgetTooltip") private var hasSeenBudgetTooltip = false
 
     private var cameraScreen: some View {
         ZStack {
@@ -227,30 +233,56 @@ struct ContentView: View {
                     .accessibilityHint("Tap to view credit options")
                     .padding(.top, 8)
 
-                    Button {
-                        showBudgetPicker = true
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "dollarsign.circle")
-                                .font(.system(size: 14, weight: .medium))
-                            if let budget = vm.budgetLimit {
-                                Text(String(format: "$%.0f", budget))
-                                    .font(.system(size: 14, weight: .semibold))
-                            } else {
-                                Text("Budget")
-                                    .font(.system(size: 14, weight: .medium))
+                    VStack(spacing: 4) {
+                        Button {
+                            if showBudgetTooltip {
+                                showBudgetTooltip = false
+                                hasSeenBudgetTooltip = true
                             }
+                            showBudgetPicker = true
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "dollarsign.circle")
+                                    .font(.system(size: 14, weight: .medium))
+                                if let budget = vm.budgetLimit {
+                                    Text(String(format: "$%.0f", budget))
+                                        .font(.system(size: 14, weight: .semibold))
+                                } else {
+                                    Text("Budget")
+                                        .font(.system(size: 14, weight: .medium))
+                                }
+                            }
+                            .foregroundStyle(vm.budgetLimit != nil ? Theme.gold : Theme.darkTextSecondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.black.opacity(0.3))
+                            .clipShape(Capsule())
                         }
-                        .foregroundStyle(vm.budgetLimit != nil ? Theme.gold : Theme.darkTextSecondary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.black.opacity(0.3))
-                        .clipShape(Capsule())
+
+                        if showBudgetTooltip {
+                            CoachTooltip(
+                                text: "Set a budget to generate affordable meals",
+                                icon: "dollarsign.circle",
+                                pointer: .up
+                            ) {
+                                showBudgetTooltip = false
+                                hasSeenBudgetTooltip = true
+                            }
+                            .transition(.opacity)
+                        }
                     }
                     .padding(.trailing, 16)
                     .padding(.top, 8)
                 }
                 Spacer()
+            }
+        }
+        .onAppear {
+            if !hasSeenBudgetTooltip {
+                Task {
+                    try? await Task.sleep(for: .seconds(2.0))
+                    withAnimation { showBudgetTooltip = true }
+                }
             }
         }
         .sheet(isPresented: $showBudgetPicker) {
@@ -366,9 +398,9 @@ struct ContentView: View {
         }
     }
 
-    private func recipeCardScreen(recipe: Recipe) -> some View {
+    private func recipeCardScreen(recipe: Recipe, isOnboardingFlow: Bool) -> some View {
         NavigationStack {
-            RecipeCardView(recipe: recipe)
+            RecipeCardView(recipe: recipe, isOnboardingFlow: isOnboardingFlow)
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button {

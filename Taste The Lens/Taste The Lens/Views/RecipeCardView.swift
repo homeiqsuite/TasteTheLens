@@ -43,6 +43,7 @@ enum ReimagineCourseType: String, CaseIterable, Identifiable {
 
 struct RecipeCardView: View {
     let recipe: Recipe
+    var isOnboardingFlow: Bool = false
     @Environment(\.modelContext) private var modelContext
     @State private var currentStep: Int = 0
     @State private var checkedIngredients: Set<String> = []
@@ -51,7 +52,15 @@ struct RecipeCardView: View {
     @State private var servingCount: Int = 2
     @State private var showAIReasoning = false
     @State private var showAuthPrompt = false
+    @State private var showCelebration = false
+    @State private var showMilestoneToast = false
+    @State private var milestoneMessage = ""
     @AppStorage("hasSeenAuthPrompt") private var hasSeenAuthPrompt = false
+    @AppStorage("hasGeneratedFirstRecipe") private var hasGeneratedFirstRecipe = false
+    @AppStorage("hasSeenMilestone3") private var hasSeenMilestone3 = false
+    @AppStorage("hasSeenMilestone5") private var hasSeenMilestone5 = false
+    @AppStorage("hasSeenRecipeWalkthrough") private var hasSeenRecipeWalkthrough = false
+    @State private var walkthroughStep: Int? = nil
 
     private var cookingSteps: [CookingStep] {
         recipe.effectiveCookingSteps
@@ -108,9 +117,74 @@ struct RecipeCardView: View {
                 // Bottom navigation bar
                 StepNavigationBar(currentStep: $currentStep, totalSteps: totalSteps)
             }
+
+            // First-recipe celebration overlay
+            if showCelebration {
+                ConfettiView()
+                    .ignoresSafeArea()
+
+                // Toast message
+                VStack {
+                    celebrationToast
+                    Spacer()
+                }
+                .transition(.opacity)
+            }
+
+            // Recipe walkthrough
+            if let step = walkthroughStep {
+                walkthroughOverlay(step: step)
+                    .transition(.opacity)
+            }
+
+            // Milestone toast
+            if showMilestoneToast {
+                VStack {
+                    milestoneToastView
+                    Spacer()
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
         .onAppear {
             servingCount = recipe.baseServings
+
+            // Capture before mutation so downstream delay logic reads the pre-mutation value
+            let isFirstRecipe = !hasGeneratedFirstRecipe
+
+            // First-recipe celebration
+            if isFirstRecipe {
+                hasGeneratedFirstRecipe = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    HapticManager.success()
+                    withAnimation(.easeOut(duration: 0.4)) { showCelebration = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                        withAnimation(.easeOut(duration: 0.5)) { showCelebration = false }
+                    }
+                }
+            } else {
+                // Milestone toasts (only after first recipe, staggered past auth prompt)
+                let recipeCount = UserDefaults.standard.integer(forKey: "totalRecipeCount")
+                if recipeCount >= 3 && !hasSeenMilestone3 {
+                    hasSeenMilestone3 = true
+                    milestoneMessage = "3 dishes created — try a Challenge!"
+                    showMilestoneAfterDelay()
+                } else if recipeCount >= 5 && !hasSeenMilestone5 {
+                    hasSeenMilestone5 = true
+                    milestoneMessage = "5 recipes! Invite friends to a Tasting Menu"
+                    showMilestoneAfterDelay()
+                }
+            }
+
+            // Recipe walkthrough: wait for confetti to finish on first recipe, else short delay
+            if !hasSeenRecipeWalkthrough {
+                let delay: Double = isFirstRecipe ? 4.5 : 1.5
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    withAnimation { walkthroughStep = 0 }
+                }
+            }
+
+            // Auth prompt: only show when no milestone toast is competing
             if !hasSeenAuthPrompt && !AuthManager.shared.isAuthenticated {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                     showAuthPrompt = true
@@ -123,6 +197,157 @@ struct RecipeCardView: View {
         }
         .sheet(isPresented: $showAIReasoning) {
             AIReasoningView(recipe: recipe)
+        }
+    }
+
+    // MARK: - Celebration Toast
+
+    private var celebrationToast: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "party.popper")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.gold)
+            Text("Your first dish! You're a natural.")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(
+            Capsule()
+                .fill(Theme.cardSurface)
+                .overlay(
+                    Capsule()
+                        .stroke(Theme.gold.opacity(0.5), lineWidth: 1)
+                )
+        )
+        .padding(.top, 60)
+    }
+
+    // MARK: - Milestone Toast
+
+    private var milestoneToastView: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "star.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.gold)
+            Text(milestoneMessage)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Theme.textPrimary)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    Capsule()
+                        .stroke(Theme.gold.opacity(0.3), lineWidth: 1)
+                )
+        )
+        .padding(.top, 60)
+    }
+
+    // MARK: - Recipe Walkthrough
+
+    private let walkthroughSteps = [
+        (text: "Swipe left to see cooking steps", icon: "hand.draw", pointer: TooltipPointer.down),
+    ]
+
+    // Vertical positions (as fraction of screen height) to anchor each tooltip
+    private let walkthroughAnchors: [CGFloat] = [
+        0.55,  // Step 0: Near the step indicator / top of content
+    ]
+
+    private func walkthroughOverlay(step: Int) -> some View {
+        VStack(spacing: 0) {
+            // Skip button — top trailing (hidden for onboarding flow)
+            if !isOnboardingFlow {
+                HStack {
+                    Spacer()
+                    Button {
+                        withAnimation(.easeOut(duration: 0.25)) { walkthroughStep = nil }
+                        hasSeenRecipeWalkthrough = true
+                    } label: {
+                        Text("Skip")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Theme.textTertiary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                            .background(
+                                Capsule()
+                                    .fill(Color.black.opacity(0.25))
+                            )
+                    }
+                    .padding(.top, 16)
+                    .padding(.trailing, 20)
+                }
+            } else {
+                Color.clear.frame(height: 16)
+            }
+
+            Spacer()
+
+            // Positioned tooltip anchor
+            GeometryReader { proxy in
+                let anchorY = proxy.size.height * walkthroughAnchors[step]
+
+                VStack(spacing: 0) {
+                    if walkthroughSteps[step].pointer == .down {
+                        Spacer()
+                            .frame(height: anchorY)
+                        CoachTooltip(
+                            text: walkthroughSteps[step].text,
+                            icon: walkthroughSteps[step].icon,
+                            pointer: walkthroughSteps[step].pointer,
+                            autoDismissSeconds: 8
+                        ) {
+                            advanceWalkthrough()
+                        }
+                        .id(step)
+                    } else {
+                        CoachTooltip(
+                            text: walkthroughSteps[step].text,
+                            icon: walkthroughSteps[step].icon,
+                            pointer: walkthroughSteps[step].pointer,
+                            autoDismissSeconds: 8
+                        ) {
+                            advanceWalkthrough()
+                        }
+                        .id(step)
+                        Spacer()
+                            .frame(height: proxy.size.height - anchorY - 60)
+                    }
+                }
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+    }
+
+    private func advanceWalkthrough() {
+        guard let step = walkthroughStep else { return }
+        let nextStep = step + 1
+        if nextStep < walkthroughSteps.count {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                walkthroughStep = nextStep
+            }
+        } else {
+            withAnimation(.easeOut(duration: 0.25)) {
+                walkthroughStep = nil
+            }
+            hasSeenRecipeWalkthrough = true
+        }
+    }
+
+    private func showMilestoneAfterDelay() {
+        // Delay past the auth prompt (1.5s) so they don't collide
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showMilestoneToast = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+                withAnimation(.easeOut(duration: 0.3)) { showMilestoneToast = false }
+            }
         }
     }
 }

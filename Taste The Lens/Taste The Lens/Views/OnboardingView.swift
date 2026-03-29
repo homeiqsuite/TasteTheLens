@@ -9,11 +9,13 @@ enum OnboardingPage: Int, CaseIterable {
 
 struct OnboardingView: View {
     @Binding var isPresented: Bool
+    @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @AppStorage("selectedChef") private var selectedChef = "default"
 
     @State private var currentPage: OnboardingPage = .welcome
 
     // Page 1 — Welcome animation states
+    @State private var fusionCalloutVisible = false
     @State private var heroVisible = false
     @State private var headlineVisible = false
     @State private var step1Visible = false
@@ -80,7 +82,9 @@ struct OnboardingView: View {
             SignInView()
         }
         .onChange(of: AuthManager.shared.isAuthenticated) { _, isAuth in
-            if isAuth {
+            if isAuth && hasSeenOnboarding {
+                // Only auto-dismiss if user has already completed onboarding before
+                // (not on first launch where auth was restored from a previous session)
                 isPresented = false
             }
         }
@@ -143,6 +147,7 @@ struct OnboardingView: View {
         connector1Visible = false
         connector2Visible = false
         welcomeCTAVisible = false
+        fusionCalloutVisible = false
         step1IconScale = 1.0
         step2IconScale = 1.0
         step3IconScale = 1.0
@@ -160,7 +165,7 @@ struct OnboardingView: View {
             heroVisible = true; headlineVisible = true
             step1Visible = true; step2Visible = true; step3Visible = true
             connector1Visible = true; connector2Visible = true
-            welcomeCTAVisible = true
+            fusionCalloutVisible = true; welcomeCTAVisible = true
             return
         }
 
@@ -202,14 +207,18 @@ struct OnboardingView: View {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { step3IconScale = 1.0 }
             }
         }
-        // CTA: 1.5s
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+        // Fusion callout: 1.4s
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+            withAnimation(.easeOut(duration: 0.45)) { fusionCalloutVisible = true }
+        }
+        // CTA: 1.7s
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.7) {
             withAnimation(.easeOut(duration: 0.5)) { welcomeCTAVisible = true }
         }
         // Shimmer loop
         startShimmerLoop()
         // CTA glow
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
                 ctaGlowRadius = 18
             }
@@ -357,6 +366,30 @@ struct OnboardingView: View {
             // Step flow
             stepFlow
                 .padding(.horizontal, 24)
+
+            // Fusion mode callout
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.gold)
+                Text("Long-press the shutter to combine photos with Fusion Mode")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.darkTextSecondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                Capsule()
+                    .fill(Theme.gold.opacity(0.08))
+                    .overlay(
+                        Capsule()
+                            .stroke(Theme.gold.opacity(0.2), lineWidth: 0.5)
+                    )
+            )
+            .padding(.horizontal, 24)
+            .padding(.top, 14)
+            .opacity(fusionCalloutVisible ? 1 : 0)
+            .offset(y: fusionCalloutVisible ? 0 : 10)
 
             Spacer()
 
@@ -526,6 +559,12 @@ struct OnboardingView: View {
                     .font(.system(size: 15))
                     .foregroundStyle(Theme.darkTextSecondary)
                     .multilineTextAlignment(.center)
+
+                Text("Your chef shapes the style, ingredients, and personality of every recipe.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.gold.opacity(0.7))
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 2)
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 28)
@@ -599,7 +638,6 @@ struct OnboardingView: View {
                         Text(chef.tagline)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(Theme.darkTextTertiary)
-                            .lineLimit(1)
                             .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                 }

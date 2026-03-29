@@ -20,6 +20,8 @@ struct Taste_The_LensApp: App {
                         // Sync server-side usage and credits
                         await UsageTracker.shared.syncUsageFromServer()
                         await UsageTracker.shared.syncCreditsFromServer()
+                        // Schedule credit expiry notification if subscriber has credits
+                        CreditExpiryNotificationService.shared.scheduleExpiryNotificationIfNeeded()
                         // Claim any unowned local recipes and sync
                         if let container = try? ModelContainer(for: Recipe.self) {
                             let context = ModelContext(container)

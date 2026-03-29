@@ -23,23 +23,24 @@ final class StoreManager {
     // Credit packs (consumable)
     static let starterPackId = "com.tastethelens.credits.starter"   // 10 credits, $1.99
     static let classicPackId = "com.tastethelens.credits.classic"   // 50 credits, $8.99
-    static let pantryPackId  = "com.tastethelens.credits.pantry"    // 100 credits, $14.99
+    static let pantryPackId  = "com.tastethelens.credits.pantry"    // 90 credits, $14.99 (reduced from 100 for margin optimization)
 
     // Subscriptions (auto-renewable)
     static let chefsTableMonthlyId = "com.tastethelens.chefstable.monthly"  // $9.99/mo
-    static let atelierMonthlyId    = "com.tastethelens.atelier.monthly"     // $49.99/mo
+    static let chefsTableAnnualId  = "com.tastethelens.chefstable.annual"   // $69.99/yr (~$5.83/mo, save 42%)
+    static let atelierMonthlyId    = "com.tastethelens.atelier.monthly"     // $49.99/mo — planned increase to $69.99/mo (App Store Connect)
 
     /// Maps credit pack product IDs to credit amounts
     static let creditPackAmounts: [String: Int] = [
         starterPackId: 10,
         classicPackId: 50,
-        pantryPackId: 100
+        pantryPackId: 90
     ]
 
     private static let allProductIds: Set<String> = [
         legacyMonthlyId, legacyAnnualId,
         starterPackId, classicPackId, pantryPackId,
-        chefsTableMonthlyId, atelierMonthlyId
+        chefsTableMonthlyId, chefsTableAnnualId, atelierMonthlyId
     ]
 
     private var updateListenerTask: Task<Void, Never>?
@@ -70,7 +71,7 @@ final class StoreManager {
 
     var subscriptionProducts: [Product] {
         let subIds: Set<String> = [
-            Self.chefsTableMonthlyId, Self.atelierMonthlyId,
+            Self.chefsTableMonthlyId, Self.chefsTableAnnualId, Self.atelierMonthlyId,
             Self.legacyMonthlyId, Self.legacyAnnualId
         ]
         return products.filter { subIds.contains($0.id) }
@@ -78,6 +79,10 @@ final class StoreManager {
 
     var chefsTableProduct: Product? {
         products.first { $0.id == Self.chefsTableMonthlyId }
+    }
+
+    var chefsTableAnnualProduct: Product? {
+        products.first { $0.id == Self.chefsTableAnnualId }
     }
 
     var atelierProduct: Product? {
@@ -91,7 +96,8 @@ final class StoreManager {
     }
 
     var annualProduct: Product? {
-        products.first { $0.id == Self.legacyAnnualId }
+        products.first { $0.id == Self.chefsTableAnnualId }
+            ?? products.first { $0.id == Self.legacyAnnualId }
     }
 
     // MARK: - Load Products
@@ -120,6 +126,11 @@ final class StoreManager {
             if let creditCount = Self.creditPackAmounts[product.id] {
                 // Consumable credit pack
                 UsageTracker.shared.addPurchasedCredits(creditCount)
+                UsageTracker.shared.trackCreditPackPurchase(price: product.price)
+                // Unlock clean exports for Classic+ buyers
+                if product.id == Self.classicPackId || product.id == Self.pantryPackId {
+                    UsageTracker.shared.hasPurchasedClassicOrHigher = true
+                }
                 logger.info("Credit pack purchased: \(creditCount) credits from \(product.id)")
             } else {
                 // Subscription
@@ -204,9 +215,10 @@ final class StoreManager {
                 .from("users")
                 .select("subscription_tier")
                 .eq("id", value: userId)
-                .single()
+                .limit(1)
                 .execute()
-            let user = try JSONDecoder().decode(UserTier.self, from: response.data)
+            let users = try JSONDecoder().decode([UserTier].self, from: response.data)
+            guard let user = users.first else { return .free }
 
             switch user.subscription_tier {
             case "pro", "chefsTable": return .chefsTable
@@ -223,7 +235,7 @@ final class StoreManager {
 
     private func tierForProductId(_ productId: String) -> SubscriptionTier {
         switch productId {
-        case Self.chefsTableMonthlyId, Self.legacyMonthlyId, Self.legacyAnnualId:
+        case Self.chefsTableMonthlyId, Self.chefsTableAnnualId, Self.legacyMonthlyId, Self.legacyAnnualId:
             return .chefsTable
         case Self.atelierMonthlyId:
             return .atelier

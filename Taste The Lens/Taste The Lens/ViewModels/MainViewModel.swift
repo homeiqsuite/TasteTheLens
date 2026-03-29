@@ -78,6 +78,7 @@ final class MainViewModel {
     var hardExcludedDishNames: [String] = []
     var budgetLimit: Double?
     var courseType: String?
+    var isOnboardingFlow = false
     var errorMessage: String?
     var showError = false
     var pendingMenuCourse: (menuId: String, courseOrder: Int)?
@@ -284,6 +285,10 @@ final class MainViewModel {
                         do {
                             try modelContext.save()
                             logger.info("Recipe auto-saved to SwiftData")
+
+                            // Track total recipe count for milestones
+                            let count = UserDefaults.standard.integer(forKey: "totalRecipeCount")
+                            UserDefaults.standard.set(count + 1, forKey: "totalRecipeCount")
                         } catch {
                             logger.error("Failed to auto-save recipe: \(error)")
                         }
@@ -382,6 +387,7 @@ final class MainViewModel {
         budgetLimit = nil
         courseType = nil
         lastGenerationStartTime = nil
+        isOnboardingFlow = false
         pipeline = ImageAnalysisPipeline()
     }
 

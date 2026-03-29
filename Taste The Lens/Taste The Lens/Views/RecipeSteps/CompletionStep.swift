@@ -9,6 +9,8 @@ struct CompletionStep: View {
     @State private var challengeError: String?
     @State private var showBudgetInput = false
     @State private var budgetAmount: Double = 15
+    @State private var showReimaginTooltip = false
+    @AppStorage("hasSeenReimaginTooltip") private var hasSeenReimaginTooltip = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -51,6 +53,19 @@ struct CompletionStep: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                     }
 
+
+                    // Reimagine tooltip
+                    if showReimaginTooltip {
+                        CoachTooltip(
+                            text: "Generate a fresh take on this dish",
+                            icon: "arrow.trianglehead.2.clockwise",
+                            pointer: .down
+                        ) {
+                            showReimaginTooltip = false
+                            hasSeenReimaginTooltip = true
+                        }
+                        .transition(.opacity)
+                    }
 
                     // Reimagine
                     Menu {
@@ -114,6 +129,14 @@ struct CompletionStep: View {
             }
         }
         .scrollBounceBehavior(.basedOnSize, axes: .vertical)
+        .onAppear {
+            if !hasSeenReimaginTooltip {
+                Task {
+                    try? await Task.sleep(for: .seconds(1.5))
+                    withAnimation { showReimaginTooltip = true }
+                }
+            }
+        }
         .sheet(isPresented: $showAuthPrompt) {
             AuthPromptSheet()
         }

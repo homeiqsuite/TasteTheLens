@@ -62,6 +62,8 @@ struct PaywallView: View {
     @State private var isPurchasing = false
     @State private var purchasingProductId: String?
     @State private var errorMessage: String?
+    @State private var showSubscriptionNudge = false
+    @State private var showAnnualBilling = false
 
     private let store = StoreManager.shared
     private let usage = UsageTracker.shared
@@ -87,6 +89,21 @@ struct PaywallView: View {
 
                     Spacer().frame(height: 24)
                 }
+            }
+            .sheet(isPresented: $showSubscriptionNudge) {
+                SubscriptionNudgeSheet(
+                    totalSpend: UsageTracker.shared.creditPackTotalSpend,
+                    onViewSubscription: {
+                        UsageTracker.shared.hasSeenSubscriptionNudge = true
+                        showSubscriptionNudge = false
+                        // Stay on paywall so user can see subscription options
+                    },
+                    onDismiss: {
+                        UsageTracker.shared.hasSeenSubscriptionNudge = true
+                        showSubscriptionNudge = false
+                        dismiss()
+                    }
+                )
             }
         }
     }
@@ -242,8 +259,32 @@ struct PaywallView: View {
                     Spacer()
                 }
 
-                // Chef's Table
-                if let chefsTable = store.chefsTableProduct {
+                // Monthly / Annual toggle (only show if annual product exists)
+                if store.chefsTableAnnualProduct != nil {
+                    Picker("Billing", selection: $showAnnualBilling) {
+                        Text("Monthly").tag(false)
+                        Text("Annual").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                }
+
+                // Chef's Table — Monthly or Annual based on toggle
+                if showAnnualBilling, let annual = store.chefsTableAnnualProduct {
+                    subscriptionCard(
+                        product: annual,
+                        name: "Chef's Table",
+                        credits: "75 credits/month",
+                        features: [
+                            "All chef personalities",
+                            "Recipe reimagination",
+                            "Cloud sync",
+                            "Clean exports (no watermark)",
+                            "Full dashboard & tasting menus"
+                        ],
+                        isRecommended: true,
+                        billingNote: "~$5.83/mo · Save 42%"
+                    )
+                } else if let chefsTable = store.chefsTableProduct {
                     subscriptionCard(
                         product: chefsTable,
                         name: "Chef's Table",
@@ -309,7 +350,8 @@ struct PaywallView: View {
         name: String,
         credits: String,
         features: [String],
-        isRecommended: Bool
+        isRecommended: Bool,
+        billingNote: String? = nil
     ) -> some View {
         let isThisPurchasing = purchasingProductId == product.id
 
@@ -349,9 +391,15 @@ struct PaywallView: View {
                             Text(product.displayPrice)
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(Theme.gold)
-                            Text("/month")
-                                .font(.system(size: 11))
-                                .foregroundStyle(Theme.darkTextHint)
+                            if let billingNote {
+                                Text(billingNote)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(Theme.gold.opacity(0.8))
+                            } else {
+                                Text("/month")
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(Theme.darkTextHint)
+                            }
                         }
                     }
                 }
@@ -429,6 +477,7 @@ struct PaywallView: View {
     }
 
     private func purchaseProduct(_ product: Product) {
+        let isCreditPack = StoreManager.creditPackAmounts.keys.contains(product.id)
         Task {
             isPurchasing = true
             purchasingProductId = product.id
@@ -437,7 +486,12 @@ struct PaywallView: View {
                 let success = try await store.purchase(product)
                 if success {
                     HapticManager.medium()
-                    dismiss()
+                    // After credit pack purchase, check if we should nudge toward subscription
+                    if isCreditPack && UsageTracker.shared.shouldShowSubscriptionNudge {
+                        showSubscriptionNudge = true
+                    } else {
+                        dismiss()
+                    }
                 }
             } catch {
                 errorMessage = error.localizedDescription
@@ -446,5 +500,63 @@ struct PaywallView: View {
             isPurchasing = false
             purchasingProductId = nil
         }
+    }
+}
+
+// MARK: - Subscription Upgrade Nudge
+
+private struct SubscriptionNudgeSheet: View {
+    let totalSpend: Double
+    let onViewSubscription: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        ZStack {
+            Theme.darkBg.ignoresSafeArea()
+
+            VStack(spacing: 20) {
+                Spacer().frame(height: 24)
+
+                Image(systemName: "lightbulb.fill")
+                    .font(.system(size: 44))
+                    .foregroundStyle(Theme.gold)
+
+                Text("Save with Chef's Table")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(Theme.darkTextPrimary)
+
+                Text("You've spent \(totalSpend, format: .currency(code: "USD")) on credits. Chef's Table gives you **75 credits/month** plus all chef personalities, reimagination, and clean exports for just $9.99/mo.")
+                    .font(.system(size: 15))
+                    .foregroundStyle(Theme.darkTextSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+
+                VStack(spacing: 12) {
+                    Button {
+                        onViewSubscription()
+                    } label: {
+                        Text("View Subscription")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Theme.darkBg)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Theme.gold)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+
+                    Button {
+                        onDismiss()
+                    } label: {
+                        Text("Not now")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.darkTextHint)
+                    }
+                }
+                .padding(.horizontal, 32)
+
+                Spacer()
+            }
+        }
+        .presentationDetents([.medium])
     }
 }

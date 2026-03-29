@@ -47,11 +47,16 @@ final class AuthManager {
         if let fullName, let formatted = PersonNameComponentsFormatter.localizedString(from: fullName, style: .default).nilIfEmpty {
             let existingName = currentUser?.userMetadata["full_name"]?.stringValue
             if existingName == nil || existingName?.isEmpty == true {
-                currentUser = try await supabase.auth.update(user: .init(data: ["full_name": .string(formatted)]))
+                _ = try await supabase.auth.update(user: .init(data: ["full_name": .string(formatted)]))
             }
         }
 
         logger.info("Signed in with Apple — user: \(session.user.id)")
+
+        // Refresh session to ensure currentUser has latest metadata
+        let refreshedSession = try await supabase.auth.session
+        currentUser = refreshedSession.user
+
         await syncDisplayName()
         await PushNotificationService.shared.requestPermission()
     }

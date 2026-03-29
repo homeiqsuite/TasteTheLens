@@ -7,6 +7,8 @@ struct PrepOverviewStep: View {
     @Binding var expandedSections: Set<String>
     @Binding var servingCount: Int
     @Binding var showAIReasoning: Bool
+    @State private var showAIReasoningTooltip = false
+    @AppStorage("hasSeenAIReasoningTooltip") private var hasSeenAIReasoningTooltip = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: true) {
@@ -21,6 +23,14 @@ struct PrepOverviewStep: View {
             }
         }
         .scrollBounceBehavior(.basedOnSize, axes: .vertical)
+        .onAppear {
+            if !hasSeenAIReasoningTooltip {
+                Task {
+                    try? await Task.sleep(for: .seconds(2.0))
+                    withAnimation { showAIReasoningTooltip = true }
+                }
+            }
+        }
     }
 
     // MARK: - Description
@@ -456,6 +466,18 @@ struct PrepOverviewStep: View {
                                     .font(.system(size: 13, weight: .medium))
                             }
                             .foregroundStyle(Theme.visual)
+                        }
+
+                        if showAIReasoningTooltip {
+                            CoachTooltip(
+                                text: "See how AI connected visuals to flavors",
+                                icon: "sparkles",
+                                pointer: .up
+                            ) {
+                                showAIReasoningTooltip = false
+                                hasSeenAIReasoningTooltip = true
+                            }
+                            .transition(.opacity)
                         }
                     }
                 }

@@ -14,6 +14,8 @@ struct SettingsView: View {
     @State private var exportFileURL: URL?
     @State private var showExportShare = false
     @State private var isExporting = false
+    @State private var showReplayOnboarding = false
+    @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = true
 
     private let authManager = AuthManager.shared
 
@@ -135,6 +137,10 @@ struct SettingsView: View {
                                 exportData()
                             }
                             settingsDivider
+                            settingsButton("Replay Tutorial", icon: "play.circle", color: Theme.textPrimary) {
+                                showReplayOnboarding = true
+                            }
+                            settingsDivider
                             settingsLink("Privacy Policy", icon: "hand.raised", url: "https://tastethelens.com/privacy")
                             settingsDivider
                             settingsLink("Terms of Service", icon: "doc.text", url: "https://tastethelens.com/terms")
@@ -176,6 +182,9 @@ struct SettingsView: View {
                 if let url = exportFileURL {
                     ShareSheet(items: [url])
                 }
+            }
+            .fullScreenCover(isPresented: $showReplayOnboarding) {
+                OnboardingView(isPresented: $showReplayOnboarding)
             }
         }
     }

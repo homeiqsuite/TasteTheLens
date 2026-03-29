@@ -31,11 +31,29 @@ struct DisplayNamePromptView: View {
                             .multilineTextAlignment(.center)
                     }
 
-                    TextField("Display Name", text: $name)
-                        .textFieldStyle(AuthTextFieldStyle())
-                        .textContentType(.name)
-                        .autocorrectionDisabled()
-                        .padding(.horizontal, 32)
+                    ZStack(alignment: .leading) {
+                        if name.isEmpty {
+                            Text("Display Name")
+                                .font(.system(size: 15))
+                                .foregroundStyle(.white.opacity(0.6))
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
+                                .allowsHitTesting(false)
+                        }
+                        TextField("", text: $name)
+                            .textContentType(.name)
+                            .autocorrectionDisabled()
+                            .foregroundStyle(Theme.darkTextPrimary)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .background(Theme.darkStroke)
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Theme.darkStroke, lineWidth: 0.5)
+                    )
+                    .padding(.horizontal, 32)
 
                     if let error = errorMessage {
                         Text(error)

@@ -106,12 +106,11 @@ struct ChefSelectionView: View {
                 Text(chef.description)
                     .font(.system(size: 12))
                     .foregroundStyle(isSelected ? Theme.darkTextSecondary : Theme.darkTextTertiary)
-                    .lineLimit(3)
+                    .lineLimit(nil)
                     .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(14)
-            .frame(width: 210, alignment: .leading)
+            .frame(width: 250, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 16)
                     .fill(isSelected ? chefTheme.accent.opacity(0.08) : Theme.darkCardSurface)
