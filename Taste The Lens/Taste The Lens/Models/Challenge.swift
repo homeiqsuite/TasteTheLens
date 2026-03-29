@@ -6,6 +6,7 @@ enum ChallengeFilter: String, CaseIterable, Identifiable {
     case trending
     case new
     case endingSoon
+    case past
 
     var id: String { rawValue }
 
@@ -14,6 +15,7 @@ enum ChallengeFilter: String, CaseIterable, Identifiable {
         case .trending: "Trending"
         case .new: "New"
         case .endingSoon: "Ending Soon"
+        case .past: "Past"
         }
     }
 }
@@ -31,6 +33,7 @@ struct ChallengeDTO: Codable, Identifiable {
     let createdAt: String
     let endsAt: String?
     let status: String
+    let winnerSubmissionId: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -43,6 +46,20 @@ struct ChallengeDTO: Codable, Identifiable {
         case createdAt = "created_at"
         case endsAt = "ends_at"
         case status
+        case winnerSubmissionId = "winner_submission_id"
+    }
+
+    var isEnded: Bool {
+        if status == "completed" { return true }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let endsAtString = endsAt,
+              let date = formatter.date(from: endsAtString) else { return false }
+        return date < Date()
+    }
+
+    var hasWinner: Bool {
+        winnerSubmissionId != nil
     }
 }
 
@@ -54,6 +71,7 @@ struct ChallengeSubmissionDTO: Codable, Identifiable {
     let caption: String?
     let upvoteCount: Int
     let createdAt: String
+    let displayName: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -63,6 +81,7 @@ struct ChallengeSubmissionDTO: Codable, Identifiable {
         case caption
         case upvoteCount = "upvote_count"
         case createdAt = "created_at"
+        case displayName = "display_name"
     }
 }
 

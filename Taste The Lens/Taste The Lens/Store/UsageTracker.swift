@@ -8,7 +8,7 @@ private let logger = makeLogger(category: "Usage")
 final class UsageTracker {
     static let shared = UsageTracker()
 
-    private static let freeLimit = 5
+    private static var freeLimit: Int { RemoteConfigManager.shared.freeGenerationLimit }
 
     /// Server-side usage count, cached locally for offline support
     private var cachedServerCount: Int?

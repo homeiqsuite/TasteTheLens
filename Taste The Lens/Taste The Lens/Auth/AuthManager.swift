@@ -34,7 +34,7 @@ final class AuthManager {
 
     // MARK: - Sign in with Apple
 
-    func signInWithApple(idToken: String, nonce: String) async throws {
+    func signInWithApple(idToken: String, nonce: String, fullName: PersonNameComponents? = nil) async throws {
         isLoading = true
         defer { isLoading = false }
 
@@ -42,7 +42,17 @@ final class AuthManager {
             credentials: .init(provider: .apple, idToken: idToken, nonce: nonce)
         )
         currentUser = session.user
+
+        // Apple only provides fullName on the FIRST sign-in — persist it to auth metadata
+        if let fullName, let formatted = PersonNameComponentsFormatter.localizedString(from: fullName, style: .default).nilIfEmpty {
+            let existingName = currentUser?.userMetadata["full_name"]?.stringValue
+            if existingName == nil || existingName?.isEmpty == true {
+                currentUser = try await supabase.auth.update(user: .init(data: ["full_name": .string(formatted)]))
+            }
+        }
+
         logger.info("Signed in with Apple — user: \(session.user.id)")
+        await syncDisplayName()
         await PushNotificationService.shared.requestPermission()
     }
 
@@ -59,6 +69,7 @@ final class AuthManager {
         )
         currentUser = response.user
         logger.info("Signed up with email — user: \(response.user.id)")
+        await syncDisplayName()
         await PushNotificationService.shared.requestPermission()
     }
 
@@ -69,6 +80,7 @@ final class AuthManager {
         let session = try await supabase.auth.signIn(email: email, password: password)
         currentUser = session.user
         logger.info("Signed in with email — user: \(session.user.id)")
+        await syncDisplayName()
         await PushNotificationService.shared.requestPermission()
     }
 
@@ -99,6 +111,34 @@ final class AuthManager {
     func updatePassword(_ newPassword: String) async throws {
         try await supabase.auth.update(user: .init(password: newPassword))
         logger.info("Password updated successfully")
+    }
+
+    // MARK: - Display Name
+
+    var needsDisplayName: Bool {
+        guard isAuthenticated else { return false }
+        let name = currentUser?.userMetadata["full_name"]?.stringValue
+        return name == nil || name?.trimmingCharacters(in: .whitespaces).isEmpty == true
+    }
+
+    func updateDisplayName(_ name: String) async throws {
+        currentUser = try await supabase.auth.update(user: .init(data: ["full_name": .string(name)]))
+        await syncDisplayName()
+        logger.info("Updated display name to: \(name)")
+    }
+
+    func syncDisplayName() async {
+        guard let userId = currentUser?.id.uuidString.lowercased() else { return }
+        do {
+            try await supabase.from("users")
+                .upsert([
+                    "id": userId,
+                    "display_name": displayName
+                ], onConflict: "id")
+                .execute()
+        } catch {
+            logger.error("Failed to sync display name: \(error)")
+        }
     }
 
     // MARK: - Sign Out
@@ -185,5 +225,11 @@ enum AuthError: LocalizedError {
         case .missingCredentials:
             return "Could not retrieve Apple Sign-In credentials."
         }
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        trimmingCharacters(in: .whitespaces).isEmpty ? nil : self
     }
 }

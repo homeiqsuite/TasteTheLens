@@ -29,14 +29,18 @@ struct DeepLinkHandler {
 
         // tastethelens://challenge/{uuid}
         if url.host == "challenge" {
-            if let idString = pathComponents.first {
+            if let idString = pathComponents.first,
+               UUID(uuidString: idString) != nil {
                 return .challenge(idString)
             }
         }
 
         // tastethelens://menu/{inviteCode}
         if url.host == "menu" {
-            if let code = pathComponents.first {
+            if let code = pathComponents.first,
+               !code.isEmpty,
+               code.count <= 64,
+               code.range(of: "^[a-zA-Z0-9_-]+$", options: .regularExpression) != nil {
                 return .tastingMenu(code)
             }
         }
@@ -44,7 +48,9 @@ struct DeepLinkHandler {
         // tastethelens://reset-callback?code={code}
         if url.host == "reset-callback" {
             if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-               let code = components.queryItems?.first(where: { $0.name == "code" })?.value {
+               let code = components.queryItems?.first(where: { $0.name == "code" })?.value,
+               !code.isEmpty,
+               code.count <= 512 {
                 return .resetCallback(code)
             }
         }

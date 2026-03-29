@@ -15,6 +15,7 @@ struct SignInView: View {
     @State private var errorMessage: String?
     @State private var successMessage: String?
     @State private var currentNonce: String?
+    @State private var showDisplayNamePrompt = false
 
     private let bg = Theme.darkBg
     private let gold = Theme.gold
@@ -117,6 +118,9 @@ struct SignInView: View {
                         .foregroundStyle(gold)
                 }
             }
+            .sheet(isPresented: $showDisplayNamePrompt, onDismiss: { dismiss() }) {
+                DisplayNamePromptView()
+            }
         }
     }
 
@@ -197,11 +201,20 @@ struct SignInView: View {
             }
             Task {
                 do {
-                    try await authManager.signInWithApple(idToken: idToken, nonce: nonce)
+                    try await authManager.signInWithApple(
+                        idToken: idToken,
+                        nonce: nonce,
+                        fullName: credential.fullName
+                    )
                     await UsageTracker.shared.claimSignupBonusIfNeeded()
                     await UsageTracker.shared.syncCreditsFromServer()
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
-                    dismiss()
+
+                    if authManager.needsDisplayName {
+                        showDisplayNamePrompt = true
+                    } else {
+                        dismiss()
+                    }
                 } catch {
                     errorMessage = error.localizedDescription
                     logger.error("Apple sign-in failed: \(error)")
@@ -217,10 +230,15 @@ struct SignInView: View {
 
     private func handleEmailAuth() async {
         errorMessage = nil
+
+        if isSignUp && displayName.trimmingCharacters(in: .whitespaces).isEmpty {
+            errorMessage = "Display name is required."
+            return
+        }
+
         do {
             if isSignUp {
-                let name = displayName.isEmpty ? email.components(separatedBy: "@").first ?? "User" : displayName
-                try await authManager.signUp(email: email, password: password, displayName: name)
+                try await authManager.signUp(email: email, password: password, displayName: displayName.trimmingCharacters(in: .whitespaces))
             } else {
                 try await authManager.signInWithEmail(email: email, password: password)
             }

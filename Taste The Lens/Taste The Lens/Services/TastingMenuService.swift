@@ -19,45 +19,24 @@ final class TastingMenuService {
     // MARK: - Create Menu
 
     func createMenu(theme: String, courseCount: Int, courseTypes: [CourseType]) async throws -> TastingMenuDTO {
-        guard let userId = AuthManager.shared.currentUser?.id.uuidString else {
+        guard AuthManager.shared.currentUser != nil else {
             throw TastingMenuError.notAuthenticated
         }
 
-        // Insert menu
-        let menu: TastingMenuDTO = try await supabase
-            .from("tasting_menus")
-            .insert([
-                "creator_id": userId,
-                "theme": theme,
-                "course_count": "\(courseCount)",
-                "status": "draft"
-            ])
-            .select()
-            .single()
-            .execute()
-            .value
-
-        // Add creator as participant
-        try await supabase
-            .from("menu_participants")
-            .insert([
-                "menu_id": menu.id,
-                "user_id": userId,
-                "role": "creator"
-            ])
-            .execute()
-
-        // Create empty course slots
-        for (index, courseType) in courseTypes.prefix(courseCount).enumerated() {
-            try await supabase
-                .from("menu_courses")
-                .insert([
-                    "menu_id": menu.id,
-                    "course_type": courseType.rawValue,
-                    "course_order": "\(index)"
-                ])
-                .execute()
+        struct CreateTastingMenuRequest: Encodable {
+            let theme: String
+            let courseCount: Int
+            let courseTypes: [String]
         }
+
+        let menu: TastingMenuDTO = try await supabase.functions.invoke(
+            "create-tasting-menu",
+            options: .init(body: CreateTastingMenuRequest(
+                theme: theme,
+                courseCount: courseCount,
+                courseTypes: courseTypes.prefix(courseCount).map(\.rawValue)
+            ))
+        )
 
         logger.info("Created tasting menu '\(theme)' with \(courseCount) courses")
         return menu

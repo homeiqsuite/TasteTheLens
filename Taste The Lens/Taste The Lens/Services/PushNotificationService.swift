@@ -66,8 +66,22 @@ final class PushNotificationService {
 
     // MARK: - FCM Token Registration
 
+    private func isValidFCMToken(_ token: String) -> Bool {
+        guard !token.isEmpty,
+              token.count >= 32,
+              token.count <= 512,
+              token.range(of: "^[a-zA-Z0-9:_-]+$", options: .regularExpression) != nil else {
+            return false
+        }
+        return true
+    }
+
     /// Upserts the FCM token to Supabase `device_tokens` table.
     func registerFCMToken(_ token: String) async {
+        guard isValidFCMToken(token) else {
+            logger.warning("Invalid FCM token format — skipping registration")
+            return
+        }
         currentFCMToken = token
 
         guard let userId = AuthManager.shared.currentUser?.id else {

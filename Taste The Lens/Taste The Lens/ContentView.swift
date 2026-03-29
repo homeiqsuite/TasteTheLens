@@ -16,6 +16,7 @@ struct ContentView: View {
     @AppStorage("debug_processingStyle") private var processingStyleRaw = ProcessingStyle.kitchenPass.rawValue
     @AppStorage("selectedChef") private var selectedChef = "default"
     @State private var showOnboarding = false
+    @State private var showDisplayNamePrompt = false
     #if !PRODUCTION
     @State private var showDebugMenu = false
     #endif
@@ -34,6 +35,14 @@ struct ContentView: View {
     }
 
     var body: some View {
+        if RemoteConfigManager.shared.maintenanceMode {
+            MaintenanceView(message: RemoteConfigManager.shared.maintenanceMessage)
+        } else {
+            mainContent
+        }
+    }
+
+    private var mainContent: some View {
         ZStack {
             bg.ignoresSafeArea()
 
@@ -122,6 +131,26 @@ struct ContentView: View {
             if !hasSeenOnboarding {
                 showOnboarding = true
             }
+        }
+        .onChange(of: AuthManager.shared.isAuthenticated) { wasAuthenticated, isNowAuthenticated in
+            if !wasAuthenticated && isNowAuthenticated {
+                Task {
+                    await StoreManager.shared.updateSubscriptionStatus()
+                    await UsageTracker.shared.syncUsageFromServer()
+                    await UsageTracker.shared.syncCreditsFromServer()
+                    await SyncManager.shared.claimLocalRecipes(modelContext: modelContext)
+                    await SyncManager.shared.syncAll(modelContext: modelContext)
+                    await PushNotificationService.shared.requestPermission()
+                    await PushNotificationService.shared.loadPreferences()
+
+                    if AuthManager.shared.needsDisplayName {
+                        showDisplayNamePrompt = true
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showDisplayNamePrompt) {
+            DisplayNamePromptView()
         }
         .onReceive(NotificationCenter.default.publisher(for: .reimagineRecipe)) { notification in
             vm.handleReimaginNotification(notification)

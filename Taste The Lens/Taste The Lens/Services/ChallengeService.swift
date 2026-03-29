@@ -11,6 +11,7 @@ final class ChallengeService {
 
     var challenges: [ChallengeDTO] = []
     var isLoading = false
+    var hasMorePastChallenges = false
 
     private var supabase: SupabaseClient { SupabaseManager.shared.client }
 
@@ -48,7 +49,8 @@ final class ChallengeService {
             dishPath = path
         }
 
-        let endsAt = ISO8601DateFormatter().string(from: Calendar.current.date(byAdding: .day, value: 7, to: Date())!)
+        let durationHours = RemoteConfigManager.shared.challengeDurationHours
+        let endsAt = ISO8601DateFormatter().string(from: Calendar.current.date(byAdding: .hour, value: durationHours, to: Date())!)
 
         let challenge: ChallengeDTO = try await supabase
             .from("challenges")
@@ -73,43 +75,67 @@ final class ChallengeService {
 
     // MARK: - Fetch Challenges
 
-    func fetchChallenges(filter: ChallengeFilter) async throws {
+    func fetchChallenges(filter: ChallengeFilter, offset: Int = 0) async throws {
         isLoading = true
         defer { isLoading = false }
 
-        let orderColumn: String
-        let ascending: Bool
+        let nowISO = ISO8601DateFormatter().string(from: Date())
+        let pageSize = 20
 
-        switch filter {
-        case .trending:
-            orderColumn = "created_at"
-            ascending = false
-        case .new:
-            orderColumn = "created_at"
-            ascending = false
-        case .endingSoon:
-            orderColumn = "ends_at"
-            ascending = true
+        let result: [ChallengeDTO]
+
+        if filter == .past {
+            result = try await supabase
+                .from("challenges")
+                .select()
+                .or("status.eq.completed,ends_at.lt.\(nowISO)")
+                .order("ends_at", ascending: false)
+                .range(from: offset, to: offset + pageSize - 1)
+                .execute()
+                .value
+            hasMorePastChallenges = result.count == pageSize
+        } else {
+            let orderColumn: String
+            let ascending: Bool
+
+            switch filter {
+            case .trending:
+                orderColumn = "created_at"
+                ascending = false
+            case .new:
+                orderColumn = "created_at"
+                ascending = false
+            case .endingSoon:
+                orderColumn = "ends_at"
+                ascending = true
+            case .past:
+                fatalError("Handled above")
+            }
+
+            result = try await supabase
+                .from("challenges")
+                .select()
+                .eq("status", value: "active")
+                .gt("ends_at", value: nowISO)
+                .order(orderColumn, ascending: ascending)
+                .limit(pageSize)
+                .execute()
+                .value
         }
 
-        let result: [ChallengeDTO] = try await supabase
-            .from("challenges")
-            .select()
-            .eq("status", value: "active")
-            .order(orderColumn, ascending: ascending)
-            .limit(20)
-            .execute()
-            .value
-
-        challenges = result
-        logger.info("Fetched \(result.count) challenges (filter: \(filter.rawValue))")
+        if offset > 0 {
+            challenges.append(contentsOf: result)
+        } else {
+            challenges = result
+        }
+        logger.info("Fetched \(result.count) challenges (filter: \(filter.rawValue), offset: \(offset))")
     }
 
     // MARK: - Fetch Submissions
 
     func fetchSubmissions(challengeId: String) async throws -> [ChallengeSubmissionDTO] {
         let result: [ChallengeSubmissionDTO] = try await supabase
-            .from("challenge_submissions")
+            .from("challenge_submissions_with_user")
             .select()
             .eq("challenge_id", value: challengeId)
             .order("upvote_count", ascending: false)
@@ -193,6 +219,43 @@ final class ChallengeService {
                 .value
             return !result.isEmpty
         } catch {
+            return false
+        }
+    }
+
+    // MARK: - Declare Winner
+
+    func declareWinner(challengeId: String, submissionId: String, challengeTitle: String) async throws {
+        guard AuthManager.shared.currentUser != nil else {
+            throw ChallengeError.notAuthenticated
+        }
+
+        try await supabase.functions.invoke("challenge-declare-winner", options: .init(body: [
+            "challengeId": challengeId,
+            "winnerSubmissionId": submissionId,
+            "challengeTitle": challengeTitle
+        ] as [String: String]))
+
+        logger.info("Declared winner \(submissionId) for challenge \(challengeId)")
+    }
+
+    // MARK: - Has Submitted
+
+    func hasSubmitted(challengeId: String) async -> Bool {
+        guard let userId = AuthManager.shared.currentUser?.id.uuidString.lowercased() else { return false }
+
+        do {
+            let result: [ChallengeSubmissionDTO] = try await supabase
+                .from("challenge_submissions")
+                .select()
+                .eq("challenge_id", value: challengeId)
+                .eq("user_id", value: userId)
+                .limit(1)
+                .execute()
+                .value
+            return !result.isEmpty
+        } catch {
+            logger.error("Failed to check submission status: \(error)")
             return false
         }
     }

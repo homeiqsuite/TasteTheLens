@@ -41,10 +41,10 @@ struct DashboardView: View {
                 heroCard
                 recentRecipesSection
                 chefModeCard
-                if EntitlementManager.shared.hasAccess(to: .fullChallenges) {
+                if RemoteConfigManager.shared.gauntletEnabled && EntitlementManager.shared.hasAccess(to: .fullChallenges) {
                     challengesSection
                 }
-                if EntitlementManager.shared.hasAccess(to: .fullTastingMenus) {
+                if RemoteConfigManager.shared.tastingMenusEnabled && EntitlementManager.shared.hasAccess(to: .fullTastingMenus) {
                     tastingMenuCard
                 }
             }
@@ -814,7 +814,7 @@ private struct FloatingParticle: View {
 
     // Deterministic per-particle values based on index
     private var seed: Double { Double(index) * 137.508 } // golden angle
-    private var size: CGFloat { CGFloat(3 + (seed.truncatingRemainder(dividingBy: 6))) }
+    private var size: CGFloat { CGFloat(4 + (seed.truncatingRemainder(dividingBy: 8))) }
     private var startX: CGFloat {
         let fraction = (seed * 0.618).truncatingRemainder(dividingBy: 1.0)
         return 30 + CGFloat(fraction) * (containerSize.width - 60)
@@ -823,17 +823,17 @@ private struct FloatingParticle: View {
         let fraction = (seed * 0.382).truncatingRemainder(dividingBy: 1.0)
         return 40 + CGFloat(fraction) * (containerSize.height - 80)
     }
-    private var driftX: CGFloat { CGFloat(((seed * 2.3).truncatingRemainder(dividingBy: 20)) - 10) }
+    private var driftX: CGFloat { CGFloat(((seed * 2.3).truncatingRemainder(dividingBy: 36)) - 18) }
     private var duration: Double { 3.0 + (seed.truncatingRemainder(dividingBy: 3.0)) }
     private var delay: Double { Double(index) * 0.5 }
 
     var body: some View {
         Circle()
-            .fill(particleColor.opacity(isAnimating ? 0.0 : 0.35))
+            .fill(particleColor.opacity(isAnimating ? 0.6 : 0.15))
             .frame(width: size, height: size)
             .position(
                 x: startX + (isAnimating ? driftX : 0),
-                y: startY + (isAnimating ? -30 : 0)
+                y: startY + (isAnimating ? -50 : 0)
             )
             .animation(
                 .easeInOut(duration: duration)

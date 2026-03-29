@@ -129,10 +129,12 @@ struct RecipeComponent: Codable, Hashable {
 struct CookingStep: Codable, Hashable {
     var instruction: String
     var ingredientsUsed: [String]
+    var tip: String?
 
     enum CodingKeys: String, CodingKey {
         case instruction
         case ingredientsUsed = "ingredients_used"
+        case tip
     }
 }
 

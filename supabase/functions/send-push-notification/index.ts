@@ -27,6 +27,8 @@ interface PushRequest {
 const NOTIFICATION_TYPE_TO_PREFERENCE: Record<string, string> = {
   challenge_submission: "challenge_activity",
   challenge_upvote: "challenge_activity",
+  challenge_winner: "challenge_activity",
+  challenge_completed: "challenge_activity",
   menu_invite: "tasting_menu_updates",
   menu_course_added: "tasting_menu_updates",
   weekly_inspiration: "weekly_inspiration",
@@ -41,6 +43,40 @@ Deno.serve(async (req) => {
 
   try {
     const body: PushRequest = await req.json();
+
+    // ── Input validation ──────────────────────────────────────────────
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const VALID_NOTIFICATION_TYPES = Object.keys(NOTIFICATION_TYPE_TO_PREFERENCE);
+
+    if (!body.recipient_user_id || typeof body.recipient_user_id !== "string" || !UUID_RE.test(body.recipient_user_id)) {
+      return Response.json({ error: "Invalid or missing recipient_user_id (must be UUID)" }, { status: 400 });
+    }
+    if (!body.notification_type || typeof body.notification_type !== "string" || body.notification_type.length > 50) {
+      return Response.json({ error: "Invalid or missing notification_type" }, { status: 400 });
+    }
+    if (!VALID_NOTIFICATION_TYPES.includes(body.notification_type)) {
+      return Response.json({ error: `Unknown notification_type: ${body.notification_type}` }, { status: 400 });
+    }
+    if (!body.title || typeof body.title !== "string" || body.title.length > 200) {
+      return Response.json({ error: "title is required and must be ≤ 200 characters" }, { status: 400 });
+    }
+    if (!body.body || typeof body.body !== "string" || body.body.length > 1000) {
+      return Response.json({ error: "body is required and must be ≤ 1000 characters" }, { status: 400 });
+    }
+    if (body.deep_link !== undefined) {
+      if (typeof body.deep_link !== "string" || body.deep_link.length > 500 || !body.deep_link.startsWith("tastethelens://")) {
+        return Response.json({ error: "deep_link must be a tastethelens:// URL ≤ 500 characters" }, { status: 400 });
+      }
+    }
+    if (body.payload !== undefined) {
+      if (typeof body.payload !== "object" || body.payload === null || Array.isArray(body.payload)) {
+        return Response.json({ error: "payload must be a JSON object" }, { status: 400 });
+      }
+      if (JSON.stringify(body.payload).length > 4096) {
+        return Response.json({ error: "payload must be < 4KB" }, { status: 400 });
+      }
+    }
+
     const {
       recipient_user_id,
       notification_type,
@@ -131,6 +167,12 @@ Deno.serve(async (req) => {
           body: JSON.stringify(fcmPayload),
         }
       );
+
+      if (response.status === 429) {
+        console.error("FCM rate limited — stopping further sends");
+        results.push({ token: fcm_token, status: "failed", error: "rate_limited" });
+        break; // Stop sending to remaining tokens
+      }
 
       if (response.ok) {
         results.push({ token: fcm_token, status: "sent" });

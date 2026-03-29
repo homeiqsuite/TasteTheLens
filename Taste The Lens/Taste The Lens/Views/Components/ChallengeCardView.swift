@@ -56,14 +56,15 @@ struct ChallengeCardView: View {
     }
 
     private var timeRemainingPill: some View {
-        let remaining = timeRemaining
+        let ended = challenge.isEnded
+        let winner = challenge.hasWinner
         return HStack(spacing: 4) {
-            Image(systemName: "clock")
+            Image(systemName: winner ? "trophy.fill" : "clock")
                 .font(.system(size: 10))
-            Text(remaining)
+            Text(winner ? "Winner declared" : timeRemaining)
                 .font(.system(size: 11, weight: .medium))
         }
-        .foregroundStyle(Theme.darkTextTertiary)
+        .foregroundStyle(ended ? (winner ? Theme.gold : Theme.darkTextHint) : Theme.darkTextTertiary)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(Capsule().fill(Theme.darkSurface))

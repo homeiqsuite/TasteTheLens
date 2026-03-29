@@ -6,6 +6,7 @@ private let logger = makeLogger(category: "ChallengeFeed")
 struct ChallengeFeedView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedFilter: ChallengeFilter = .trending
+    @State private var pastChallengesOffset = 0
 
     private let challengeService = ChallengeService.shared
 
@@ -15,14 +16,7 @@ struct ChallengeFeedView: View {
                 Theme.darkBg.ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    Picker("Filter", selection: $selectedFilter) {
-                        ForEach(ChallengeFilter.allCases) { filter in
-                            Text(filter.displayName).tag(filter)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
+                    filterTabs
 
                     if challengeService.isLoading && challengeService.challenges.isEmpty {
                         Spacer()
@@ -42,12 +36,29 @@ struct ChallengeFeedView: View {
                                     }
                                     .buttonStyle(.plain)
                                 }
+
+                                // Load More button for past challenges
+                                if selectedFilter == .past && challengeService.hasMorePastChallenges {
+                                    Button {
+                                        pastChallengesOffset += 20
+                                        Task {
+                                            try? await challengeService.fetchChallenges(filter: .past, offset: pastChallengesOffset)
+                                        }
+                                    } label: {
+                                        Text("Load More")
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundStyle(Theme.gold)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 12)
+                                    }
+                                }
                             }
                             .padding(.horizontal, 16)
                             .padding(.top, 16)
                             .padding(.bottom, 32)
                         }
                         .refreshable {
+                            pastChallengesOffset = 0
                             try? await challengeService.fetchChallenges(filter: selectedFilter)
                         }
                     }
@@ -72,11 +83,37 @@ struct ChallengeFeedView: View {
                 try? await challengeService.fetchChallenges(filter: selectedFilter)
             }
             .onChange(of: selectedFilter) { _, newFilter in
+                pastChallengesOffset = 0
                 Task {
                     try? await challengeService.fetchChallenges(filter: newFilter)
                 }
             }
         }
+    }
+
+    // MARK: - Filter Tabs
+
+    private var filterTabs: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(ChallengeFilter.allCases) { filter in
+                    Button {
+                        selectedFilter = filter
+                    } label: {
+                        Text(filter.displayName)
+                            .font(.system(size: 14, weight: selectedFilter == filter ? .bold : .medium))
+                            .foregroundStyle(selectedFilter == filter ? Theme.darkBg : Theme.darkTextSecondary)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule().fill(selectedFilter == filter ? Theme.gold : Theme.darkSurface)
+                            )
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+        .padding(.top, 8)
     }
 
     private var emptyState: some View {

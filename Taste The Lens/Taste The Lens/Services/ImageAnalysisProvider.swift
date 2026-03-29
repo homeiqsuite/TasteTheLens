@@ -1,11 +1,5 @@
-import UIKit
-
-// MARK: - Protocol
-
-protocol ImageAnalysisProvider: Sendable {
-    func analyzeImage(_ image: UIImage, systemPrompt: String) async throws -> (ClaudeRecipeResponse, String)
-    func screenImage(_ image: UIImage) async throws -> ContentScreeningResult
-}
+import Foundation
+import Supabase
 
 // MARK: - Retry Logic
 
@@ -24,24 +18,26 @@ enum RetryableError {
             }
         }
 
+        // Supabase edge function errors — retry 5xx but NOT 429 (handled separately)
+        if let functionsError = error as? FunctionsError {
+            if case .httpError(let code, _) = functionsError {
+                return code >= 500
+            }
+        }
+
         // API errors with 5xx status codes
         let description = error.localizedDescription
         if description.contains("error (5") { return true }
 
-        // Gemini/Claude/Fal network errors
-        if error is GeminiAPIError {
-            if case .networkError = error as! GeminiAPIError { return true }
-            return false
-        }
-        if error is ClaudeAPIError {
-            if case .networkError = error as! ClaudeAPIError { return true }
-            return false
-        }
-        if error is FalAPIError {
-            if case .networkError = error as! FalAPIError { return true }
-            return false
-        }
+        return false
+    }
 
+    /// Returns true if the error is a rate limit (429) from an edge function.
+    static func isRateLimited(_ error: Error) -> Bool {
+        if let functionsError = error as? FunctionsError,
+           case .httpError(let code, _) = functionsError {
+            return code == 429
+        }
         return false
     }
 }
@@ -61,6 +57,13 @@ func withExponentialBackoff<T>(
 
             // Don't retry cancellation
             if error is CancellationError { throw error }
+
+            // Rate limit errors: retry with longer delay (30s default)
+            if RetryableError.isRateLimited(error) {
+                guard attempt < maxAttempts - 1 else { throw error }
+                try await Task.sleep(for: .seconds(30))
+                continue
+            }
 
             // Only retry retryable errors
             guard attempt < maxAttempts - 1, RetryableError.isRetryable(error) else {

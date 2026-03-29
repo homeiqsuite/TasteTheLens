@@ -98,6 +98,11 @@ final class MainViewModel {
             return
         }
 
+        if let task = processingTask, !task.isCancelled {
+            showTemporaryError("A recipe is already being generated. Please wait.")
+            return
+        }
+
         if let last = lastGenerationStartTime, Date().timeIntervalSince(last) < 10 {
             showTemporaryError("Please wait a moment before generating another recipe.")
             return
@@ -108,7 +113,6 @@ final class MainViewModel {
             capturedImage = image
             dishHistoryNames = DishHistory.recent(for: .current)
             hardExcludedDishNames = []
-            courseType = nil
             pipeline = ImageAnalysisPipeline()
             lastGenerationStartTime = Date()
             currentScreen = .processing
@@ -138,6 +142,11 @@ final class MainViewModel {
             return
         }
 
+        if let task = processingTask, !task.isCancelled {
+            showTemporaryError("A recipe is already being generated. Please wait.")
+            return
+        }
+
         if let last = lastGenerationStartTime, Date().timeIntervalSince(last) < 10 {
             showTemporaryError("Please wait a moment before generating another recipe.")
             return
@@ -149,7 +158,6 @@ final class MainViewModel {
             capturedImage = images.first
             dishHistoryNames = DishHistory.recent(for: .current)
             hardExcludedDishNames = []
-            courseType = nil
             pipeline = ImageAnalysisPipeline()
             lastGenerationStartTime = Date()
             currentScreen = .processing
@@ -237,6 +245,7 @@ final class MainViewModel {
                     guard let remoteRecipeId = recipe.remoteId else {
                         logger.error("Recipe has no remoteId after sync — cannot add to menu")
                         pendingMenuCourse = nil
+                        showTemporaryError("Failed to save course to menu — please try again.")
                         withAnimation(reduceMotion ? .easeInOut(duration: 0.3) : .spring(response: 0.6, dampingFraction: 0.8)) {
                             currentScreen = .dashboard
                         }

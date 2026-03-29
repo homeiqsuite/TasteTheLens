@@ -12,6 +12,7 @@ struct CameraView: View {
     @State private var showFusionTooltip = false
     @State private var cameraError: String?
     @State private var showCameraError = false
+    @State private var isCapturing = false
     @AppStorage("selectedChef") private var selectedChef = "default"
     @AppStorage("hasSeenFusionTooltip") private var hasSeenFusionTooltip = false
 
@@ -204,10 +205,13 @@ struct CameraView: View {
     // MARK: - Single-Shot Capture
 
     private func capturePhoto() {
+        guard !isCapturing else { return }
+        isCapturing = true
         logger.info("Shutter tapped — capturing photo")
         HapticManager.medium()
 
         Task {
+            defer { isCapturing = false }
             do {
                 let image = try await cameraManager.capturePhoto()
                 logger.info("Photo captured successfully: \(image.size.width)x\(image.size.height)")
@@ -235,6 +239,10 @@ struct CameraView: View {
             }
         } else {
             // Activate fusion mode
+            guard RemoteConfigManager.shared.fusionModeEnabled else {
+                logger.info("Fusion mode disabled via remote config")
+                return
+            }
             logger.info("Entering Fusion Mode")
             HapticManager.heavy()
             withAnimation {
@@ -249,15 +257,17 @@ struct CameraView: View {
     }
 
     private func captureFusionShot() {
-        guard fusionState.canCapture else {
-            logger.info("Fusion mode — max 3 shots reached")
+        guard fusionState.canCapture, !isCapturing else {
+            logger.info("Fusion mode — max 3 shots reached or capture in progress")
             return
         }
+        isCapturing = true
 
         logger.info("Fusion shutter tapped — capturing shot \(fusionState.shotCount + 1)/3")
         HapticManager.medium()
 
         Task {
+            defer { isCapturing = false }
             do {
                 let image = try await cameraManager.capturePhoto()
                 logger.info("Fusion shot captured: \(image.size.width)x\(image.size.height)")

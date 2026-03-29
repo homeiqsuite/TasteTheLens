@@ -4,12 +4,14 @@ import SwiftData
 @main
 struct Taste_The_LensApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @Environment(\.scenePhase) private var scenePhase
     @State private var activeSheet: AppSheet?
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .task {
+                    RemoteConfigManager.shared.startPeriodicSync()
                     await AuthManager.shared.restoreSession()
                     // On authenticated launch, claim any unowned local recipes and sync
                     if AuthManager.shared.isAuthenticated {
@@ -25,8 +27,15 @@ struct Taste_The_LensApp: App {
                             await SyncManager.shared.syncAll(modelContext: context)
                         }
                         // Request push notification permission and register token
-                        await PushNotificationService.shared.requestPermission()
-                        await PushNotificationService.shared.loadPreferences()
+                        if RemoteConfigManager.shared.pushNotificationsEnabled {
+                            await PushNotificationService.shared.requestPermission()
+                            await PushNotificationService.shared.loadPreferences()
+                        }
+                    }
+                }
+                .onChange(of: scenePhase) { _, newPhase in
+                    if newPhase == .active {
+                        Task { await RemoteConfigManager.shared.fetch() }
                     }
                 }
                 .onOpenURL { url in

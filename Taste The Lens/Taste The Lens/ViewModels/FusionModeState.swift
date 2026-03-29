@@ -6,6 +6,9 @@ final class FusionModeState {
     var capturedImages: [UIImage] = []
     var showDismissConfirmation = false
 
+    private var lastCaptureTime: Date?
+    private let minimumCaptureInterval: TimeInterval = 0.5
+
     var shotCount: Int { capturedImages.count }
     var canFuse: Bool { capturedImages.count >= 2 }
     var canCapture: Bool { capturedImages.count < 3 }
@@ -13,7 +16,12 @@ final class FusionModeState {
 
     func addImage(_ image: UIImage) {
         guard canCapture else { return }
+        if let last = lastCaptureTime,
+           Date().timeIntervalSince(last) < minimumCaptureInterval {
+            return
+        }
         capturedImages.append(image)
+        lastCaptureTime = Date()
     }
 
     func removeImage(at index: Int) {
@@ -25,5 +33,6 @@ final class FusionModeState {
         isActive = false
         capturedImages = []
         showDismissConfirmation = false
+        lastCaptureTime = nil
     }
 }

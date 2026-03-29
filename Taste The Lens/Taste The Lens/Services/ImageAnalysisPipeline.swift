@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import SwiftData
+import Supabase
 import ActivityKit
 import WidgetKit
 import os
@@ -32,6 +33,52 @@ enum PipelineState: Equatable {
     }
 }
 
+// MARK: - Edge Function Response Types
+
+struct ScreenImageResponse: Codable {
+    let safe: Bool
+    let reason: String
+}
+
+struct AnalyzeImageResponse: Codable {
+    let recipe: ClaudeRecipeResponse
+    let rawJSON: String
+}
+
+struct GenerateImageResponse: Codable {
+    let imageData: String
+    let mimeType: String
+}
+
+// MARK: - Edge Function Request Types
+
+struct ScreenImageRequest: Encodable {
+    let images: [String]
+}
+
+struct AnalyzeImageRequest: Encodable {
+    let images: [String]
+    let provider: String
+    let chef: String
+    let customChefConfig: CustomChefConfigPayload?
+    let dietaryPreferences: [String]?
+    let hardExcluding: [String]
+    let softAvoiding: [String]
+    let budgetLimit: Double?
+    let courseType: String?
+}
+
+struct CustomChefConfigPayload: Encodable {
+    let skillLevel: String
+    let cuisines: [String]
+    let personality: String
+}
+
+struct GenerateImageRequest: Encodable {
+    let prompt: String
+    let provider: String
+}
+
 @Observable
 final class ImageAnalysisPipeline: Identifiable {
     let id = UUID()
@@ -44,12 +91,11 @@ final class ImageAnalysisPipeline: Identifiable {
     var startTime: Date?
     var isFusion: Bool = false
 
-    private let geminiClient = GeminiAPIClient()
+    private var supabase: SupabaseClient { SupabaseManager.shared.client }
 
     var imageGenModelName: String { imageGenModel.displayName }
 
     private let imageGenModel: ImageGenerationModel
-    private let imageGenClient: ImageGenerationProviding
 
     init(imageGenModel: ImageGenerationModel? = nil) {
         let model = imageGenModel ?? {
@@ -57,7 +103,6 @@ final class ImageAnalysisPipeline: Identifiable {
             return ImageGenerationModel(rawValue: raw) ?? .imagen4
         }()
         self.imageGenModel = model
-        self.imageGenClient = ImageGenerationFactory.client(for: model)
     }
 
     func process(image: UIImage, modelContext: ModelContext, hardExcluding: [String] = [], softAvoiding: [String] = [], budgetLimit: Double? = nil, courseType: String? = nil) async {
@@ -72,15 +117,17 @@ final class ImageAnalysisPipeline: Identifiable {
         }
         logger.info("Inspiration image: \(inspirationData.count) bytes")
 
+        let base64Image = inspirationData.base64EncodedString()
+
         do {
-            // Step 0: Content screening
+            // Step 0: Content screening via edge function
             state = .screeningImage
             processingStatus = "Checking image..."
             await LiveActivityManager.shared.updatePhase("Screening", progress: 0.1, status: "Checking image...")
             logger.info("Screening image for content safety...")
 
-            let screening = try await withExponentialBackoff {
-                try await geminiClient.screenImage(image)
+            let screening: ScreenImageResponse = try await withExponentialBackoff {
+                try await self.supabase.functions.invoke("screen-image", options: .init(body: ScreenImageRequest(images: [base64Image])))
             }
             try Task.checkCancellation()
             if !screening.safe {
@@ -90,41 +137,29 @@ final class ImageAnalysisPipeline: Identifiable {
             }
             logger.info("Image passed screening: \(screening.reason)")
 
-            // Step 1: Gemini analysis
+            // Step 1: Recipe analysis via edge function
             state = .analyzingImage
             processingStatus = "Extracting palette..."
             await LiveActivityManager.shared.updatePhase("Analyzing", progress: 0.35, status: "Extracting palette...")
             let chef = ChefPersonality.current
-            logger.info("Calling Gemini API with chef: \(chef.displayName)...")
+            logger.info("Calling analyze-image with chef: \(chef.displayName)...")
 
-            var prompt = chef.systemPrompt
-            if !hardExcluding.isEmpty {
-                let excludeList = hardExcluding.joined(separator: ", ")
-                prompt += "\n\nIMPORTANT: Generate a completely different dish. Do NOT repeat any of these previously generated dishes: \(excludeList). Create something entirely new and distinct — different dish format, different flavor profile, different primary ingredients."
-            }
-            // Soft-avoid: history of recently generated dishes (encourages variety without hard-blocking)
-            let softList = softAvoiding.filter { name in
-                !hardExcluding.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame })
-            }
-            if !softList.isEmpty {
-                let avoidList = softList.joined(separator: ", ")
-                prompt += "\n\nVARIETY GUIDANCE: The user has recently generated these dishes: \(avoidList). Try to create something different in format and style — explore a different dish category, cooking method, or regional variation. You may revisit a similar dish only if the image strongly calls for it."
-            }
-            if let budgetLimit {
-                let formatted = budgetLimit.truncatingRemainder(dividingBy: 1) == 0
-                    ? String(format: "$%.0f", budgetLimit)
-                    : String(format: "$%.2f", budgetLimit)
-                prompt += "\n\nBUDGET CONSTRAINT: The total cost of ALL ingredients combined must be under \(formatted). Choose affordable, budget-friendly ingredients. Prioritize pantry staples, in-season produce, and cost-effective proteins (chicken thighs, eggs, beans, lentils, ground meat). Avoid expensive ingredients like seafood, specialty cheeses, or premium cuts. The dish should taste great without breaking the bank."
-            }
-            if let courseType {
-                prompt += "\n\nCOURSE TYPE CONSTRAINT (MANDATORY): You MUST create a \(courseType) dish. This is non-negotiable — the dish category must be a \(courseType) regardless of what the image contains. Use the image purely for visual inspiration (colors, textures, mood), but the resulting dish MUST belong to the \(courseType) category. Specifically: Appetizers must be small, shareable starters. Soups must be liquid-based. Salads must be vegetable/grain-forward cold or warm salads. Main Courses must be hearty, protein-centered entrées. Desserts MUST be sweet — cakes, tarts, ice cream, pastries, puddings, cookies, chocolate creations, fruit desserts, etc. NEVER generate a savory dish for a Dessert course. Amuse-Bouche must be single-bite palate teasers. If the image shows something savory but the course is Dessert, find a creative sweet interpretation inspired by the image's colors and textures."
-            }
+            let analysisRequest = buildAnalysisRequest(
+                base64Images: [base64Image],
+                chef: chef,
+                hardExcluding: hardExcluding,
+                softAvoiding: softAvoiding,
+                budgetLimit: budgetLimit,
+                courseType: courseType
+            )
 
-            let (recipeResponse, rawJSON) = try await withExponentialBackoff {
-                try await geminiClient.analyzeImage(image, systemPrompt: prompt)
+            let analysisResponse: AnalyzeImageResponse = try await withExponentialBackoff {
+                try await self.supabase.functions.invoke("analyze-image", options: .init(body: analysisRequest))
             }
+            let recipeResponse = analysisResponse.recipe
+            let rawJSON = analysisResponse.rawJSON
             try Task.checkCancellation()
-            logger.info("Gemini response received — dish: \(recipeResponse.dishName)")
+            logger.info("Analysis response received — dish: \(recipeResponse.dishName)")
             logger.debug("Image gen prompt: \(recipeResponse.imageGenerationPrompt.prefix(100))...")
 
             extractedColors = recipeResponse.colorPalette ?? []
@@ -132,7 +167,7 @@ final class ImageAnalysisPipeline: Identifiable {
             partialIngredients = recipeResponse.components.flatMap { $0.ingredients }
             processingStatus = "Translating emotion..."
 
-            // Step 2: Image generation (non-fatal — recipe is still useful without a generated image)
+            // Step 2: Image generation via edge function (non-fatal)
             try Task.checkCancellation()
             state = .generatingImage
             processingStatus = "Plating concept..."
@@ -142,14 +177,15 @@ final class ImageAnalysisPipeline: Identifiable {
             var generatedImageData: Data? = nil
             var imageURL: String = ""
             do {
-                let enhancedPrompt = recipeResponse.imageGenerationPrompt
-                    + " Professional editorial food photography, Michelin star presentation, warm inviting lighting, shallow depth of field, 85mm lens, appetizing and delicious."
-                let (data, url) = try await withExponentialBackoff {
-                    try await self.imageGenClient.generateImage(prompt: enhancedPrompt)
+                let genResponse: GenerateImageResponse = try await withExponentialBackoff {
+                    try await self.supabase.functions.invoke("generate-image", options: .init(body: GenerateImageRequest(
+                        prompt: recipeResponse.imageGenerationPrompt,
+                        provider: self.imageGenModel.edgeFunctionKey
+                    )))
                 }
-                generatedImageData = data
-                imageURL = url
-                logger.info("\(self.imageGenModel.displayName) response — image: \(data.count) bytes, URL: \(url)")
+                generatedImageData = Data(base64Encoded: genResponse.imageData)
+                imageURL = genResponse.mimeType
+                logger.info("\(self.imageGenModel.displayName) response — image: \(generatedImageData?.count ?? 0) bytes")
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
@@ -213,8 +249,9 @@ final class ImageAnalysisPipeline: Identifiable {
         startTime = Date()
         await LiveActivityManager.shared.startGeneration()
 
-        // Convert images to JPEG data one at a time to reduce peak memory
+        // Convert images to JPEG data and base64 one at a time to reduce peak memory
         var allImageData: [Data] = []
+        var base64Images: [String] = []
         for (index, image) in images.enumerated() {
             guard let data = image.jpegDataForUpload() else {
                 logger.error("Failed to convert fusion image \(index) to JPEG data")
@@ -222,18 +259,19 @@ final class ImageAnalysisPipeline: Identifiable {
                 return
             }
             allImageData.append(data)
+            base64Images.append(data.base64EncodedString())
         }
         logger.info("All \(allImageData.count) fusion images converted to JPEG")
 
         do {
-            // Step 0: Content screening — screen all images concurrently
+            // Step 0: Content screening via edge function
             state = .screeningImage
             processingStatus = "Checking images..."
             await LiveActivityManager.shared.updatePhase("Screening", progress: 0.1, status: "Checking images...")
             logger.info("Screening \(images.count) images for content safety...")
 
-            let screening = try await withExponentialBackoff {
-                try await geminiClient.screenImages(images)
+            let screening: ScreenImageResponse = try await withExponentialBackoff {
+                try await self.supabase.functions.invoke("screen-image", options: .init(body: ScreenImageRequest(images: base64Images)))
             }
             try Task.checkCancellation()
             if !screening.safe {
@@ -243,47 +281,36 @@ final class ImageAnalysisPipeline: Identifiable {
             }
             logger.info("All fusion images passed screening")
 
-            // Step 1: Gemini analysis — send all images in one request
+            // Step 1: Recipe analysis via edge function
             state = .analyzingImage
             processingStatus = "Blending visual worlds..."
             await LiveActivityManager.shared.updatePhase("Analyzing", progress: 0.35, status: "Fusing visual DNA...")
             let chef = ChefPersonality.current
-            logger.info("Calling Gemini API with \(images.count) images, chef: \(chef.displayName)...")
+            logger.info("Calling analyze-image with \(images.count) images, chef: \(chef.displayName)...")
 
-            var prompt = chef.systemPrompt
-            if !hardExcluding.isEmpty {
-                let excludeList = hardExcluding.joined(separator: ", ")
-                prompt += "\n\nIMPORTANT: Generate a completely different dish. Do NOT repeat any of these previously generated dishes: \(excludeList). Create something entirely new and distinct — different dish format, different flavor profile, different primary ingredients."
-            }
-            let softList = softAvoiding.filter { name in
-                !hardExcluding.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame })
-            }
-            if !softList.isEmpty {
-                let avoidList = softList.joined(separator: ", ")
-                prompt += "\n\nVARIETY GUIDANCE: The user has recently generated these dishes: \(avoidList). Try to create something different in format and style — explore a different dish category, cooking method, or regional variation. You may revisit a similar dish only if the image strongly calls for it."
-            }
-            if let budgetLimit {
-                let formatted = budgetLimit.truncatingRemainder(dividingBy: 1) == 0
-                    ? String(format: "$%.0f", budgetLimit)
-                    : String(format: "$%.2f", budgetLimit)
-                prompt += "\n\nBUDGET CONSTRAINT: The total cost of ALL ingredients combined must be under \(formatted). Choose affordable, budget-friendly ingredients. Prioritize pantry staples, in-season produce, and cost-effective proteins (chicken thighs, eggs, beans, lentils, ground meat). Avoid expensive ingredients like seafood, specialty cheeses, or premium cuts. The dish should taste great without breaking the bank."
-            }
-            if let courseType {
-                prompt += "\n\nCOURSE TYPE CONSTRAINT (MANDATORY): You MUST create a \(courseType) dish. This is non-negotiable — the dish category must be a \(courseType) regardless of what the image contains. Use the image purely for visual inspiration (colors, textures, mood), but the resulting dish MUST belong to the \(courseType) category. Specifically: Appetizers must be small, shareable starters. Soups must be liquid-based. Salads must be vegetable/grain-forward cold or warm salads. Main Courses must be hearty, protein-centered entrées. Desserts MUST be sweet — cakes, tarts, ice cream, pastries, puddings, cookies, chocolate creations, fruit desserts, etc. NEVER generate a savory dish for a Dessert course. Amuse-Bouche must be single-bite palate teasers. If the image shows something savory but the course is Dessert, find a creative sweet interpretation inspired by the image's colors and textures."
-            }
+            let analysisRequest = buildAnalysisRequest(
+                base64Images: base64Images,
+                chef: chef,
+                hardExcluding: hardExcluding,
+                softAvoiding: softAvoiding,
+                budgetLimit: budgetLimit,
+                courseType: courseType
+            )
 
-            let (recipeResponse, rawJSON) = try await withExponentialBackoff {
-                try await geminiClient.analyzeImages(images, systemPrompt: prompt)
+            let analysisResponse: AnalyzeImageResponse = try await withExponentialBackoff {
+                try await self.supabase.functions.invoke("analyze-image", options: .init(body: analysisRequest))
             }
+            let recipeResponse = analysisResponse.recipe
+            let rawJSON = analysisResponse.rawJSON
             try Task.checkCancellation()
-            logger.info("Gemini fusion response received — dish: \(recipeResponse.dishName)")
+            logger.info("Fusion analysis response received — dish: \(recipeResponse.dishName)")
 
             extractedColors = recipeResponse.colorPalette ?? []
             partialDishName = recipeResponse.dishName
             partialIngredients = recipeResponse.components.flatMap { $0.ingredients }
             processingStatus = "Translating fusion..."
 
-            // Step 2: Image generation (non-fatal)
+            // Step 2: Image generation via edge function (non-fatal)
             try Task.checkCancellation()
             state = .generatingImage
             processingStatus = "Plating concept..."
@@ -293,14 +320,15 @@ final class ImageAnalysisPipeline: Identifiable {
             var generatedImageData: Data? = nil
             var imageURL: String = ""
             do {
-                let enhancedPrompt = recipeResponse.imageGenerationPrompt
-                    + " Professional editorial food photography, Michelin star presentation, warm inviting lighting, shallow depth of field, 85mm lens, appetizing and delicious."
-                let (data, url) = try await withExponentialBackoff {
-                    try await self.imageGenClient.generateImage(prompt: enhancedPrompt)
+                let genResponse: GenerateImageResponse = try await withExponentialBackoff {
+                    try await self.supabase.functions.invoke("generate-image", options: .init(body: GenerateImageRequest(
+                        prompt: recipeResponse.imageGenerationPrompt,
+                        provider: self.imageGenModel.edgeFunctionKey
+                    )))
                 }
-                generatedImageData = data
-                imageURL = url
-                logger.info("\(self.imageGenModel.displayName) response — image: \(data.count) bytes, URL: \(url)")
+                generatedImageData = Data(base64Encoded: genResponse.imageData)
+                imageURL = genResponse.mimeType
+                logger.info("\(self.imageGenModel.displayName) response — image: \(generatedImageData?.count ?? 0) bytes")
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
@@ -361,6 +389,40 @@ final class ImageAnalysisPipeline: Identifiable {
         }
     }
 
+    // MARK: - Analysis Request Builder
+
+    private func buildAnalysisRequest(
+        base64Images: [String],
+        chef: ChefPersonality,
+        hardExcluding: [String],
+        softAvoiding: [String],
+        budgetLimit: Double?,
+        courseType: String?
+    ) -> AnalyzeImageRequest {
+        let dietaryPrefs = DietaryPreference.current()
+
+        var customConfig: CustomChefConfigPayload?
+        if chef == .custom, let config = CustomChefConfig.load() {
+            customConfig = CustomChefConfigPayload(
+                skillLevel: config.skillLevel.rawValue,
+                cuisines: config.cuisines.map(\.rawValue),
+                personality: config.personality.rawValue
+            )
+        }
+
+        return AnalyzeImageRequest(
+            images: base64Images,
+            provider: "gemini",
+            chef: chef.rawValue,
+            customChefConfig: customConfig,
+            dietaryPreferences: dietaryPrefs.isEmpty ? nil : dietaryPrefs.map(\.rawValue),
+            hardExcluding: hardExcluding,
+            softAvoiding: softAvoiding,
+            budgetLimit: budgetLimit,
+            courseType: courseType
+        )
+    }
+
     // MARK: - Widget Data
 
     private func updateWidgetData(recipe: Recipe) {
@@ -374,5 +436,18 @@ final class ImageAnalysisPipeline: Identifiable {
             defaults.set(thumbnail, forKey: "lastRecipeThumbnail")
         }
         WidgetCenter.shared.reloadAllTimelines()
+    }
+}
+
+// MARK: - ImageGenerationModel Edge Function Key
+
+extension ImageGenerationModel {
+    var edgeFunctionKey: String {
+        switch self {
+        case .imagen4: return "imagen4"
+        case .imagen4Fast: return "imagen4fast"
+        case .fluxPro: return "fluxpro"
+        case .fluxSchnell: return "fluxschnell"
+        }
     }
 }

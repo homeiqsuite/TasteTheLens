@@ -12,7 +12,6 @@ struct PrepOverviewStep: View {
         ScrollView(.vertical, showsIndicators: true) {
             VStack(spacing: 0) {
                 descriptionSection
-                donationDisclaimer
                 dietaryBadges
                 quickStatsStrip
                 nutritionSection
@@ -37,21 +36,6 @@ struct PrepOverviewStep: View {
             .padding(.bottom, 8)
     }
 
-    // MARK: - Donation Disclaimer
-
-    private var donationDisclaimer: some View {
-        Text("Taste The Lens donates a portion of revenue to fight hunger.")
-            .font(.system(size: 12))
-            .foregroundStyle(Theme.textTertiary)
-            .multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .background(Theme.cardSurface)
-            .overlay(
-                VStack { Spacer(); Theme.divider.frame(height: 1) }
-            )
-    }
 
     // MARK: - Dietary Badges
 
@@ -129,32 +113,6 @@ struct PrepOverviewStep: View {
             }
             .fixedSize(horizontal: true, vertical: false)
 
-            dividerLine
-
-            // Ingredient count
-            VStack(spacing: 1) {
-                Text("\(totalIngredientCount)")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(Theme.textPrimary)
-                Text("ingredients")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textTertiary)
-            }
-            .frame(maxWidth: .infinity)
-
-            dividerLine
-
-            // Step count
-            VStack(spacing: 1) {
-                Text("\(recipe.effectiveCookingSteps.count)")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(Theme.textPrimary)
-                Text("steps")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textTertiary)
-            }
-            .frame(maxWidth: .infinity)
-
             // Prep time
             if let prep = recipe.prepTime, !prep.isEmpty {
                 dividerLine
@@ -190,21 +148,6 @@ struct PrepOverviewStep: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-
-            // Estimated calories
-            if let cals = recipe.nutrition?.calories ?? recipe.estimatedCalories {
-                dividerLine
-
-                VStack(spacing: 1) {
-                    Text("\(scaledNutrient(cals))")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(Theme.textPrimary)
-                    Text("cal")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textTertiary)
-                }
-                .frame(maxWidth: .infinity)
-            }
         }
         .padding(.vertical, 14)
         .padding(.horizontal, 16)
@@ -229,46 +172,65 @@ struct PrepOverviewStep: View {
 
     @ViewBuilder
     private var nutritionSection: some View {
-        if let nutrition = recipe.nutrition {
+        let nutrition = recipe.nutrition
+        let calories = nutrition?.calories ?? recipe.estimatedCalories
+
+        if nutrition != nil || calories != nil {
             VStack(alignment: .leading, spacing: 12) {
                 sectionHeader("Nutrition per Serving")
 
-                HStack(spacing: 0) {
-                    macroColumn(value: scaledNutrient(nutrition.protein), label: "Protein", unit: "g", color: Theme.visual)
-                    macroColumn(value: scaledNutrient(nutrition.carbs), label: "Carbs", unit: "g", color: Theme.primary)
-                    macroColumn(value: scaledNutrient(nutrition.fat), label: "Fat", unit: "g", color: Theme.culinary)
-                    macroColumn(value: scaledNutrient(nutrition.fiber), label: "Fiber", unit: "g", color: Theme.gold)
-                    macroColumn(value: scaledNutrient(nutrition.sugar), label: "Sugar", unit: "g", color: Theme.textTertiary)
+                // Calories prominent display
+                if let cals = calories {
+                    HStack(spacing: 4) {
+                        Text("\(scaledNutrient(cals))")
+                            .font(.system(size: 28, weight: .bold))
+                            .foregroundStyle(Theme.textPrimary)
+                        Text("kcal")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                let total = Double(nutrition.protein * 4 + nutrition.carbs * 4 + nutrition.fat * 9)
-                if total > 0 {
-                    GeometryReader { geo in
-                        HStack(spacing: 2) {
-                            let proteinFrac = Double(nutrition.protein * 4) / total
-                            let carbsFrac = Double(nutrition.carbs * 4) / total
-                            let fatFrac = Double(nutrition.fat * 9) / total
+                // Macro columns
+                if let nutrition {
+                    HStack(spacing: 0) {
+                        macroColumn(value: scaledNutrient(nutrition.protein), label: "Protein", unit: "g", color: Theme.visual)
+                        macroColumn(value: scaledNutrient(nutrition.carbs), label: "Carbs", unit: "g", color: Theme.primary)
+                        macroColumn(value: scaledNutrient(nutrition.fat), label: "Fat", unit: "g", color: Theme.culinary)
+                        macroColumn(value: scaledNutrient(nutrition.fiber), label: "Fiber", unit: "g", color: Theme.gold)
+                        macroColumn(value: scaledNutrient(nutrition.sugar), label: "Sugar", unit: "g", color: Theme.textTertiary)
+                    }
 
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(Theme.visual)
-                                .frame(width: max(geo.size.width * proteinFrac - 2, 0))
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(Theme.primary)
-                                .frame(width: max(geo.size.width * carbsFrac - 2, 0))
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(Theme.culinary)
-                                .frame(width: max(geo.size.width * fatFrac - 2, 0))
+                    let total = Double(nutrition.protein * 4 + nutrition.carbs * 4 + nutrition.fat * 9)
+                    if total > 0 {
+                        GeometryReader { geo in
+                            HStack(spacing: 2) {
+                                let proteinFrac = Double(nutrition.protein * 4) / total
+                                let carbsFrac = Double(nutrition.carbs * 4) / total
+                                let fatFrac = Double(nutrition.fat * 9) / total
+
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(Theme.visual)
+                                    .frame(width: max(geo.size.width * proteinFrac - 2, 0))
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(Theme.primary)
+                                    .frame(width: max(geo.size.width * carbsFrac - 2, 0))
+                                RoundedRectangle(cornerRadius: 3)
+                                    .fill(Theme.culinary)
+                                    .frame(width: max(geo.size.width * fatFrac - 2, 0))
+                            }
                         }
-                    }
-                    .frame(height: 6)
+                        .frame(height: 6)
 
-                    HStack(spacing: 16) {
-                        macroLegend(color: Theme.visual, label: "Protein")
-                        macroLegend(color: Theme.primary, label: "Carbs")
-                        macroLegend(color: Theme.culinary, label: "Fat")
+                        HStack(spacing: 16) {
+                            macroLegend(color: Theme.visual, label: "Protein")
+                            macroLegend(color: Theme.primary, label: "Carbs")
+                            macroLegend(color: Theme.culinary, label: "Fat")
+                        }
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textTertiary)
                     }
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textTertiary)
                 }
             }
             .padding(.horizontal, 20)

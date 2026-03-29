@@ -51,22 +51,6 @@ struct CompletionStep: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                     }
 
-                    // Share PDF
-                    Button {
-                        shareRecipePDF()
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "doc")
-                                .font(.system(size: 14))
-                            Text("Share PDF")
-                                .font(.system(size: 15, weight: .semibold))
-                        }
-                        .foregroundStyle(Theme.textPrimary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(Theme.buttonBg)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                    }
 
                     // Reimagine
                     Menu {
@@ -195,12 +179,6 @@ struct CompletionStep: View {
         presentShareSheet(items: [exportImage])
     }
 
-    private func shareRecipePDF() {
-        let pdfData = PDFExporter.generatePDF(for: recipe)
-        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(recipe.dishName).pdf")
-        try? pdfData.write(to: tempURL)
-        presentShareSheet(items: [tempURL])
-    }
 
     private func presentShareSheet(items: [Any]) {
         let activityVC = UIActivityViewController(activityItems: items, applicationActivities: nil)

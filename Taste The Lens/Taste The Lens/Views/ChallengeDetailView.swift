@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import Auth
 import os
 
 private let logger = makeLogger(category: "ChallengeDetail")
@@ -12,7 +13,15 @@ struct ChallengeDetailView: View {
     @State private var isLoading = true
     @State private var showSubmitSheet = false
     @State private var showAuthPrompt = false
+    @State private var hasSubmitted = false
     @State private var upvotedIds: Set<String> = []
+
+    // Winner management
+    @State private var localWinnerSubmissionId: String?
+    @State private var isCreator = false
+    @State private var selectedWinnerId: String?
+    @State private var showDeclareWinnerConfirmation = false
+    @State private var isDeclaring = false
 
     private let challengeService = ChallengeService.shared
     private let authManager = AuthManager.shared
@@ -22,6 +31,10 @@ struct ChallengeDetailView: View {
         GridItem(.flexible(), spacing: 12)
     ]
 
+    private var challengeIsEnded: Bool {
+        challenge.isEnded || localWinnerSubmissionId != nil
+    }
+
     var body: some View {
         ZStack {
             Theme.darkBg.ignoresSafeArea()
@@ -30,11 +43,15 @@ struct ChallengeDetailView: View {
                 VStack(spacing: 20) {
                     heroSection
                     challengeInfoSection
-                    acceptButton
+                    actionButton
                     submissionsSection
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 32)
+            }
+            .refreshable {
+                await loadSubmissions()
+                await checkIfSubmitted()
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -42,6 +59,7 @@ struct ChallengeDetailView: View {
         .toolbarColorScheme(.dark, for: .navigationBar)
         .sheet(isPresented: $showSubmitSheet) {
             ChallengeSubmitView(challenge: challenge) {
+                hasSubmitted = true
                 Task {
                     submissions = try await challengeService.fetchSubmissions(challengeId: challenge.id)
                 }
@@ -50,10 +68,23 @@ struct ChallengeDetailView: View {
         .sheet(isPresented: $showAuthPrompt) {
             AuthPromptSheet()
         }
+        .alert("Declare Winner?", isPresented: $showDeclareWinnerConfirmation) {
+            Button("Declare Winner", role: .destructive) {
+                Task { await declareWinner() }
+            }
+            Button("Cancel", role: .cancel) {
+                selectedWinnerId = nil
+            }
+        } message: {
+            Text("This cannot be undone. The challenge will be marked as completed.")
+        }
         .task {
+            localWinnerSubmissionId = challenge.winnerSubmissionId
+            isCreator = authManager.currentUser?.id.uuidString.lowercased() == challenge.creatorId
             async let loadImage: Void = loadDishImage()
             async let loadSubs: Void = loadSubmissions()
-            _ = await (loadImage, loadSubs)
+            async let checkSubmitted: Void = checkIfSubmitted()
+            _ = await (loadImage, loadSubs, checkSubmitted)
         }
     }
 
@@ -100,7 +131,12 @@ struct ChallengeDetailView: View {
             }
 
             HStack(spacing: 16) {
-                Label(timeRemaining, systemImage: "clock")
+                if localWinnerSubmissionId != nil {
+                    Label("Winner declared", systemImage: "trophy.fill")
+                        .foregroundStyle(Theme.gold)
+                } else {
+                    Label(timeRemaining, systemImage: "clock")
+                }
                 Label("\(submissions.count) submissions", systemImage: "person.2")
             }
             .font(.system(size: 13))
@@ -110,27 +146,44 @@ struct ChallengeDetailView: View {
         .glassCard()
     }
 
-    // MARK: - Accept Button
+    // MARK: - Action Button
 
-    private var acceptButton: some View {
-        Button {
-            HapticManager.medium()
-            if authManager.isAuthenticated {
-                showSubmitSheet = true
-            } else {
-                showAuthPrompt = true
-            }
-        } label: {
+    @ViewBuilder
+    private var actionButton: some View {
+        if challengeIsEnded {
+            // Challenge ended — show disabled state
             HStack(spacing: 8) {
-                Image(systemName: "flame.fill")
-                Text("Accept Challenge")
+                Image(systemName: localWinnerSubmissionId != nil ? "trophy.fill" : "clock.badge.checkmark")
+                Text(localWinnerSubmissionId != nil ? "Challenge Complete" : "Challenge Ended")
                     .font(.system(size: 16, weight: .bold))
             }
-            .foregroundStyle(Theme.darkBg)
+            .foregroundStyle(Theme.darkTextTertiary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(Theme.gold)
+            .background(Theme.darkSurface)
             .clipShape(RoundedRectangle(cornerRadius: 14))
+        } else {
+            // Active challenge — accept button
+            Button {
+                HapticManager.medium()
+                if authManager.isAuthenticated {
+                    showSubmitSheet = true
+                } else {
+                    showAuthPrompt = true
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: hasSubmitted ? "checkmark.circle.fill" : "flame.fill")
+                    Text(hasSubmitted ? "Submitted" : "Accept Challenge")
+                        .font(.system(size: 16, weight: .bold))
+                }
+                .foregroundStyle(hasSubmitted ? Theme.darkTextTertiary : Theme.darkBg)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(hasSubmitted ? Theme.darkSurface : Theme.gold)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+            }
+            .disabled(hasSubmitted)
         }
     }
 
@@ -164,7 +217,9 @@ struct ChallengeDetailView: View {
     }
 
     private func submissionCard(_ submission: ChallengeSubmissionDTO) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let isWinner = submission.id == localWinnerSubmissionId
+
+        return VStack(alignment: .leading, spacing: 8) {
             // Photo
             Color.clear
                 .frame(height: 140)
@@ -185,6 +240,32 @@ struct ChallengeDetailView: View {
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(alignment: .topTrailing) {
+                    if isWinner {
+                        Image(systemName: "trophy.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(Theme.gold)
+                            .padding(6)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
+                            .padding(6)
+                    }
+                }
+
+            // Winner label
+            if isWinner {
+                Text("Winner")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Theme.gold)
+            }
+
+            // Display name
+            if let name = submission.displayName, !name.isEmpty {
+                Text(name)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(isWinner ? Theme.gold : Theme.darkTextSecondary)
+                    .lineLimit(1)
+            }
 
             // Caption
             if let caption = submission.caption, !caption.isEmpty {
@@ -194,21 +275,42 @@ struct ChallengeDetailView: View {
                     .lineLimit(2)
             }
 
-            // Upvote
-            Button {
-                Task { await toggleUpvote(submission) }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: upvotedIds.contains(submission.id) ? "arrow.up.circle.fill" : "arrow.up.circle")
-                        .font(.system(size: 14))
-                    Text("\(submission.upvoteCount)")
-                        .font(.system(size: 13, weight: .medium))
+            // Upvote + Crown
+            HStack {
+                Button {
+                    Task { await toggleUpvote(submission) }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: upvotedIds.contains(submission.id) ? "arrow.up.circle.fill" : "arrow.up.circle")
+                            .font(.system(size: 14))
+                        Text("\(submission.upvoteCount)")
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .foregroundStyle(upvotedIds.contains(submission.id) ? Theme.gold : Theme.darkTextTertiary)
                 }
-                .foregroundStyle(upvotedIds.contains(submission.id) ? Theme.gold : Theme.darkTextTertiary)
+                .disabled(!authManager.isAuthenticated)
+
+                Spacer()
+
+                // Crown button for creator to declare winner (only after ended, not on own submissions)
+                if isCreator && challenge.isEnded && localWinnerSubmissionId == nil
+                    && submission.userId != authManager.currentUser?.id.uuidString.lowercased() {
+                    Button {
+                        selectedWinnerId = submission.id
+                        showDeclareWinnerConfirmation = true
+                    } label: {
+                        Image(systemName: "crown.fill")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.gold.opacity(0.7))
+                    }
+                }
             }
-            .disabled(!authManager.isAuthenticated)
         }
         .glassCard(cornerRadius: 14)
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(isWinner ? Theme.gold : .clear, lineWidth: 2)
+        )
         .task {
             if authManager.isAuthenticated {
                 let voted = await challengeService.hasUpvoted(submissionId: submission.id)
@@ -242,6 +344,12 @@ struct ChallengeDetailView: View {
         isLoading = false
     }
 
+    private func checkIfSubmitted() async {
+        if authManager.isAuthenticated {
+            hasSubmitted = await challengeService.hasSubmitted(challengeId: challenge.id)
+        }
+    }
+
     private func loadSubmissions() async {
         do {
             submissions = try await challengeService.fetchSubmissions(challengeId: challenge.id)
@@ -261,10 +369,27 @@ struct ChallengeDetailView: View {
                 try await challengeService.upvote(submissionId: submission.id)
                 upvotedIds.insert(submission.id)
             }
-            // Refresh submissions to get updated counts
             submissions = try await challengeService.fetchSubmissions(challengeId: challenge.id)
         } catch {
             logger.error("Upvote toggle failed: \(error)")
+        }
+    }
+
+    private func declareWinner() async {
+        guard let submissionId = selectedWinnerId else { return }
+        isDeclaring = true
+        defer { isDeclaring = false }
+
+        do {
+            try await challengeService.declareWinner(
+                challengeId: challenge.id,
+                submissionId: submissionId,
+                challengeTitle: challenge.title
+            )
+            localWinnerSubmissionId = submissionId
+            HapticManager.success()
+        } catch {
+            logger.error("Failed to declare winner: \(error)")
         }
     }
 }
