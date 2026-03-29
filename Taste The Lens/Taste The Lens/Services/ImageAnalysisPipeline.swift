@@ -4,6 +4,7 @@ import SwiftData
 import Supabase
 import ActivityKit
 import WidgetKit
+import Network
 import os
 
 private let logger = makeLogger(category: "Pipeline")
@@ -16,12 +17,14 @@ enum PipelineState: Equatable {
     case complete
     case failed(String)
     case rejected(String)
+    case insufficientCredits
 
     static func == (lhs: PipelineState, rhs: PipelineState) -> Bool {
         switch (lhs, rhs) {
         case (.idle, .idle), (.screeningImage, .screeningImage),
              (.analyzingImage, .analyzingImage),
-             (.generatingImage, .generatingImage), (.complete, .complete):
+             (.generatingImage, .generatingImage), (.complete, .complete),
+             (.insufficientCredits, .insufficientCredits):
             return true
         case (.failed(let a), .failed(let b)):
             return a == b
@@ -39,9 +42,11 @@ struct EdgeFunctionError: LocalizedError {
     let statusCode: Int
     let body: String
     var errorDescription: String? {
+        if statusCode == 402 { return "You've run out of credits. Purchase more to continue creating recipes." }
         if statusCode == 429 { return "Too many requests. Please wait a moment and try again." }
         return "Server error (\(statusCode)). Please try again."
     }
+    var isInsufficientCredits: Bool { statusCode == 402 }
     var isRateLimit: Bool { statusCode == 429 }
     var isRetryable: Bool { statusCode >= 500 }
 }
@@ -53,9 +58,17 @@ struct ScreenImageResponse: Codable {
     let reason: String
 }
 
+struct CreditBalance: Codable {
+    let purchased_credits: Int
+    let subscription_credits: Int
+    let rollover_credits: Int
+    let free_usage_count: Int
+}
+
 struct AnalyzeImageResponse: Codable {
     let recipe: ClaudeRecipeResponse
     let rawJSON: String
+    let credits: CreditBalance?
 }
 
 struct GenerateImageResponse: Codable {
@@ -105,6 +118,11 @@ final class ImageAnalysisPipeline: Identifiable {
     var isFusion: Bool = false
 
     private var supabase: SupabaseClient { SupabaseManager.shared.client }
+
+    /// Network connectivity check using the shared NetworkMonitor.
+    private func checkConnectivity() async -> Bool {
+        await MainActor.run { NetworkMonitor.shared.isConnected }
+    }
 
     /// Calls a Supabase edge function directly via URLSession, bypassing SDK auth handling.
     /// This prevents hangs when the SDK tries to resolve auth tokens for guests.
@@ -160,6 +178,11 @@ final class ImageAnalysisPipeline: Identifiable {
     }
 
     func process(image: UIImage, modelContext: ModelContext, hardExcluding: [String] = [], softAvoiding: [String] = [], budgetLimit: Double? = nil, courseType: String? = nil) async {
+        guard await checkConnectivity() else {
+            logger.error("No network connectivity")
+            state = .failed("No internet connection. Please check your network and try again.")
+            return
+        }
         logger.info("Pipeline started — hardExclude: \(hardExcluding), softAvoid: \(softAvoiding.count) items, budget: \(budgetLimit?.description ?? "none"), courseType: \(courseType ?? "none")")
         startTime = Date()
         await LiveActivityManager.shared.startGeneration()
@@ -220,6 +243,10 @@ final class ImageAnalysisPipeline: Identifiable {
                 try await withExponentialBackoff {
                     try await self.invokeEdgeFunction("analyze-image", body: analysisRequest)
                 }
+            }
+            // Update local credit cache from server response
+            if let credits = analysisResponse.credits {
+                UsageTracker.shared.updateFromServer(credits)
             }
             let recipeResponse = analysisResponse.recipe
             let rawJSON = analysisResponse.rawJSON
@@ -285,7 +312,8 @@ final class ImageAnalysisPipeline: Identifiable {
 
             completedRecipe = recipe
             state = .complete
-            UsageTracker.shared.incrementUsage()
+            // Guest users: track usage locally (server doesn't enforce for unauthenticated users)
+            UsageTracker.shared.incrementGuestUsage()
             await CommunityImpactService.shared.recordGeneration()
             if recipe.generatedDishImageData != nil {
                 updateWidgetData(recipe: recipe)
@@ -296,6 +324,10 @@ final class ImageAnalysisPipeline: Identifiable {
         } catch is CancellationError {
             logger.info("Pipeline cancelled")
             await LiveActivityManager.shared.cancelGeneration()
+        } catch let error as EdgeFunctionError where error.isInsufficientCredits {
+            logger.warning("Insufficient credits — prompting purchase")
+            state = .insufficientCredits
+            await LiveActivityManager.shared.endGeneration(dishName: nil)
         } catch {
             logger.error("Pipeline failed: \(error)")
             logger.error("Pipeline error type: \(type(of: error)), description: \(String(describing: error))")
@@ -310,6 +342,11 @@ final class ImageAnalysisPipeline: Identifiable {
         guard !images.isEmpty else {
             logger.error("Fusion pipeline called with no images")
             state = .failed("No images provided for fusion.")
+            return
+        }
+        guard await checkConnectivity() else {
+            logger.error("No network connectivity")
+            state = .failed("No internet connection. Please check your network and try again.")
             return
         }
         logger.info("Fusion pipeline started — \(images.count) images, hardExclude: \(hardExcluding), softAvoid: \(softAvoiding.count) items, budget: \(budgetLimit?.description ?? "none")")
@@ -371,6 +408,10 @@ final class ImageAnalysisPipeline: Identifiable {
                 try await withExponentialBackoff {
                     try await self.invokeEdgeFunction("analyze-image", body: analysisRequest)
                 }
+            }
+            // Update local credit cache from server response
+            if let credits = analysisResponse.credits {
+                UsageTracker.shared.updateFromServer(credits)
             }
             let recipeResponse = analysisResponse.recipe
             let rawJSON = analysisResponse.rawJSON
@@ -445,7 +486,8 @@ final class ImageAnalysisPipeline: Identifiable {
 
             completedRecipe = recipe
             state = .complete
-            UsageTracker.shared.incrementUsage()
+            // Guest users: track usage locally (server doesn't enforce for unauthenticated users)
+            UsageTracker.shared.incrementGuestUsage()
             await CommunityImpactService.shared.recordGeneration()
             if recipe.generatedDishImageData != nil {
                 updateWidgetData(recipe: recipe)
@@ -456,6 +498,10 @@ final class ImageAnalysisPipeline: Identifiable {
         } catch is CancellationError {
             logger.info("Fusion pipeline cancelled")
             await LiveActivityManager.shared.cancelGeneration()
+        } catch let error as EdgeFunctionError where error.isInsufficientCredits {
+            logger.warning("Insufficient credits — prompting purchase")
+            state = .insufficientCredits
+            await LiveActivityManager.shared.endGeneration(dishName: nil)
         } catch {
             logger.error("Fusion pipeline failed: \(error)")
             state = .failed(error.localizedDescription)

@@ -81,6 +81,8 @@ final class MainViewModel {
     var isOnboardingFlow = false
     var errorMessage: String?
     var showError = false
+    var noticeMessage: String?
+    var showNotice = false
     var pendingMenuCourse: (menuId: String, courseOrder: Int)?
 
     var showPrivacyNotice = false
@@ -110,6 +112,18 @@ final class MainViewModel {
         }
 
         if UsageTracker.shared.canGenerate {
+            // If offline, queue the photo instead of processing
+            if !NetworkMonitor.shared.isConnected {
+                logger.info("Offline — queueing photo for later processing")
+                if OfflineCaptureQueue.shared.enqueue(image: image, budgetLimit: budgetLimit, courseType: courseType) {
+                    HapticManager.light()
+                    showTemporaryNotice("Photo saved — will process when you're back online")
+                } else {
+                    showTemporaryError("Queue is full. Please process existing photos first.")
+                }
+                return
+            }
+
             logger.info("Photo received — transitioning to processing. pendingMenuCourse: \(String(describing: self.pendingMenuCourse))")
             capturedImage = image
             dishHistoryNames = DishHistory.recent(for: .current)
@@ -154,6 +168,19 @@ final class MainViewModel {
         }
 
         if UsageTracker.shared.canGenerate {
+            // If offline, queue the fusion photos instead of processing
+            if !NetworkMonitor.shared.isConnected {
+                logger.info("Offline — queueing \(images.count) fusion photos for later processing")
+                let additional = images.count > 1 ? Array(images.dropFirst()) : nil
+                if OfflineCaptureQueue.shared.enqueue(image: images[0], additionalImages: additional, budgetLimit: budgetLimit, courseType: courseType) {
+                    HapticManager.light()
+                    showTemporaryNotice("Photos saved — will process when you're back online")
+                } else {
+                    showTemporaryError("Queue is full. Please process existing photos first.")
+                }
+                return
+            }
+
             logger.info("Fusion photos received (\(images.count) images) — transitioning to processing")
             capturedImages = images
             capturedImage = images.first
@@ -306,6 +333,13 @@ final class MainViewModel {
             } else if case .rejected(let reason) = pipeline.state {
                 logger.info("Image rejected — \(reason)")
                 showTemporaryError(reason)
+            } else if case .insufficientCredits = pipeline.state {
+                logger.info("Insufficient credits — showing paywall")
+                withAnimation(reduceMotion ? .easeInOut(duration: 0.3) : .spring(response: 0.6, dampingFraction: 0.8)) {
+                    currentScreen = .dashboard
+                }
+                paywallContext = .outOfGenerations
+                showPaywall = true
             } else if case .failed(let message) = pipeline.state {
                 logger.error("Pipeline failed — showing error: \(message)")
                 showTemporaryError(message)
@@ -394,6 +428,7 @@ final class MainViewModel {
     // MARK: - Private
 
     private var errorDismissTask: Task<Void, Never>?
+    private var noticeDismissTask: Task<Void, Never>?
 
     private func showTemporaryError(_ message: String) {
         errorDismissTask?.cancel()
@@ -404,6 +439,17 @@ final class MainViewModel {
             guard !Task.isCancelled else { return }
             withAnimation { showError = false }
             currentScreen = .dashboard
+        }
+    }
+
+    func showTemporaryNotice(_ message: String) {
+        noticeDismissTask?.cancel()
+        noticeMessage = message
+        showNotice = true
+        noticeDismissTask = Task {
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            withAnimation { showNotice = false }
         }
     }
 }

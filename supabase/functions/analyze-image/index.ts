@@ -641,10 +641,69 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Server-side credit enforcement (authenticated users only)
+  let creditPool: string | null = null;
+  let creditBalances: Record<string, number> | null = null;
+
+  if (userId) {
+    // Read free generation limit from remote_config
+    let freeLimit = 5;
+    try {
+      const { data: configRow } = await supabase
+        .from("remote_config")
+        .select("value")
+        .eq("key", "free_generation_limit")
+        .single();
+      if (configRow?.value != null) {
+        freeLimit = typeof configRow.value === "number" ? configRow.value : parseInt(String(configRow.value), 10) || 5;
+      }
+    } catch {
+      // Fall back to default
+    }
+
+    const { data: deductResult, error: deductError } = await supabase.rpc("deduct_credit", {
+      p_user_id: userId,
+      p_free_limit: freeLimit,
+    });
+
+    if (deductError) {
+      console.error("deduct_credit RPC error:", deductError);
+      return Response.json({ error: "Credit check failed" }, { status: 500 });
+    }
+
+    if (!deductResult?.success) {
+      return Response.json(
+        {
+          error: "insufficient_credits",
+          message: "You've run out of credits.",
+          credits: {
+            purchased_credits: deductResult?.purchased_credits ?? 0,
+            subscription_credits: deductResult?.subscription_credits ?? 0,
+            rollover_credits: deductResult?.rollover_credits ?? 0,
+            free_usage_count: deductResult?.free_usage_count ?? deductResult?.free_limit ?? 0,
+          },
+        },
+        { status: 402 }
+      );
+    }
+
+    creditPool = deductResult.pool;
+    creditBalances = {
+      purchased_credits: deductResult.purchased_credits,
+      subscription_credits: deductResult.subscription_credits,
+      rollover_credits: deductResult.rollover_credits,
+      free_usage_count: deductResult.free_usage_count,
+    };
+  }
+
   try {
     const body: AnalyzeImageRequest = await req.json();
 
     if (!body.images || !Array.isArray(body.images) || body.images.length === 0) {
+      // Refund if we already deducted
+      if (userId && creditPool) {
+        await supabase.rpc("refund_credit", { p_user_id: userId, p_pool: creditPool }).catch(() => {});
+      }
       return Response.json(
         { error: "images array is required" },
         { status: 400 }
@@ -663,13 +722,23 @@ Deno.serve(async (req) => {
     }
 
     // Response size limit: 500KB for recipe JSON
-    const responseBody = JSON.stringify(result);
+    const responseWithCredits = creditBalances
+      ? { ...result, credits: creditBalances }
+      : result;
+    const responseBody = JSON.stringify(responseWithCredits);
     if (responseBody.length > 500_000) {
       console.error("Response too large:", responseBody.length);
       return Response.json({ error: "Response exceeded size limit" }, { status: 502 });
     }
     return new Response(responseBody, { headers: { "Content-Type": "application/json" } });
   } catch (error: unknown) {
+    // Refund credit on AI failure
+    if (userId && creditPool) {
+      await supabase.rpc("refund_credit", { p_user_id: userId, p_pool: creditPool }).catch((e: unknown) => {
+        console.error("refund_credit failed:", e);
+      });
+    }
+
     if (error && typeof error === "object" && "isRateLimit" in error) {
       const rl = error as { retryAfterSeconds: number; provider: string };
       return Response.json(

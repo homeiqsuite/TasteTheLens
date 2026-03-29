@@ -190,6 +190,7 @@ final class UsageTracker {
 
     /// Add purchased credits (from credit pack purchase)
     func addPurchasedCredits(_ count: Int) {
+        // Optimistic local update for immediate UI feedback
         purchasedCredits += count
         logger.info("Added \(count) purchased credits — total: \(self.purchasedCredits)")
 
@@ -205,6 +206,8 @@ final class UsageTracker {
                         .rpc("add_purchased_credits", params: params)
                         .execute()
                     logger.info("Remote purchased credits updated")
+                    // Sync back from server to ensure local cache matches
+                    await syncCreditsFromServer()
                 } catch {
                     logger.warning("Remote credit update failed: \(error)")
                 }
@@ -243,53 +246,25 @@ final class UsageTracker {
         }
     }
 
-    // MARK: - Usage Increment
+    // MARK: - Server Credit Updates
 
-    /// Deduct one credit/generation. Order: free gens → rollover → subscription → purchased
-    func incrementUsage() {
-        if EntitlementManager.shared.isSubscriber {
-            deductSubscriberCredit()
-        } else if remainingFreeGenerations > 0 {
-            deductFreeGeneration()
-        } else if purchasedCredits > 0 {
-            purchasedCredits -= 1
-            logger.info("Deducted 1 purchased credit — remaining: \(self.purchasedCredits)")
+    /// Update local credit cache from server-returned balances (called after analyze-image response)
+    func updateFromServer(_ balance: CreditBalance) {
+        purchasedCredits = balance.purchased_credits
+        subscriptionCredits = balance.subscription_credits
+        rolledOverCredits = balance.rollover_credits
+        if !EntitlementManager.shared.isSubscriber {
+            cachedServerCount = balance.free_usage_count
+            guestUsageCount = balance.free_usage_count
         }
+        logger.info("Credits updated from server — purchased: \(balance.purchased_credits), sub: \(balance.subscription_credits), rollover: \(balance.rollover_credits), free: \(balance.free_usage_count)")
     }
 
-    private func deductSubscriberCredit() {
-        if rolledOverCredits > 0 {
-            rolledOverCredits -= 1
-            logger.info("Deducted 1 rollover credit — remaining: \(self.rolledOverCredits)")
-        } else if subscriptionCredits > 0 {
-            subscriptionCredits -= 1
-            logger.info("Deducted 1 subscription credit — remaining: \(self.subscriptionCredits)")
-        } else if purchasedCredits > 0 {
-            purchasedCredits -= 1
-            logger.info("Deducted 1 purchased credit — remaining: \(self.purchasedCredits)")
-        }
-    }
-
-    private func deductFreeGeneration() {
+    /// Increment guest usage count locally (for unauthenticated users only, since server can't track them)
+    func incrementGuestUsage() {
+        guard !AuthManager.shared.isAuthenticated else { return }
         guestUsageCount += 1
-        if let cached = cachedServerCount {
-            cachedServerCount = cached + 1
-        }
-        logger.info("Free generation used — \(self.usageCount)/\(Self.freeLimit)")
-
-        if AuthManager.shared.isAuthenticated {
-            Task {
-                do {
-                    guard let userId = AuthManager.shared.currentUser?.id.uuidString else { return }
-                    try await SupabaseManager.shared.client
-                        .rpc("increment_usage", params: ["user_id_param": userId])
-                        .execute()
-                    logger.info("Remote usage updated successfully")
-                } catch {
-                    logger.warning("Remote usage update failed: \(error)")
-                }
-            }
-        }
+        logger.info("Guest generation used — \(self.guestUsageCount)/\(Self.freeLimit)")
     }
 
     // MARK: - Server Sync
@@ -389,6 +364,52 @@ final class UsageTracker {
             refreshSubscriptionCredits(tier: tier)
         } else {
             clearSubscriptionCredits()
+        }
+    }
+
+    // MARK: - One-Time Credit Migration
+
+    private static let migrationKey = "hasCompletedCreditMigrationV2"
+
+    /// Reconcile local credit values with server on first launch after update.
+    /// Uses MAX(server, client) for each pool to avoid penalizing legitimate users.
+    func reconcileCreditsIfNeeded() async {
+        guard AuthManager.shared.isAuthenticated,
+              !UserDefaults.standard.bool(forKey: Self.migrationKey),
+              let userId = AuthManager.shared.currentUser?.id else { return }
+
+        struct ReconcileResponse: Decodable {
+            let success: Bool
+            let purchased_credits: Int?
+            let subscription_credits: Int?
+            let rollover_credits: Int?
+            let free_usage_count: Int?
+        }
+
+        do {
+            let response = try await SupabaseManager.shared.client
+                .rpc("reconcile_credits", params: [
+                    "p_user_id": userId.uuidString,
+                    "p_client_purchased": String(purchasedCredits),
+                    "p_client_subscription": String(subscriptionCredits),
+                    "p_client_rollover": String(rolledOverCredits)
+                ])
+                .execute()
+
+            if let result = try? JSONDecoder().decode(ReconcileResponse.self, from: response.data),
+               result.success {
+                purchasedCredits = result.purchased_credits ?? purchasedCredits
+                subscriptionCredits = result.subscription_credits ?? subscriptionCredits
+                rolledOverCredits = result.rollover_credits ?? rolledOverCredits
+                if let freeCount = result.free_usage_count {
+                    cachedServerCount = freeCount
+                }
+                logger.info("Credit reconciliation complete — purchased: \(self.purchasedCredits), sub: \(self.subscriptionCredits), rollover: \(self.rolledOverCredits)")
+            }
+
+            UserDefaults.standard.set(true, forKey: Self.migrationKey)
+        } catch {
+            logger.warning("Credit reconciliation failed: \(error)")
         }
     }
 }

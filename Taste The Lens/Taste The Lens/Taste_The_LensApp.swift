@@ -11,12 +11,17 @@ struct Taste_The_LensApp: App {
         WindowGroup {
             ContentView()
                 .task {
+                    // Start network monitoring and load offline queue early
+                    _ = NetworkMonitor.shared
+                    _ = OfflineCaptureQueue.shared
                     RemoteConfigManager.shared.startPeriodicSync()
                     await AuthManager.shared.restoreSession()
                     // On authenticated launch, claim any unowned local recipes and sync
                     if AuthManager.shared.isAuthenticated {
                         // Re-check subscription status now that auth is ready
                         await StoreManager.shared.updateSubscriptionStatus()
+                        // One-time credit reconciliation (MAX of server vs client)
+                        await UsageTracker.shared.reconcileCreditsIfNeeded()
                         // Sync server-side usage and credits
                         await UsageTracker.shared.syncUsageFromServer()
                         await UsageTracker.shared.syncCreditsFromServer()
