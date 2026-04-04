@@ -78,6 +78,8 @@ final class MainViewModel {
     var hardExcludedDishNames: [String] = []
     var budgetLimit: Double?
     var courseType: String?
+    var cultureReimagineName: String?
+    var simplifyMode: Bool = false
     var isOnboardingFlow = false
     var errorMessage: String?
     var showError = false
@@ -205,6 +207,9 @@ final class MainViewModel {
             return
         }
 
+        // Cancel any lingering task from a previous run to prevent racing
+        processingTask?.cancel()
+
         processingTask = Task {
             logger.info("Processing task started")
 
@@ -236,9 +241,9 @@ final class MainViewModel {
 
             // Route to fusion pipeline if multiple images captured
             if let fusionImages = capturedImages, fusionImages.count >= 2 {
-                await pipeline.processFusion(images: fusionImages, modelContext: modelContext, hardExcluding: hardExcludedDishNames, softAvoiding: dishHistoryNames, budgetLimit: budgetLimit, courseType: courseType)
+                await pipeline.processFusion(images: fusionImages, modelContext: modelContext, hardExcluding: hardExcludedDishNames, softAvoiding: dishHistoryNames, budgetLimit: budgetLimit, courseType: courseType, cultureName: cultureReimagineName, simplifyMode: simplifyMode)
             } else {
-                await pipeline.process(image: image, modelContext: modelContext, hardExcluding: hardExcludedDishNames, softAvoiding: dishHistoryNames, budgetLimit: budgetLimit, courseType: courseType)
+                await pipeline.process(image: image, modelContext: modelContext, hardExcluding: hardExcludedDishNames, softAvoiding: dishHistoryNames, budgetLimit: budgetLimit, courseType: courseType, cultureName: cultureReimagineName, simplifyMode: simplifyMode)
             }
 
             logger.info("Pipeline finished — state: \(String(describing: self.pipeline.state))")
@@ -262,10 +267,25 @@ final class MainViewModel {
                         logger.error("Failed to save recipe to SwiftData: \(error)")
                     }
 
-                    // Sync recipe to Supabase BEFORE linking to course (foreign key requires it)
+                    // #3: Sync recipe to Supabase with retry (up to 3 attempts) before linking to course
                     if AuthManager.shared.isAuthenticated {
                         logger.info("Syncing recipe to Supabase before adding course...")
-                        await SyncManager.shared.syncRecipe(recipe)
+                        var syncError: Error?
+                        for attempt in 1...3 {
+                            await SyncManager.shared.syncRecipe(recipe)
+                            if recipe.remoteId != nil {
+                                syncError = nil
+                                break
+                            }
+                            syncError = TastingMenuError.menuNotFound // placeholder to signal failure
+                            if attempt < 3 {
+                                logger.warning("Sync attempt \(attempt) failed — retrying in 1s")
+                                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                            }
+                        }
+                        if syncError != nil {
+                            logger.error("Recipe sync failed after 3 attempts")
+                        }
                         logger.info("Recipe sync complete — remoteId: \(recipe.remoteId ?? "nil")")
                     }
 
@@ -289,6 +309,9 @@ final class MainViewModel {
                         )
                         logger.info("Course added to Supabase successfully")
                         HapticManager.success()
+                    } catch let error as TastingMenuError {
+                        logger.error("Failed to add course to menu: \(error.localizedDescription)")
+                        showTemporaryError(error.localizedDescription)
                     } catch {
                         logger.error("Failed to add course to menu: \(error)")
                     }
@@ -312,6 +335,7 @@ final class MainViewModel {
                         do {
                             try modelContext.save()
                             logger.info("Recipe auto-saved to SwiftData")
+                            showTemporaryNotice("Recipe saved")
 
                             // Track total recipe count for milestones
                             let count = UserDefaults.standard.integer(forKey: "totalRecipeCount")
@@ -332,9 +356,11 @@ final class MainViewModel {
                 }
             } else if case .rejected(let reason) = pipeline.state {
                 logger.info("Image rejected — \(reason)")
+                pendingMenuCourse = nil
                 showTemporaryError(reason)
             } else if case .insufficientCredits = pipeline.state {
                 logger.info("Insufficient credits — showing paywall")
+                pendingMenuCourse = nil
                 withAnimation(reduceMotion ? .easeInOut(duration: 0.3) : .spring(response: 0.6, dampingFraction: 0.8)) {
                     currentScreen = .dashboard
                 }
@@ -342,9 +368,15 @@ final class MainViewModel {
                 showPaywall = true
             } else if case .failed(let message) = pipeline.state {
                 logger.error("Pipeline failed — showing error: \(message)")
+                pendingMenuCourse = nil
                 showTemporaryError(message)
             }
 
+            // Reset transient per-generation state so the next capture starts clean
+            simplifyMode = false
+            cultureReimagineName = nil
+
+            self.processingTask = nil
         }
     }
 
@@ -354,6 +386,10 @@ final class MainViewModel {
         pipeline = ImageAnalysisPipeline()
         pendingMenuCourse = nil
         capturedImages = nil
+        simplifyMode = false
+        cultureReimagineName = nil
+        budgetLimit = nil
+        courseType = nil
         currentScreen = .camera
         logger.info("Processing cancelled by user")
     }
@@ -380,9 +416,36 @@ final class MainViewModel {
         dishHistoryNames = DishHistory.recent(for: .current)
         capturedImage = image
         courseType = notification.userInfo?["courseType"] as? String
+        cultureReimagineName = notification.userInfo?["cultureName"] as? String
         if let budget = notification.userInfo?["budgetLimit"] as? Double {
             budgetLimit = budget
         }
+        pipeline = ImageAnalysisPipeline()
+        lastGenerationStartTime = Date()
+        showTemporaryNotice("Generating a new version...")
+        currentScreen = .processing
+    }
+
+    // MARK: - Simplify
+
+    func handleSimplifyNotification(_ notification: Notification) {
+        if let showPaywallFlag = notification.userInfo?["showPaywall"] as? Bool, showPaywallFlag {
+            let contextRaw = notification.userInfo?["paywallContext"] as? String
+            paywallContext = contextRaw == "reimagination" ? .featureGated(.reimagination) : .outOfGenerations
+            showPaywall = true
+            return
+        }
+
+        guard let dishName = notification.userInfo?["excludeDishName"] as? String,
+              let imageData = notification.userInfo?["inspirationImageData"] as? Data,
+              let image = UIImage(data: imageData) else { return }
+
+        if !hardExcludedDishNames.contains(where: { $0.caseInsensitiveCompare(dishName) == .orderedSame }) {
+            hardExcludedDishNames.append(dishName)
+        }
+        dishHistoryNames = DishHistory.recent(for: .current)
+        capturedImage = image
+        simplifyMode = true
         pipeline = ImageAnalysisPipeline()
         lastGenerationStartTime = Date()
         currentScreen = .processing
@@ -420,6 +483,8 @@ final class MainViewModel {
         hardExcludedDishNames = []
         budgetLimit = nil
         courseType = nil
+        cultureReimagineName = nil
+        simplifyMode = false
         lastGenerationStartTime = nil
         isOnboardingFlow = false
         pipeline = ImageAnalysisPipeline()
@@ -434,11 +499,20 @@ final class MainViewModel {
         errorDismissTask?.cancel()
         errorMessage = message
         showError = true
+        HapticManager.error()
+        let shouldNavigate = currentScreen == .processing
+        // Release captured image memory when navigating away on error
+        if shouldNavigate {
+            capturedImage = nil
+            capturedImages = nil
+        }
         errorDismissTask = Task {
-            try? await Task.sleep(for: .seconds(3))
+            try? await Task.sleep(for: .seconds(5))
             guard !Task.isCancelled else { return }
             withAnimation { showError = false }
-            currentScreen = .dashboard
+            if shouldNavigate {
+                currentScreen = .dashboard
+            }
         }
     }
 

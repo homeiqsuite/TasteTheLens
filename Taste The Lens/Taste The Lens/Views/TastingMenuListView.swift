@@ -14,7 +14,11 @@ struct TastingMenuListView: View {
     @State private var joinError: String?
     @State private var isJoining = false
     @State private var menuToDelete: TastingMenuDTO?
+    @State private var menuToLeave: TastingMenuDTO?
     @State private var showDeleteConfirmation = false
+    @State private var showLeaveConfirmation = false
+    // #24: Cache participant counts for delete confirmation
+    @State private var participantCounts: [String: Int] = [:]
 
     private let authManager = AuthManager.shared
     private let menuService = TastingMenuService.shared
@@ -98,12 +102,24 @@ struct TastingMenuListView: View {
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
-                            if menu.creatorId == authManager.currentUser?.id.uuidString {
+                            let isCreator = menu.creatorId == authManager.currentUser?.id.uuidString
+
+                            if isCreator {
                                 Button(role: .destructive) {
                                     menuToDelete = menu
                                     showDeleteConfirmation = true
+                                    // #24: Pre-fetch participant count for warning message
+                                    Task { await prefetchParticipantCount(menu) }
                                 } label: {
                                     Label("Delete Menu", systemImage: "trash")
+                                }
+                            } else {
+                                // #22: Participants can leave the menu
+                                Button(role: .destructive) {
+                                    menuToLeave = menu
+                                    showLeaveConfirmation = true
+                                } label: {
+                                    Label("Leave Menu", systemImage: "person.badge.minus")
                                 }
                             }
                         }
@@ -117,6 +133,7 @@ struct TastingMenuListView: View {
         .refreshable {
             try? await menuService.fetchMyMenus()
         }
+        // #24: Delete confirmation with participant count warning
         .alert("Delete Menu", isPresented: $showDeleteConfirmation, presenting: menuToDelete) { menu in
             Button("Delete", role: .destructive) {
                 Task {
@@ -126,7 +143,29 @@ struct TastingMenuListView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: { menu in
-            Text("Are you sure you want to delete \"\(menu.theme)\"? This cannot be undone.")
+            let count = participantCounts[menu.id] ?? 0
+            let otherChefs = count > 1 ? count - 1 : 0
+            if otherChefs > 0 {
+                Text("Deleting \"\(menu.theme)\" will also remove \(otherChefs) other chef\(otherChefs == 1 ? "" : "s") from the menu. This cannot be undone.")
+            } else {
+                Text("Are you sure you want to delete \"\(menu.theme)\"? This cannot be undone.")
+            }
+        }
+        // #22: Leave confirmation
+        .alert("Leave Menu", isPresented: $showLeaveConfirmation, presenting: menuToLeave) { menu in
+            Button("Leave", role: .destructive) {
+                Task {
+                    do {
+                        try await menuService.leaveMenu(id: menu.id)
+                        HapticManager.success()
+                    } catch {
+                        logger.error("Failed to leave menu: \(error)")
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { menu in
+            Text("You'll be removed from \"\(menu.theme)\" and any course you added will remain. You can rejoin with an invite link.")
         }
     }
 
@@ -142,6 +181,13 @@ struct TastingMenuListView: View {
 
             HStack(spacing: 16) {
                 Label("\(menu.courseCount) courses", systemImage: "menucard")
+
+                // Show event date if set
+                if let eventDateStr = menu.eventDate,
+                   let eventDate = ISO8601DateFormatter().date(from: eventDateStr) {
+                    Label(eventDate.formatted(date: .abbreviated, time: .omitted), systemImage: "calendar")
+                }
+
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12))
@@ -154,12 +200,21 @@ struct TastingMenuListView: View {
     }
 
     private func statusBadge(_ status: String) -> some View {
-        Text(status.capitalized)
+        Text(statusLabel(status))
             .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(statusColor(status))
             .padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(Capsule().fill(statusColor(status).opacity(0.15)))
+    }
+
+    private func statusLabel(_ status: String) -> String {
+        switch status {
+        case "draft": return "Draft"
+        case "in_progress": return "In Progress"
+        case "published": return "Published"
+        default: return status.capitalized
+        }
     }
 
     private func statusColor(_ status: String) -> Color {
@@ -171,64 +226,136 @@ struct TastingMenuListView: View {
         }
     }
 
-    // MARK: - Join Tab
+    // #24
+    private func prefetchParticipantCount(_ menu: TastingMenuDTO) async {
+        if let participants = try? await menuService.fetchParticipants(menuId: menu.id) {
+            participantCounts[menu.id] = participants.count
+        }
+    }
+
+    // MARK: - Join Tab (#18)
 
     private var joinTab: some View {
-        VStack(spacing: 24) {
-            Spacer()
+        ScrollView {
+            VStack(spacing: 28) {
+                Spacer().frame(height: 8)
 
-            Image(systemName: "link.badge.plus")
-                .font(.system(size: 48))
-                .foregroundStyle(Theme.darkTextHint)
+                // Illustration + heading
+                VStack(spacing: 12) {
+                    Image(systemName: "person.2.badge.gearshape")
+                        .font(.system(size: 52))
+                        .foregroundStyle(Theme.gold.opacity(0.7))
 
-            Text("Enter an invite code to join a tasting menu")
-                .font(.system(size: 15))
-                .foregroundStyle(Theme.darkTextTertiary)
-                .multilineTextAlignment(.center)
+                    Text("Join a Tasting Menu")
+                        .font(.system(size: 20, weight: .bold, design: .serif))
+                        .foregroundStyle(Theme.darkTextPrimary)
 
-            VStack(spacing: 12) {
-                TextField("Invite code", text: $inviteCode)
-                    .font(.system(size: 16))
-                    .foregroundStyle(Theme.darkTextPrimary)
-                    .padding(14)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Theme.darkSurface)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Theme.darkStroke, lineWidth: 0.5)
-                    )
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-
-                Button {
-                    Task { await joinWithCode() }
-                } label: {
-                    HStack {
-                        if isJoining { ProgressView().tint(Theme.darkBg) }
-                        Text(isJoining ? "Joining..." : "Join Menu")
-                            .font(.system(size: 15, weight: .bold))
-                    }
-                    .foregroundStyle(Theme.darkBg)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(!inviteCode.isEmpty ? Theme.gold : Theme.gold.opacity(0.3))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    Text("Enter the invite code shared by the menu creator to join their collaborative dinner.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.darkTextTertiary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 8)
                 }
-                .disabled(inviteCode.isEmpty || isJoining)
 
-                if let error = joinError {
-                    Text(error)
-                        .font(.system(size: 13))
-                        .foregroundStyle(.red.opacity(0.7))
+                // How it works steps
+                howItWorksSection
+
+                // Input and button
+                VStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Invite Code")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(Theme.darkTextTertiary)
+                            Spacer()
+                            Text("e.g. a3f9b2c1")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(Theme.darkTextHint)
+                        }
+
+                        TextField("Enter invite code", text: $inviteCode)
+                            .font(.system(size: 16, design: .monospaced))
+                            .foregroundStyle(Theme.darkTextPrimary)
+                            .padding(14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Theme.darkSurface)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Theme.darkStroke, lineWidth: 0.5)
+                            )
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                    }
+
+                    Button {
+                        if authManager.isAuthenticated {
+                            Task { await joinWithCode() }
+                        } else {
+                            joinError = "Sign in to join a tasting menu"
+                        }
+                    } label: {
+                        HStack {
+                            if isJoining { ProgressView().tint(Theme.darkBg) }
+                            Text(isJoining ? "Joining..." : "Join Menu")
+                                .font(.system(size: 15, weight: .bold))
+                        }
+                        .foregroundStyle(Theme.darkBg)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(!inviteCode.isEmpty ? Theme.gold : Theme.gold.opacity(0.3))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .disabled(inviteCode.isEmpty || isJoining)
+
+                    if let error = joinError {
+                        Text(error)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.red.opacity(0.7))
+                            .multilineTextAlignment(.center)
+                    }
                 }
             }
             .padding(.horizontal, 24)
-
-            Spacer()
+            .padding(.bottom, 40)
         }
-        .padding(.horizontal, 16)
+    }
+
+    private var howItWorksSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("How it works")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Theme.darkTextTertiary)
+                .textCase(.uppercase)
+                .tracking(1)
+
+            ForEach([
+                ("1", "Get an invite code from a friend who created a tasting menu"),
+                ("2", "Enter the code above and tap Join Menu"),
+                ("3", "Capture a photo to add your course to the menu"),
+            ], id: \.0) { step, desc in
+                HStack(alignment: .top, spacing: 12) {
+                    Text(step)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Theme.darkBg)
+                        .frame(width: 22, height: 22)
+                        .background(Circle().fill(Theme.gold))
+
+                    Text(desc)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.darkTextTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer()
+                }
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Theme.darkSurface)
+        )
     }
 
     private func joinWithCode() async {
@@ -245,7 +372,14 @@ struct TastingMenuListView: View {
             inviteCode = ""
             selectedTab = 0
         } catch {
-            joinError = "Invalid invite code or menu not found"
+            let msg = error.localizedDescription
+            if msg.contains("expired") {
+                joinError = "This invite link has expired. Ask the menu creator for a new one."
+            } else if msg.contains("published") {
+                joinError = "This menu has already been published and is no longer accepting new chefs."
+            } else {
+                joinError = "Invalid invite code or menu not found."
+            }
         }
         isJoining = false
     }

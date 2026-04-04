@@ -78,6 +78,27 @@ struct ContentView: View {
                 }
             }
 
+            // Offline banner
+            if !NetworkMonitor.shared.isConnected || NetworkMonitor.shared.wasDisconnected || OfflineCaptureQueue.shared.queueCount > 0 {
+                OfflineBannerView(
+                    isConnected: NetworkMonitor.shared.isConnected,
+                    wasDisconnected: NetworkMonitor.shared.wasDisconnected,
+                    queueCount: OfflineCaptureQueue.shared.queueCount,
+                    isProcessingQueue: OfflineCaptureQueue.shared.isProcessingQueue,
+                    processingIndex: OfflineCaptureQueue.shared.processingIndex,
+                    onProcess: {
+                        Task {
+                            await OfflineCaptureQueue.shared.processQueue(modelContext: modelContext)
+                        }
+                    }
+                )
+            }
+
+            // Notice toast (non-navigating, for queue confirmations)
+            if vm.showNotice, let message = vm.noticeMessage {
+                noticeToast(message: message)
+            }
+
             // Error toast
             if vm.showError, let message = vm.errorMessage {
                 errorToast(message: message)
@@ -99,7 +120,11 @@ struct ContentView: View {
         .onChange(of: showOnboarding) { _, newValue in
             if !newValue {
                 hasSeenOnboarding = true
-                // After onboarding, take user straight to camera
+                if AuthManager.shared.isAuthenticated {
+                    // User signed in during onboarding — stay on dashboard
+                    return
+                }
+                // Normal onboarding completion — take user to camera
                 withAnimation(.spring(response: 0.6, dampingFraction: 0.85)) {
                     vm.currentScreen = .camera
                 }
@@ -139,18 +164,29 @@ struct ContentView: View {
         .onChange(of: AuthManager.shared.isAuthenticated) { wasAuthenticated, isNowAuthenticated in
             if !wasAuthenticated && isNowAuthenticated {
                 Task {
-                    await StoreManager.shared.updateSubscriptionStatus()
+                    await StoreManager.shared.checkLegacySubscription()
+                    await UsageTracker.shared.reconcileCreditsIfNeeded()
+                    await UsageTracker.shared.claimWelcomeCreditsIfNeeded()
                     await UsageTracker.shared.syncUsageFromServer()
                     await UsageTracker.shared.syncCreditsFromServer()
                     await SyncManager.shared.claimLocalRecipes(modelContext: modelContext)
                     await SyncManager.shared.syncAll(modelContext: modelContext)
                     await PushNotificationService.shared.requestPermission()
                     await PushNotificationService.shared.loadPreferences()
+                    await SyncManager.shared.pullDietaryPreferences()
 
-                    if AuthManager.shared.needsDisplayName {
+                    if AuthManager.shared.needsDisplayName && !showDisplayNamePrompt {
                         showDisplayNamePrompt = true
                     }
                 }
+            } else if wasAuthenticated && !isNowAuthenticated {
+                // Sign-out: reset all user-specific state synchronously.
+                UsageTracker.shared.resetForSignOut()
+                // Reset per-user @AppStorage flags so the next user gets a fresh experience
+                UserDefaults.standard.removeObject(forKey: "hasSeenOnboarding")
+                hasSeenOnboarding = false
+                UserDefaults.standard.removeObject(forKey: "hasSeenAuthPrompt")
+                UserDefaults.standard.removeObject(forKey: "hasSeenOfflineQueueDisclaimer")
             }
         }
         .sheet(isPresented: $showDisplayNamePrompt) {
@@ -159,13 +195,30 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .reimagineRecipe)) { notification in
             vm.handleReimaginNotification(notification)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .simplifyRecipe)) { notification in
+            vm.handleSimplifyNotification(notification)
+        }
         .onReceive(NotificationCenter.default.publisher(for: .addMenuCourse)) { notification in
             vm.handleAddMenuCourse(notification)
+        }
+        // #2: Clear stale pendingMenuCourse when app returns from background and we're not processing
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            if vm.currentScreen != .processing {
+                vm.pendingMenuCourse = nil
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .openTastingMenuInvite)) { notification in
             if let code = notification.userInfo?["inviteCode"] as? String {
                 vm.deepLinkedInviteCode = code
                 vm.showTastingMenus = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .networkStatusChanged)) { _ in
+            if NetworkMonitor.shared.isConnected {
+                // Sync existing recipes on reconnect (queued photos require explicit user action)
+                Task {
+                    await SyncManager.shared.syncAll(modelContext: modelContext)
+                }
             }
         }
     }
@@ -414,6 +467,41 @@ struct ContentView: View {
                     }
                 }
         }
+    }
+
+    // MARK: - Notice Toast
+
+    private func noticeToast(message: String) -> some View {
+        VStack {
+            Spacer()
+
+            HStack(spacing: 10) {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Text(message)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Theme.darkTextPrimary)
+                    .lineLimit(2)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Theme.darkCardSurface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(Theme.darkCardBorder, lineWidth: 0.5)
+                    )
+            )
+            .padding(.horizontal, 24)
+            .padding(.bottom, 100)
+            .onTapGesture {
+                withAnimation { vm.showNotice = false }
+            }
+            .accessibilityLabel(message)
+        }
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .animation(.spring(response: 0.4), value: vm.showNotice)
     }
 
     // MARK: - Error Toast

@@ -36,6 +36,8 @@ struct TastingMenuDTO: Codable, Identifiable {
     let inviteCode: String
     let createdAt: String
     let updatedAt: String
+    let eventDate: String?          // #14: Optional event/dinner date
+    let inviteExpiresAt: String?    // #6: Optional invite code expiry
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -46,6 +48,8 @@ struct TastingMenuDTO: Codable, Identifiable {
         case inviteCode = "invite_code"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case eventDate = "event_date"
+        case inviteExpiresAt = "invite_expires_at"
     }
 }
 

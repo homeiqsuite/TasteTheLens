@@ -7,12 +7,11 @@ private let logger = makeLogger(category: "PublishedMenu")
 struct PublishedMenuView: View {
     let menu: TastingMenuDTO
     let courses: [MenuCourseDTO]
+    // #10: Accept pre-fetched recipes from DetailView to avoid double-downloading
+    var preloadedRecipes: [String: Recipe] = [:]
 
     @Environment(\.modelContext) private var modelContext
     @State private var loadedRecipes: [Int: Recipe] = [:]
-    @State private var remoteRecipes: [String: Recipe] = [:]
-    @State private var showSharePDF = false
-    @State private var pdfData: Data?
 
     var body: some View {
         ZStack {
@@ -40,6 +39,15 @@ struct PublishedMenuView: View {
                         Text("\(courses.count) Courses")
                             .font(.system(size: 14))
                             .foregroundStyle(Theme.darkTextTertiary)
+
+                        // Show event date if set
+                        if let eventDateStr = menu.eventDate,
+                           let eventDate = ISO8601DateFormatter().date(from: eventDateStr) {
+                            let formatted = eventDate.formatted(date: .long, time: .omitted)
+                            Text(formatted)
+                                .font(.system(size: 13))
+                                .foregroundStyle(Theme.gold.opacity(0.7))
+                        }
                     }
                     .padding(.top, 32)
                     .padding(.bottom, 40)
@@ -60,8 +68,9 @@ struct PublishedMenuView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: 12) {
+                    // #21: Share menu PDF (not invite) on published menus
                     Button {
-                        shareInvite()
+                        shareMenuPDF()
                     } label: {
                         Image(systemName: "square.and.arrow.up")
                             .foregroundStyle(Theme.gold)
@@ -78,7 +87,11 @@ struct PublishedMenuView: View {
         }
         .task {
             loadAllRecipes()
-            await fetchRemoteRecipes()
+            // #10: Only fetch remotely for courses not already covered by preloaded data
+            let missingIds = courses.compactMap(\.recipeId).filter { preloadedRecipes[$0] == nil }
+            if !missingIds.isEmpty {
+                await fetchRemoteRecipes()
+            }
         }
     }
 
@@ -144,7 +157,14 @@ struct PublishedMenuView: View {
     private func loadAllRecipes() {
         for course in courses {
             guard let recipeIdString = course.recipeId else { continue }
-            // Look up by remoteId in local SwiftData first
+
+            // Check preloaded first (#10)
+            if let preloaded = preloadedRecipes[recipeIdString] {
+                loadedRecipes[course.courseOrder] = preloaded
+                continue
+            }
+
+            // Fall back to local SwiftData
             let descriptor = FetchDescriptor<Recipe>(predicate: #Predicate { $0.remoteId == recipeIdString })
             if let recipe = try? modelContext.fetch(descriptor).first {
                 loadedRecipes[course.courseOrder] = recipe
@@ -155,9 +175,7 @@ struct PublishedMenuView: View {
     private func fetchRemoteRecipes() async {
         do {
             let fetched = try await TastingMenuService.shared.fetchMenuRecipes(menuId: menu.id)
-            remoteRecipes = fetched
 
-            // Fill any courses that weren't found locally
             for course in courses {
                 guard let recipeId = course.recipeId,
                       loadedRecipes[course.courseOrder] == nil,
@@ -169,17 +187,22 @@ struct PublishedMenuView: View {
         }
     }
 
-    private func shareInvite() {
-        if let url = DeepLinkHandler.url(forMenuInvite: menu.inviteCode) {
-            let activityVC = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               var topVC = windowScene.windows.first?.rootViewController {
-                while let presented = topVC.presentedViewController {
-                    topVC = presented
-                }
-                topVC.present(activityVC, animated: true)
+    // #21: Share a text summary of the menu (not the invite link)
+    private func shareMenuPDF() {
+        var courseData: [(courseType: String, recipe: Recipe)] = []
+        for course in courses {
+            if let recipe = loadedRecipes[course.courseOrder] {
+                courseData.append((courseType: course.courseType, recipe: recipe))
             }
         }
+        guard !courseData.isEmpty else { return }
+
+        let data = PDFExporter.generateMenuPDF(theme: menu.theme, courses: courseData)
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("TastingMenu-\(menu.theme).pdf")
+        try? data.write(to: tempURL)
+
+        let activityVC = UIActivityViewController(activityItems: [tempURL], applicationActivities: nil)
+        presentActivityVC(activityVC)
     }
 
     private func exportPDF() {
@@ -196,6 +219,10 @@ struct PublishedMenuView: View {
         try? data.write(to: tempURL)
 
         let activityVC = UIActivityViewController(activityItems: [tempURL], applicationActivities: nil)
+        presentActivityVC(activityVC)
+    }
+
+    private func presentActivityVC(_ activityVC: UIActivityViewController) {
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            var topVC = windowScene.windows.first?.rootViewController {
             while let presented = topVC.presentedViewController {
