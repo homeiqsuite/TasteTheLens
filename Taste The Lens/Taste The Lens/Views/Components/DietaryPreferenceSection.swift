@@ -1,7 +1,9 @@
 import SwiftUI
 
 struct DietaryPreferenceSection: View {
+    var showSaveConfirmation: Bool = false
     @State private var selected: Set<DietaryPreference> = Set(DietaryPreference.current())
+    @State private var recentlySaved: DietaryPreference?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -43,6 +45,14 @@ struct DietaryPreferenceSection: View {
                 selected.insert(pref)
             }
             DietaryPreference.save(Array(selected))
+            Task { await SyncManager.shared.syncDietaryPreferences() }
+            if showSaveConfirmation {
+                withAnimation(.easeInOut(duration: 0.15)) { recentlySaved = pref }
+                Task {
+                    try? await Task.sleep(for: .milliseconds(800))
+                    withAnimation(.easeOut(duration: 0.2)) { recentlySaved = nil }
+                }
+            }
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: pref.icon)
@@ -59,6 +69,10 @@ struct DietaryPreferenceSection: View {
             .overlay(
                 Capsule()
                     .stroke(isSelected ? Theme.primary : Theme.cardBorder, lineWidth: 1)
+            )
+            .overlay(
+                Capsule()
+                    .stroke(recentlySaved == pref ? .green.opacity(0.6) : .clear, lineWidth: 1.5)
             )
             .foregroundStyle(isSelected ? Theme.primary : Theme.textSecondary)
         }

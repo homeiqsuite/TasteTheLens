@@ -13,6 +13,7 @@ struct DashboardView: View {
     @State private var showChefPicker = false
     @State private var progressAnimated = false
     @State private var heroGlowPulse = false
+    @State private var showPaywall = false
 
     // Hero card animations
     @State private var particlesAnimating = false
@@ -22,7 +23,9 @@ struct DashboardView: View {
     @State private var iconAppeared = false
     @State private var textAppeared = false
     @State private var ctaAppeared = false
+    @State private var shimmerTask: Task<Void, Never>?
     @AppStorage("selectedChef") private var selectedChef = "default"
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let authManager = AuthManager.shared
     private let challengeService = ChallengeService.shared
@@ -41,7 +44,7 @@ struct DashboardView: View {
                 heroCard
                 recentRecipesSection
                 chefModeCard
-                if RemoteConfigManager.shared.gauntletEnabled && EntitlementManager.shared.hasAccess(to: .fullChallenges) {
+                if RemoteConfigManager.shared.gauntletEnabled {
                     challengesSection
                 }
                 if RemoteConfigManager.shared.tastingMenusEnabled && EntitlementManager.shared.hasAccess(to: .fullTastingMenus) {
@@ -88,6 +91,9 @@ struct DashboardView: View {
                 .presentationDetents([.medium])
             }
         }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView(context: .featureGated(.fullChallenges))
+        }
         .task {
             await loadDashboardData()
         }
@@ -95,7 +101,7 @@ struct DashboardView: View {
 
     private func loadDashboardData() async {
         async let statsTask: () = impactService.fetchStats()
-        async let challengesTask: () = { try? await challengeService.fetchChallenges(filter: .trending) }()
+        async let challengesTask: () = challengeService.fetchDashboardChallenges()
         async let menusTask: () = {
             if authManager.isAuthenticated {
                 try? await menuService.fetchMyMenus()
@@ -108,8 +114,7 @@ struct DashboardView: View {
         async let dashboardTask: () = loadDashboardData()
         async let creditsTask: () = UsageTracker.shared.syncCreditsFromServer()
         async let usageTask: () = UsageTracker.shared.syncUsageFromServer()
-        async let subscriptionTask: () = StoreManager.shared.updateSubscriptionStatus()
-        _ = await (dashboardTask, creditsTask, usageTask, subscriptionTask)
+        _ = await (dashboardTask, creditsTask, usageTask)
         logger.info("Dashboard refreshed")
     }
 
@@ -177,7 +182,7 @@ struct DashboardView: View {
                                 )
                             )
                             .animation(
-                                .easeInOut(duration: 6.0).repeatForever(autoreverses: true),
+                                reduceMotion ? nil : .easeInOut(duration: 6.0).repeatForever(autoreverses: true),
                                 value: gradientBreathing
                             )
                     )
@@ -220,7 +225,7 @@ struct DashboardView: View {
                             .blur(radius: 20)
                             .scaleEffect(heroGlowPulse ? 1.1 : 0.9)
                             .animation(
-                                .easeInOut(duration: 2.0).repeatForever(autoreverses: true),
+                                reduceMotion ? nil : .easeInOut(duration: 2.0).repeatForever(autoreverses: true),
                                 value: heroGlowPulse
                             )
 
@@ -287,15 +292,26 @@ struct DashboardView: View {
         }
         .buttonStyle(PremiumCardButtonStyle())
         .onAppear {
-            heroGlowPulse = true
-            particlesAnimating = true
-            gradientBreathing = true
+            heroGlowPulse = !reduceMotion
+            particlesAnimating = !reduceMotion
+            gradientBreathing = !reduceMotion
             startEntranceAnimation()
             startShimmerLoop()
+        }
+        .onDisappear {
+            shimmerTask?.cancel()
+            shimmerTask = nil
         }
     }
 
     private func startEntranceAnimation() {
+        if reduceMotion {
+            cardAppeared = true
+            iconAppeared = true
+            textAppeared = true
+            ctaAppeared = true
+            return
+        }
         withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
             cardAppeared = true
         }
@@ -311,20 +327,21 @@ struct DashboardView: View {
     }
 
     private func startShimmerLoop() {
-        // Initial delay before first shimmer
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            runShimmer()
-        }
-    }
-
-    private func runShimmer() {
-        shimmerOffset = -200
-        withAnimation(.easeInOut(duration: 0.8)) {
-            shimmerOffset = 200
-        }
-        // Repeat every 4 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
-            runShimmer()
+        guard !reduceMotion else { return }
+        shimmerTask?.cancel()
+        shimmerTask = Task {
+            try? await Task.sleep(for: .seconds(1.0))
+            var elapsed = 0.0
+            while !Task.isCancelled && elapsed < 10.0 {
+                await MainActor.run {
+                    shimmerOffset = -200
+                    withAnimation(.easeInOut(duration: 0.8)) {
+                        shimmerOffset = 200
+                    }
+                }
+                try? await Task.sleep(for: .seconds(4.0))
+                elapsed += 4.0
+            }
         }
     }
 
@@ -457,32 +474,71 @@ struct DashboardView: View {
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(chefTheme.textPrimary)
                 Spacer()
-                if !challengeService.challenges.isEmpty {
-                    Button {
+                Button {
+                    if EntitlementManager.shared.hasAccess(to: .fullChallenges) {
                         vm.showChallengeFeed = true
-                    } label: {
-                        Text("See All")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(chefTheme.accent)
+                    } else {
+                        showPaywall = true
                     }
+                } label: {
+                    Text("See All")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(chefTheme.accent)
                 }
             }
 
-            if challengeService.challenges.isEmpty {
-                challengeEmptyState
-            } else {
+            switch challengeService.dashboardState {
+            case .loading:
+                ProgressView()
+                    .tint(chefTheme.accent)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 24)
+            case .activeChallenges:
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
-                        ForEach(Array(challengeService.challenges.prefix(5))) { challenge in
+                        ForEach(challengeService.dashboardChallenges) { challenge in
                             challengePreviewCard(challenge)
                         }
                     }
                 }
+            case .noActiveButHasPast:
+                challengeEmptyStatePast
+            case .noChallengesAtAll:
+                challengeEmptyStateNone
             }
         }
     }
 
-    private var challengeEmptyState: some View {
+    private var challengeEmptyStatePast: some View {
+        VStack(spacing: 12) {
+            Circle()
+                .fill(chefTheme.accent.opacity(0.12))
+                .frame(width: 52, height: 52)
+                .overlay(
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 22))
+                        .foregroundStyle(chefTheme.accent)
+                )
+
+            VStack(spacing: 4) {
+                Text("No active challenges")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(chefTheme.textSecondary)
+                Text("Check back soon or browse past challenges")
+                    .font(.system(size: 13))
+                    .foregroundStyle(chefTheme.textTertiary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(chefTheme.cardBg)
+                .shadow(color: chefTheme.cardShadow, radius: 12, y: 4)
+        )
+    }
+
+    private var challengeEmptyStateNone: some View {
         VStack(spacing: 12) {
             Circle()
                 .fill(chefTheme.accent.opacity(0.12))
@@ -513,7 +569,11 @@ struct DashboardView: View {
 
     private func challengePreviewCard(_ challenge: ChallengeDTO) -> some View {
         Button {
-            vm.showChallengeFeed = true
+            if EntitlementManager.shared.hasAccess(to: .fullChallenges) {
+                vm.showChallengeFeed = true
+            } else {
+                showPaywall = true
+            }
         } label: {
             ChallengePreviewThumbnail(challenge: challenge, chefTheme: chefTheme)
         }

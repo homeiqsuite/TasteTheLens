@@ -4,13 +4,14 @@ import AVFoundation
 enum OnboardingPage: Int, CaseIterable {
     case welcome = 0
     case chef = 1
-    case camera = 2
+    case preferences = 2
+    case camera = 3
 }
 
 struct OnboardingView: View {
     @Binding var isPresented: Bool
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
-    @AppStorage("selectedChef") private var selectedChef = "default"
+    @AppStorage("selectedChef") private var selectedChef = "beginner"
 
     @State private var currentPage: OnboardingPage = .welcome
 
@@ -47,6 +48,14 @@ struct OnboardingView: View {
     @State private var ring2Scale: CGFloat = 1.0
     @State private var ring2Opacity: Double = 0.3
 
+    // Page 3 — Preferences animation states
+    @State private var prefsHeaderVisible = false
+    @State private var prefsSkillVisible = false
+    @State private var prefsDietaryVisible = false
+    @State private var prefsCTAVisible = false
+    @AppStorage("userSkillLevel") private var userSkillLevel = "homeCook"
+    @State private var selectedDietaryPrefs: Set<DietaryPreference> = Set(DietaryPreference.current())
+
     @State private var showSignIn = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -70,6 +79,9 @@ struct OnboardingView: View {
                     case .chef:
                         chefPage
                             .transition(pageTransition)
+                    case .preferences:
+                        preferencesPage
+                            .transition(pageTransition)
                     case .camera:
                         cameraPage
                             .transition(pageTransition)
@@ -82,9 +94,8 @@ struct OnboardingView: View {
             SignInView()
         }
         .onChange(of: AuthManager.shared.isAuthenticated) { _, isAuth in
-            if isAuth && hasSeenOnboarding {
-                // Only auto-dismiss if user has already completed onboarding before
-                // (not on first launch where auth was restored from a previous session)
+            if isAuth {
+                // User signed in during onboarding — skip straight to dashboard
                 isPresented = false
             }
         }
@@ -120,6 +131,10 @@ struct OnboardingView: View {
 
     private func advance() {
         HapticManager.medium()
+        // Save dietary prefs when leaving preferences page
+        if currentPage == .preferences {
+            DietaryPreference.save(Array(selectedDietaryPrefs))
+        }
         let next = OnboardingPage(rawValue: currentPage.rawValue + 1)
         if let next {
             resetAnimationStates()
@@ -154,6 +169,10 @@ struct OnboardingView: View {
         chefHeaderVisible = false
         chefCardVisible = [false, false, false, false]
         chefCTAVisible = false
+        prefsHeaderVisible = false
+        prefsSkillVisible = false
+        prefsDietaryVisible = false
+        prefsCTAVisible = false
         cameraIconVisible = false
         cameraTextVisible = false
         cameraText2Visible = false
@@ -638,6 +657,7 @@ struct OnboardingView: View {
                         Text(chef.tagline)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(Theme.darkTextTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
                             .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                 }
@@ -700,6 +720,186 @@ struct OnboardingView: View {
             }
         }
         .offset(y: isSelected && !reduceMotion ? avatarFloat : 0)
+    }
+
+    // MARK: - Preferences Page
+
+    private func triggerPrefsAnimations() {
+        guard !reduceMotion else {
+            prefsHeaderVisible = true; prefsSkillVisible = true
+            prefsDietaryVisible = true; prefsCTAVisible = true
+            return
+        }
+        withAnimation(.easeOut(duration: 0.5)) { prefsHeaderVisible = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            withAnimation(.easeOut(duration: 0.45)) { prefsSkillVisible = true }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+            withAnimation(.easeOut(duration: 0.45)) { prefsDietaryVisible = true }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            withAnimation(.easeOut(duration: 0.5)) { prefsCTAVisible = true }
+        }
+    }
+
+    private var preferencesPage: some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            // Header
+            VStack(spacing: 10) {
+                Text("Your Preferences")
+                    .font(.system(size: 32, weight: .bold, design: .serif))
+                    .foregroundStyle(Theme.gold)
+
+                Text("Help us tailor recipes to your experience level and dietary needs.")
+                    .font(.system(size: 15))
+                    .foregroundStyle(Theme.darkTextSecondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 28)
+            .opacity(prefsHeaderVisible ? 1 : 0)
+            .offset(y: prefsHeaderVisible ? 0 : 16)
+
+            // Skill level cards
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Cooking Experience")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.darkTextTertiary)
+                    .textCase(.uppercase)
+                    .tracking(1.2)
+                    .padding(.leading, 4)
+
+                VStack(spacing: 10) {
+                    skillLevelCard(id: "beginner", icon: "leaf", title: "Beginner", subtitle: "Simple recipes, basic techniques", color: Theme.visual)
+                    skillLevelCard(id: "homeCook", icon: "frying.pan", title: "Home Cook", subtitle: "Comfortable in the kitchen", color: Theme.gold)
+                    skillLevelCard(id: "adventurous", icon: "flame", title: "Adventurous", subtitle: "Bring on the challenge", color: Theme.culinary)
+                }
+            }
+            .padding(.horizontal, 20)
+            .opacity(prefsSkillVisible ? 1 : 0)
+            .offset(y: prefsSkillVisible ? 0 : 16)
+
+            // Dietary preferences
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Dietary Preferences")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.darkTextTertiary)
+                    .textCase(.uppercase)
+                    .tracking(1.2)
+                    .padding(.leading, 4)
+
+                OnboardingDietarySection(selected: $selectedDietaryPrefs)
+                    .padding(14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(Theme.glassCardFill)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
+                    )
+
+                Text("Active restrictions apply to all generated recipes")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.darkTextHint)
+                    .padding(.leading, 4)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .opacity(prefsDietaryVisible ? 1 : 0)
+            .offset(y: prefsDietaryVisible ? 0 : 16)
+
+            Spacer()
+
+            // CTA
+            VStack(spacing: 12) {
+                Button {
+                    advance()
+                } label: {
+                    Text("Continue")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(Theme.darkBg)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 54)
+                        .background(
+                            LinearGradient(
+                                colors: [Theme.gold, Theme.primary],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .clipShape(Capsule())
+                        .shadow(color: Theme.gold.opacity(0.35), radius: 14, y: 5)
+                }
+
+                Button {
+                    advance()
+                } label: {
+                    Text("Skip for now")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Theme.darkTextTertiary)
+                }
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 40)
+            .opacity(prefsCTAVisible ? 1 : 0)
+            .offset(y: prefsCTAVisible ? 0 : 12)
+        }
+        .onAppear { triggerPrefsAnimations() }
+    }
+
+    private func skillLevelCard(id: String, icon: String, title: String, subtitle: String, color: Color) -> some View {
+        let isSelected = userSkillLevel == id
+
+        return Button {
+            HapticManager.light()
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                userSkillLevel = id
+            }
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: icon)
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(isSelected ? color : Theme.darkTextTertiary)
+                    .frame(width: 44, height: 44)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(isSelected ? color.opacity(0.15) : Theme.darkSurface)
+                    )
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Theme.darkTextPrimary)
+                    Text(subtitle)
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.darkTextSecondary)
+                }
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(color)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(isSelected ? Theme.glassCardFill : Theme.glassCardFill.opacity(0.5))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(isSelected ? color : Color.white.opacity(0.08), lineWidth: isSelected ? 1.5 : 0.5)
+            )
+            .scaleEffect(isSelected ? 1.02 : 1.0)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Camera Page

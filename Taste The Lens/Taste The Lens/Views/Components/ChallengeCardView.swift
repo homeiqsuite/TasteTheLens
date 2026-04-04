@@ -1,8 +1,12 @@
 import SwiftUI
+internal import Combine
 
 struct ChallengeCardView: View {
     let challenge: ChallengeDTO
     @State private var dishImage: UIImage?
+    @State private var now = Date()
+
+    private let timer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -43,11 +47,27 @@ struct ChallengeCardView: View {
                     timeRemainingPill
                     Spacer()
                 }
+
+                if let keywords = challenge.keywords, !keywords.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(keywords, id: \.self) { keyword in
+                                Text(keyword)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(Theme.darkTextSecondary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(Capsule().fill(Theme.darkSurface))
+                            }
+                        }
+                    }
+                }
             }
             .padding(.horizontal, 4)
             .padding(.top, 10)
         }
         .glassCard()
+        .onReceive(timer) { now = $0 }
         .task {
             if let path = challenge.dishImagePath, !path.isEmpty {
                 dishImage = await ChallengeService.shared.loadImage(path: path)
@@ -71,19 +91,29 @@ struct ChallengeCardView: View {
     }
 
     private var timeRemaining: String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         guard let endsAtString = challenge.endsAt,
-              let endsAt = formatter.date(from: endsAtString) else { return "—" }
+              let endsAt = Self.parseDate(endsAtString) else { return "—" }
 
-        let interval = endsAt.timeIntervalSince(Date())
+        let interval = endsAt.timeIntervalSince(now)
         if interval <= 0 { return "Ended" }
 
         let days = Int(interval / 86400)
         let hours = Int(interval.truncatingRemainder(dividingBy: 86400) / 3600)
+        let minutes = Int(interval.truncatingRemainder(dividingBy: 3600) / 60)
 
         if days > 0 { return "\(days)d \(hours)h left" }
         if hours > 0 { return "\(hours)h left" }
-        return "< 1h left"
+        if minutes > 0 { return "\(minutes)m left" }
+        return "< 1m left"
+    }
+
+    private static func parseDate(_ string: String) -> Date? {
+        let withFractional = ISO8601DateFormatter()
+        withFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = withFractional.date(from: string) { return date }
+
+        let withoutFractional = ISO8601DateFormatter()
+        withoutFractional.formatOptions = [.withInternetDateTime]
+        return withoutFractional.date(from: string)
     }
 }

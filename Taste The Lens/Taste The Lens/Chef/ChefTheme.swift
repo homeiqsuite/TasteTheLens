@@ -201,6 +201,47 @@ extension ChefTheme {
         prefersDarkMode: true
     )
 
+    /// Big & Little Chef — warm coral/amber, playful, light theme
+    static let familyChef = ChefTheme(
+        dashboardBg: Color(red: 0.996, green: 0.969, blue: 0.949),       // #FEF7F2
+        cardBg: Color(red: 1.0, green: 0.984, blue: 0.969),              // #FFFBF7
+        cardShadow: Color(red: 0.949, green: 0.502, blue: 0.267).opacity(0.06),
+        cardBorder: Color(red: 0.922, green: 0.875, blue: 0.851),        // #EBDFD9
+        accent: Color(red: 0.949, green: 0.502, blue: 0.267),            // #F28044
+        accentDeep: Color(red: 0.820, green: 0.376, blue: 0.153),        // #D16027
+        accentOrange: Color(red: 0.988, green: 0.647, blue: 0.298),      // #FCA54C
+        impactColor: Color(red: 0.949, green: 0.502, blue: 0.267),       // #F28044
+        heroGradient: LinearGradient(
+            colors: [
+                Color(red: 0.988, green: 0.647, blue: 0.298),            // #FCA54C
+                Color(red: 0.949, green: 0.502, blue: 0.267),            // #F28044
+                Color(red: 0.878, green: 0.345, blue: 0.298),            // #E0584C
+            ],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        ),
+        ctaGradient: LinearGradient(
+            colors: [
+                Color(red: 0.988, green: 0.647, blue: 0.298),
+                Color(red: 0.949, green: 0.502, blue: 0.267),
+            ],
+            startPoint: .leading, endPoint: .trailing
+        ),
+        impactGradient: LinearGradient(
+            colors: [
+                Color(red: 0.988, green: 0.647, blue: 0.298),
+                Color(red: 0.878, green: 0.345, blue: 0.298),
+            ],
+            startPoint: .leading, endPoint: .trailing
+        ),
+        textPrimary: Color(red: 0.102, green: 0.102, blue: 0.102),       // #1A1A1A
+        textSecondary: Color(red: 0.29, green: 0.29, blue: 0.29),        // #4A4A4A
+        textTertiary: Color(red: 0.541, green: 0.541, blue: 0.541),      // #8A8A8A
+        textQuaternary: Color(red: 0.69, green: 0.69, blue: 0.69),       // #B0B0B0
+        heroIcon: "figure.2.and.child.holdinghands",
+        heroSubtitle: "Cook together, make memories",
+        prefersDarkMode: false
+    )
+
     /// Custom Chef — neutral slate/teal, dark theme
     static let custom = ChefTheme(
         dashboardBg: Color(red: 0.071, green: 0.078, blue: 0.098),             // #121419

@@ -3,6 +3,7 @@ import SwiftUI
 struct StepNavigationBar: View {
     @Binding var currentStep: Int
     let totalSteps: Int
+    var onCookingMode: (() -> Void)? = nil
 
     private var isFirstStep: Bool { currentStep == 0 }
     private var isLastStep: Bool { currentStep == totalSteps - 1 }
@@ -24,6 +25,21 @@ struct StepNavigationBar: View {
                     .clipShape(RoundedRectangle(cornerRadius: 14))
             }
             .disabled(isFirstStep)
+
+            // Cooking mode button
+            if let onCookingMode {
+                Button {
+                    HapticManager.medium()
+                    onCookingMode()
+                } label: {
+                    Image(systemName: "hand.raised.slash")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.textPrimary)
+                        .frame(width: 48, height: 48)
+                        .background(Theme.buttonBg)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                }
+            }
 
             // Next button (hidden on completion step)
             if !isLastStep {

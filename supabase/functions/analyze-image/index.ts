@@ -7,6 +7,7 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 
 const GEMINI_MODEL = "gemini-2.5-flash";
 const CLAUDE_MODEL = "claude-sonnet-4-20250514";
+const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
 // ─── Request / Response Types ───────────────────────────────────────────────
 
@@ -24,6 +25,9 @@ interface AnalyzeImageRequest {
   softAvoiding: string[];
   budgetLimit?: number;
   courseType?: string;
+  cultureName?: string;
+  simplifyMode?: boolean;
+  skillLevel?: string; // "beginner" | "homeCook" | "adventurous"
 }
 
 interface AnalyzeImageResponse {
@@ -31,13 +35,208 @@ interface AnalyzeImageResponse {
   rawJSON: string;
 }
 
+// ─── Content Screening ──────────────────────────────────────────────────────
+
+const SCREENING_PROMPT = `Content safety screener for a food/recipe app. Check if the image is appropriate for culinary inspiration.
+
+REJECT (safe: false) if:
+- Real, identifiable people (selfies, portraits, group photos)
+- Children as primary subject
+- Live animals as primary subject (packaged meat/seafood is fine)
+
+ALLOW (safe: true) if:
+- Food, ingredients, drinks, kitchens, restaurants, menus
+- Objects, products, art, landscapes, architecture, nature, abstract
+- Fictional characters, cartoons, illustrations, statues, sculptures
+- Stylized/drawn people (not real photos of identifiable people)
+- People incidental/background (e.g., street market focused on food stalls)
+- Packaged products with people on labels
+- Hands only (no face visible)
+
+CRITICAL: Output ONLY raw JSON, no markdown, no explanation, no code fences.`;
+
+const SCREENING_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    safe: { type: "BOOLEAN" },
+    reason: { type: "STRING" },
+  },
+  required: ["safe", "reason"],
+};
+
+async function screenForSafety(
+  images: string[]
+): Promise<{ safe: boolean; reason: string }> {
+  const parts: Record<string, unknown>[] = images.map((img) => ({
+    inline_data: { mime_type: "image/jpeg", data: img },
+  }));
+  parts.push({
+    text: 'Do any of these images contain prohibited content? Check ONLY for: (1) real identifiable people, (2) children as the primary subject, or (3) live animals as the primary subject. Everything else is allowed and safe — clothing, personal hygiene products, household objects, art, landscapes, architecture, and any non-food items are all fine. Return JSON: {"safe": true/false, "reason": "brief explanation"}',
+  });
+
+  const requestBody = {
+    system_instruction: { parts: [{ text: SCREENING_PROMPT }] },
+    contents: [{ parts }],
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 1024,
+      responseMimeType: "application/json",
+      responseSchema: SCREENING_SCHEMA,
+    },
+  };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch(GEMINI_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Screening API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+
+    // responseSchema puts the structured JSON directly in data
+    if (typeof data?.safe === "boolean") {
+      return { safe: data.safe, reason: data.reason ?? "" };
+    }
+
+    // Fallback: try parsing from candidates (when responseSchema is not enforced)
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (text) {
+      return JSON.parse(text);
+    }
+
+    throw new Error("Invalid screening response: " + JSON.stringify(data));
+  } catch (error) {
+    // Fail-closed: propagate error — no silent pass-through on API failure
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// ─── Gemini Response Schema ─────────────────────────────────────────────────
+// Enforces exact JSON structure from Gemini.
+// Replaces the SHARED_RESPONSE_FORMAT prose (~1500 tokens removed per request).
+
+const RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    scene_analysis: {
+      type: "OBJECT",
+      properties: {
+        detected_items: { type: "ARRAY", items: { type: "STRING" } },
+        detected_text: { type: "ARRAY", items: { type: "STRING" } },
+        setting: { type: "STRING" },
+        approach: { type: "STRING" },
+      },
+      required: ["detected_items", "detected_text", "setting", "approach"],
+    },
+    dish_name: { type: "STRING" },
+    description: { type: "STRING" },
+    base_servings: { type: "INTEGER" },
+    prep_time: { type: "STRING" },
+    cook_time: { type: "STRING" },
+    color_palette: { type: "ARRAY", items: { type: "STRING" } },
+    image_generation_prompt: { type: "STRING" },
+    translation_matrix: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          visual: { type: "STRING" },
+          culinary: { type: "STRING" },
+        },
+        required: ["visual", "culinary"],
+      },
+    },
+    components: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          name: { type: "STRING" },
+          ingredients: { type: "ARRAY", items: { type: "STRING" } },
+          substitutions: {
+            type: "ARRAY",
+            items: {
+              type: "OBJECT",
+              properties: {
+                original: { type: "STRING" },
+                substitutes: { type: "ARRAY", items: { type: "STRING" } },
+              },
+              required: ["original", "substitutes"],
+            },
+          },
+          method: { type: "STRING" },
+        },
+        required: ["name", "ingredients", "substitutions", "method"],
+      },
+    },
+    cooking_steps: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          instruction: { type: "STRING" },
+          ingredients_used: { type: "ARRAY", items: { type: "STRING" } },
+          tip: { type: "STRING" },
+          little_chef: { type: "STRING" },
+        },
+        required: ["instruction", "ingredients_used", "tip"],
+      },
+    },
+    cooking_instructions: { type: "ARRAY", items: { type: "STRING" } },
+    plating_steps: { type: "ARRAY", items: { type: "STRING" } },
+    sommelier_pairing: {
+      type: "OBJECT",
+      properties: {
+        wine: { type: "STRING" },
+        cocktail: { type: "STRING" },
+        nonalcoholic: { type: "STRING" },
+      },
+      required: ["wine", "cocktail", "nonalcoholic"],
+    },
+    difficulty: { type: "STRING", enum: ["Easy", "Medium", "Advanced"] },
+    chef_commentary: { type: "STRING" },
+    estimated_calories: { type: "INTEGER" },
+    nutrition: {
+      type: "OBJECT",
+      properties: {
+        calories: { type: "INTEGER" },
+        protein: { type: "INTEGER" },
+        carbs: { type: "INTEGER" },
+        fat: { type: "INTEGER" },
+        fiber: { type: "INTEGER" },
+        sugar: { type: "INTEGER" },
+      },
+      required: ["calories", "protein", "carbs", "fat", "fiber", "sugar"],
+    },
+  },
+  required: [
+    "scene_analysis", "dish_name", "description", "base_servings",
+    "prep_time", "cook_time", "color_palette", "image_generation_prompt",
+    "translation_matrix", "components", "cooking_steps", "cooking_instructions",
+    "plating_steps", "sommelier_pairing", "difficulty", "chef_commentary",
+    "estimated_calories", "nutrition",
+  ],
+};
+
 // ─── User Prompt Text ───────────────────────────────────────────────────────
 
 const SINGLE_IMAGE_PROMPT =
   "Analyze this image. First, identify everything visible — every object, ingredient, text, and setting detail. Then create a delicious, home-cookable dish inspired by what you see. If you spot real ingredients, use them. Use only common grocery store ingredients. Return ONLY the JSON, no markdown code fences.";
 
 const FUSION_IMAGE_PROMPT =
-  "Analyze ALL of these images together. Identify everything visible in each — objects, ingredients, text, settings. Create ONE cohesive, delicious, home-cookable dish that FUSES the visual DNA of all images. Blend colors, textures, moods, and any real ingredients you spot across all photos. The dish should feel like a creative fusion of these visual worlds. Use only common grocery store ingredients. Return ONLY the JSON, no markdown code fences.";
+  "Analyze ALL of these images together. Identify everything visible in each — objects, ingredients, text, settings. Create ONE cohesive, delicious, home-cookable dish that FUSES the visual DNA of all images. Blend colors, textures, moods, and ALL real ingredients you spot across all photos — every detected ingredient must appear in the recipe. The dish should feel like a creative fusion of these visual worlds. Use only common grocery store ingredients. Return ONLY the JSON, no markdown code fences.";
 
 // ─── Shared Prompt Sections ─────────────────────────────────────────────────
 
@@ -52,9 +251,9 @@ Before any creative translation, carefully identify EVERYTHING visible in the im
 
 STEP 1 — CHOOSE YOUR APPROACH:
 Based on what you identified, pick one of three approaches:
-* "ingredient-driven" — If the image contains identifiable INGREDIENTS or FOOD ITEMS, build the recipe AROUND those actual ingredients. The visual translation (colors, mood, textures) should influence the STYLE and TECHNIQUE, but the real ingredients must be used. If you see 6 eggs and flour, think baking. If you see one jalapeño next to a steak, it's an accent not the star.
+* "ingredient-driven" — If the image contains identifiable INGREDIENTS or FOOD ITEMS, build the recipe AROUND those actual ingredients. The visual translation (colors, mood, textures) should influence the STYLE and TECHNIQUE, but the real ingredients must be used. If you see 6 eggs and flour, think baking. If you see one jalapeño next to a steak, it's an accent not the star. CRITICAL: ALL detected ingredients MUST appear in the recipe — do not omit any. If an ingredient doesn't fit the main dish, incorporate it as a side component, garnish, marinade, or sauce.
 * "visual-translation" — If the image is non-food (landscape, art, object, architecture, person, etc.), use the full visual-to-culinary translation as your primary driver (colors → ingredients, mood → flavor profile, etc.).
-* "hybrid" — If it's a mix (e.g., a person holding groceries, a restaurant scene with visible dishes, a kitchen with ingredients in the background), use the identifiable food items as the foundation and let the surrounding visual elements guide the creative direction.
+* "hybrid" — If it's a mix (e.g., a person holding groceries, a restaurant scene with visible dishes, a kitchen with ingredients in the background), use the identifiable food items as the foundation and let the surrounding visual elements guide the creative direction. CRITICAL: ALL detected food ingredients MUST appear in the recipe — do not omit any.
 
 STEP 1.5 — THEMATIC RESONANCE (especially important for visual-translation):
 Go beyond colors and shapes — understand WHAT the subject IS and let its meaning, story, and associations drive the dish. The subject matter should influence cuisine choice, flavor narrative, dish name, and format — not just the color palette. Think like a chef who truly understands the world, not just a color wheel.
@@ -72,7 +271,7 @@ STEP 2 — DIETARY & CONTEXT AWARENESS:
 * If ALL visible ingredients are plant-based → keep the recipe vegan/vegetarian
 * If you see a "gluten-free", "organic", or other label → respect that constraint
 * If the setting is clearly a specific cuisine (e.g., a Japanese kitchen, an Indian spice rack, a Mexican market) → lean into that cuisine authentically
-* If you see a full pantry or many ingredients → pick a cohesive subset, don't try to use everything
+* If you're using visual-translation approach and the image shows many unrelated objects → pick a cohesive thematic subset to inspire the dish. NOTE: For ingredient-driven or hybrid approach, you MUST use ALL detected ingredients — never omit them.
 
 STEP 3 — VISUAL ANALYSIS:
 Extract the following from the image:
@@ -82,7 +281,29 @@ Extract the following from the image:
 * Texture qualities (smooth, rough, layered, crispy, flowing)
 * Any symbolic or cultural elements`;
 
-const SHARED_RESPONSE_FORMAT = `Return ONLY valid JSON in this exact structure, no other text: { "scene_analysis": { "detected_items": ["list every object, ingredient, and notable element you can see in the image"], "detected_text": ["any text, labels, brand names, or signage visible — empty array if none"], "setting": "brief description of the environment/context", "approach": "ingredient-driven OR visual-translation OR hybrid" }, "dish_name": "A creative, evocative dish name that hints at the visual inspiration", "description": "2-3 sentences connecting the visual inspiration to the flavor profile. If ingredients were detected, mention how they inspired the dish. Should feel inviting and make the reader hungry.", "base_servings": 2 (integer — how many servings this recipe makes as written), "prep_time": "15 mins" (string — estimated hands-on preparation time before cooking, e.g. "10 mins", "30 mins", "1 hr"), "cook_time": "25 mins" (string — estimated active cooking/baking time, e.g. "20 mins", "1 hr", "45 mins"), "color_palette": ["#hex1", "#hex2", "#hex3", "#hex4"] (the 3-5 dominant colors extracted from the source image as hex codes), "image_generation_prompt": "Write a highly detailed prompt for a photorealistic editorial food photograph of this dish. CRITICAL: The overall color palette of the plated dish MUST match the dominant colors from the source image. If the source was mostly white, the dish in the photo must appear predominantly white/cream-colored. Include: specific plating on elegant tableware, warm soft lighting, shallow depth of field, visible texture details. Think Bon Appétit photography. The dish must look delicious and edible above all else.", "translation_matrix": [ { "visual": "Describe the visual element (color, shape, mood) — or the detected ingredient", "culinary": "The culinary equivalent ingredient or technique" } ], "components": [ { "name": "Component name (e.g. Herb-Crusted Salmon)", "ingredients": ["2 tbsp butter", "1/2 cup flour", "3 chicken breasts"] (IMPORTANT: every ingredient MUST start with a numeric quantity and unit so servings can be scaled — e.g. '2 tbsp butter' not just 'butter', '1/2 cup flour' not 'flour', '3 cloves garlic' not 'garlic'), "substitutions": [ { "original": "2 tbsp butter", "substitutes": ["2 tbsp olive oil"] }, { "original": "1/2 cup flour", "substitutes": ["1/2 cup almond flour"] } ], "method": "Detailed cooking instruction in 2-3 sentences. Be specific with temperatures, times, and techniques so someone could actually make this." } ], "cooking_steps": [ { "instruction": "A clear, actionable cooking step with timing, temperatures, and sensory cues.", "ingredients_used": ["2 tbsp butter", "3 chicken breasts"], "tip": "A practical cooking tip or gotcha for this step — common mistakes to avoid, timing tricks, or sensory cues that help get it right." } ] (EXACTLY 4 steps. Condense the ENTIRE cooking process into exactly 4 clear phases. Each step groups related actions together. Each step's ingredients_used MUST list the specific ingredients from the components array that are used in that step, using the EXACT same strings. Every ingredient across all components must appear in at least one step's ingredients_used. Each step MUST include a tip — a practical cooking insight, common pitfall, or pro technique specific to that step.), "cooking_instructions": [] (DEPRECATED — always return empty array, use cooking_steps instead), "plating_steps": [ "Step 1: ...", "Step 2: ...", "Step 3: ..." ], "sommelier_pairing": { "wine": "Specific wine recommendation with region and tasting notes", "cocktail": "Creative cocktail pairing with brief description", "nonalcoholic": "Thoughtful non-alcoholic option" }, "estimated_calories": 450 (integer — estimated total calories per serving. Be realistic based on ingredients and portion sizes. This is a rough estimate to help users plan meals.), "nutrition": { "calories": 450, "protein": 30, "carbs": 45, "fat": 18, "fiber": 6, "sugar": 8 } (all integers in grams except calories which is kcal — estimated macronutrients per serving. Be realistic based on actual ingredients and portions.) }`;
+// Shared color fidelity block — used by all personality guidelines (no duplication).
+const SHARED_COLOR_FIDELITY = `#1 HIGHEST PRIORITY — COLOR FIDELITY:
+The dominant colors in the source image are the MOST IMPORTANT factor in choosing ingredients (for visual-translation and hybrid approaches). The finished dish MUST visually mirror the source image's color palette. If the image is predominantly white or light-colored, at least 80% of the dish must be white/light ingredients (e.g. cauliflower, white rice, cream sauce, white fish, mozzarella, chicken breast, potatoes, coconut, vanilla, white beans, parsnips). Do NOT add colorful ingredients that aren't represented in the source image — no bright greens, reds, oranges, or dark browns unless those colors are dominant in the photo. For ingredient-driven approaches, the actual ingredients take priority but still use color fidelity to guide supplementary ingredients and plating.
+
+Translate each visual element to a culinary equivalent:
+* Colors → Ingredients (e.g., warm orange #D4763B → roasted sweet potato, deep green #2D5A27 → fresh herbs, white #FFFFFF → cauliflower, mozzarella, or white fish, dark brown #3B2F2F → seared steak or dark chocolate)
+* Shapes → Plating style (e.g., clean lines → neat layering, organic curves → casual swoosh of sauce)
+* Mood → Flavor profile (warm/cozy → rich and comforting; bright/fresh → citrus, herbs, acidity)
+* Textures → Cooking methods (smooth → puree, silky sauce; rough → crispy topping, toasted breadcrumbs)
+
+COLOR REMINDER: Re-check your ingredient choices against the source image colors before finalizing. Every major ingredient should trace back to a color in the image (or to an actual ingredient you detected).`;
+
+// Condensed behavioral rules — replaces the ~1500-token SHARED_RESPONSE_FORMAT prose.
+// Field structure is enforced by RESPONSE_SCHEMA; this handles behavioral constraints.
+const RESPONSE_RULES = `RESPONSE RULES:
+* cooking_steps: EXACTLY 4 steps covering the entire cooking process — condense all actions into exactly 4 clear phases. Each step must include a tip (practical cooking insight, common pitfall, or pro technique). For family chef ONLY: every step must also include a little_chef field with the child's safe task.
+* ingredients: every ingredient MUST start with a numeric quantity and unit (e.g. "2 tbsp butter", "1/2 cup flour", "3 chicken breasts") — never just "butter" or "flour"
+* substitutions.original: MUST exactly match the corresponding string in that component's ingredients array
+* cooking_instructions: always return empty array (deprecated — use cooking_steps instead)
+* Every ingredient across all components must appear in at least one step's ingredients_used, using the exact same string
+* difficulty: Assess overall recipe difficulty as "Easy" (basic techniques, few ingredients, <30 min total), "Medium" (some technique required, standard home-cook level), or "Advanced" (complex techniques, precise timing, many components).
+* chef_commentary: A 1-2 sentence personality-driven explanation of WHY this particular photo inspired this particular dish. Speak in character as the chef personality. Reference specific visual elements from the image and explain the creative leap to the culinary result. Make it feel personal and insightful, not generic.
+* image_generation_prompt: describe a photorealistic editorial food photo of the dish. The color palette MUST match the source image's dominant colors. Include plating, tableware, lighting, and texture details. Think Bon Appétit photography.`;
 
 // ─── Personality Preambles ──────────────────────────────────────────────────
 
@@ -123,22 +344,24 @@ YOUR PHILOSOPHY:
 * ECOSYSTEM RESPECT — weave in brief, genuine observations about the animal's role in its ecosystem. Not preachy, not a lecture — just the kind of thing a knowledgeable outdoorsman naturally mentions around the fire.
 * OUTDOOR COOKING METHODS — favor techniques that work outdoors: smoking, grilling over wood coals, cast iron cooking, Dutch oven baking, spit roasting, plank grilling, ember roasting. You can use a kitchen too, but your heart is outside.
 * FORAGED & WILD INGREDIENTS — incorporate wild-harvested elements when thematic (wild mushrooms, ramps, juniper berries, wild rice, sumac, pine nuts, fiddlehead ferns) but always provide grocery store alternatives.`,
+
+  family: `You are Big Chef & Little Chef — a dynamic kitchen duo designed to get parents and children (ages 3–10) cooking together. You speak in two voices: Big Chef gives the grown-up clear, confident instructions, and Little Chef gives the child a safe, exciting job at every single step.
+Your task is to analyze a visual image and create a delicious, family-friendly dish inspired by it — one that a parent and child can genuinely cook together from start to finish.
+
+YOUR PHILOSOPHY:
+* EVERY STEP HAS TWO JOBS — Big Chef's job (adult) and Little Chef's job (child). No exceptions. Even simple steps have something a child can do: hold the bowl, add a pre-measured ingredient, stir a cold mixture, push a button on a timer, or tear herbs.
+* SAFETY FIRST, FEAR NEVER — Be honest about what's hot, sharp, or heavy, but frame it positively: "The pan is hot, so Big Chef handles this part while Little Chef watches like a real chef." Never make kids feel excluded — make them feel like they're doing the most important job.
+* LITTLE CHEF TASKS — Age-appropriate safe jobs: crack eggs (with guidance), measure and pour pre-measured ingredients, wash produce, tear herbs, stir cold or room-temperature mixtures, push bread into a pan, use cookie cutters, sprinkle toppings, count ingredients, mix dry ingredients in a bowl, mash soft things (bananas, avocado), taste and season with guidance, plate and garnish with supervision.
+* BIG CHEF TASKS — Anything involving heat, sharp tools, heavy pots, hot oil, or precise timing. Adults handle the stove, oven, knives, boiling water, frying, and any technique requiring fine motor skill.
+* SIMPLE & FAMILIAR — Choose dishes kids will actually want to eat. Comfort foods, familiar formats, colorful ingredients. Avoid overly sophisticated flavor profiles.
+* ENCOURAGING TONE — Use "You've got this!" energy for both parent and child. Celebrate every step. Make the kitchen feel like the most fun place in the house.`,
 };
 
 // ─── Personality Guidelines (Step 4) ────────────────────────────────────────
 
 const PERSONALITY_GUIDELINES: Record<string, string> = {
   default: `STEP 4 — CREATE THE DISH:
-#1 HIGHEST PRIORITY — COLOR FIDELITY:
-The dominant colors in the source image are the MOST IMPORTANT factor in choosing ingredients (for visual-translation and hybrid approaches). The finished dish MUST visually mirror the source image's color palette. If the image is predominantly white or light-colored, at least 80% of the dish must be white/light ingredients (e.g. cauliflower, white rice, cream sauce, white fish, mozzarella, chicken breast, potatoes, coconut, vanilla, white beans, parsnips). Do NOT add colorful ingredients that aren't represented in the source image — no bright greens, reds, oranges, or dark browns unless those colors are dominant in the photo. For ingredient-driven approaches, the actual ingredients take priority but still use color fidelity to guide supplementary ingredients and plating.
-
-Translate each visual element to a culinary equivalent:
-* Colors → Ingredients (e.g., warm orange #D4763B → roasted sweet potato, deep green #2D5A27 → fresh herbs, white #FFFFFF → cauliflower, mozzarella, or white fish, dark brown #3B2F2F → seared steak or dark chocolate)
-* Shapes → Plating style (e.g., clean lines → neat layering, organic curves → casual swoosh of sauce)
-* Mood → Flavor profile (warm/cozy → rich and comforting; bright/fresh → citrus, herbs, acidity)
-* Textures → Cooking methods (smooth → puree, silky sauce; rough → crispy topping, toasted breadcrumbs)
-
-COLOR REMINDER: Re-check your ingredient choices against the source image colors before finalizing. Every major ingredient should trace back to a color in the image (or to an actual ingredient you detected).
+${SHARED_COLOR_FIDELITY}
 
 #2 HIGH PRIORITY — GLOBAL CUISINE DIVERSITY:
 You are a world-traveling chef. Every dish must feel like it comes from a different corner of the globe. Before choosing a cuisine, mentally spin a globe and land somewhere unexpected.
@@ -172,10 +395,7 @@ IMPORTANT GUIDELINES:
 * For each ingredient, suggest 1-2 common substitutes that would work in this recipe. Think about allergies (dairy-free, nut-free), availability, and budget. Substitutes must also be available at a standard grocery store. The "original" field in each substitution MUST exactly match the corresponding string in the "ingredients" array.`,
 
   dooby: `STEP 4 — CREATE THE DISH:
-#1 HIGHEST PRIORITY — COLOR FIDELITY:
-The dominant colors in the source image are the MOST IMPORTANT factor in choosing ingredients (for visual-translation and hybrid approaches). The finished dish MUST visually mirror the source image's color palette. For ingredient-driven approaches, the actual ingredients take priority but still use color fidelity to guide supplementary ingredients and plating.
-
-COLOR REMINDER: Re-check your ingredient choices against the source image colors before finalizing.
+${SHARED_COLOR_FIDELITY}
 
 #2 HIGH PRIORITY — MUNCHIE MAXIMALISM:
 Every dish should be the kind of thing that makes someone say "DUDE, YES" at 1 AM. Think:
@@ -200,10 +420,7 @@ IMPORTANT GUIDELINES:
 * The "original" field in each substitution MUST exactly match the corresponding string in the "ingredients" array`,
 
   beginner: `STEP 4 — CREATE THE DISH:
-#1 HIGHEST PRIORITY — COLOR FIDELITY:
-The dominant colors in the source image are the MOST IMPORTANT factor in choosing ingredients (for visual-translation and hybrid approaches). The finished dish MUST visually mirror the source image's color palette. For ingredient-driven approaches, the actual ingredients take priority.
-
-COLOR REMINDER: Re-check your ingredient choices against the source image colors before finalizing.
+${SHARED_COLOR_FIDELITY}
 
 #2 HIGH PRIORITY — ABSOLUTE SIMPLICITY:
 This recipe is for someone who has NEVER cooked before. Every choice should minimize complexity:
@@ -229,10 +446,7 @@ IMPORTANT GUIDELINES:
 * The "original" field in each substitution MUST exactly match the corresponding string in the "ingredients" array`,
 
   grizzly: `STEP 4 — CREATE THE DISH:
-#1 HIGHEST PRIORITY — COLOR FIDELITY:
-The dominant colors in the source image are the MOST IMPORTANT factor in choosing ingredients (for visual-translation and hybrid approaches). The finished dish MUST visually mirror the source image's color palette. For ingredient-driven approaches, the actual ingredients take priority but still use color fidelity to guide supplementary ingredients and plating.
-
-COLOR REMINDER: Re-check your ingredient choices against the source image colors before finalizing.
+${SHARED_COLOR_FIDELITY}
 
 #2 HIGH PRIORITY — WILD & OUTDOOR COOKING:
 Every dish should feel like it belongs at a campsite, hunting lodge, or rustic cabin table. Think:
@@ -260,6 +474,42 @@ IMPORTANT GUIDELINES:
 * For substitutions, ALWAYS include a conventional grocery store protein alternative (e.g., beef for venison, chicken thigh for pheasant) so the recipe is accessible to everyone
 * The "original" field in each substitution MUST exactly match the corresponding string in the "ingredients" array
 * Beverage pairings should lean rustic — bold reds, whiskey-based cocktails, craft beer styles, black coffee, or warm cider for non-alcoholic`,
+
+  family: `STEP 4 — CREATE THE DISH:
+${SHARED_COLOR_FIDELITY}
+
+#2 HIGH PRIORITY — FAMILY DUAL-INSTRUCTION FORMAT:
+EVERY cooking_steps item MUST include BOTH fields populated:
+- instruction: "👨‍🍳 Big Chef: [Adult's specific task with temperature, timing, and technique details]"
+- little_chef: "🧒 Little Chef's job: [Child's safe, specific, encouraging task]"
+
+The little_chef field is MANDATORY for every step — never leave it empty. Every single step must have something for the child to do.
+The tip field MUST include a safety note or teaching moment, e.g. "Keep little hands back from the hot pan!" or "Great moment to ask your little chef to count the ingredients!"
+
+DISH SELECTION RULES:
+* Choose kid-friendly dishes people of all ages will enjoy: tacos, pasta, pizza, pancakes, sandwiches, stir-fries, simple bakes, wraps, grain bowls, soups kids love (tomato, chicken noodle)
+* Colorful dishes are a win — kids love color
+* Avoid heavy spice, bitter greens, or sophisticated flavors kids typically reject
+* Keep total cook time under 45 minutes
+* Max 8 ingredients across all components — keep it manageable
+
+CHILD TASK BANK (assign contextually):
+* Cracking eggs: "Tap it firmly on the edge of the bowl, then use both thumbs to gently pull it apart — you've got this!"
+* Measuring: "Use the measuring cup to scoop exactly 1 cup — level it off with your finger!"
+* Stirring cold mixtures: "Give it 20 big stirs — count them out loud!"
+* Washing produce: "Rinse these under cool water and rub them gently with your hands"
+* Tearing herbs: "Tear the herbs into small pieces with your fingers — smell how amazing that is!"
+* Sprinkling toppings: "Sprinkle the topping all over — be generous!"
+* Mashing soft things: "Use the fork to mash this up — the bumpier the better!"
+* Plating: "Use the big spoon to scoop it onto the plate — make it look beautiful!"
+* Timer duty: "Set the timer — you're in charge of telling us when it beeps!"
+
+IMPORTANT GUIDELINES:
+* Every ingredient must be available at a standard grocery store
+* Use simple, familiar names for everything
+* Component names should be playful and clear — "Cheesy Taco Filling" not "Braised Beef Picadillo"
+* Substitutions should be just as simple as the originals
+* The "original" field in each substitution MUST exactly match the corresponding string in the "ingredients" array`,
 };
 
 // ─── Custom Chef Prompt Builders ────────────────────────────────────────────
@@ -397,10 +647,7 @@ function buildCustomGuidelines(config: AnalyzeImageRequest["customChefConfig"]):
   const toneDirective = PERSONALITY_STYLE_TONE[config.personality] || PERSONALITY_STYLE_TONE["theClassic"];
 
   return `STEP 4 — CREATE THE DISH:
-#1 HIGHEST PRIORITY — COLOR FIDELITY:
-The dominant colors in the source image are the MOST IMPORTANT factor in choosing ingredients (for visual-translation and hybrid approaches). The finished dish MUST visually mirror the source image's color palette. For ingredient-driven approaches, the actual ingredients take priority but still use color fidelity to guide supplementary ingredients and plating.
-
-COLOR REMINDER: Re-check your ingredient choices against the source image colors before finalizing.
+${SHARED_COLOR_FIDELITY}
 
 #2 ${skillDirective}
 
@@ -423,7 +670,46 @@ const DIETARY_DISPLAY_NAMES: Record<string, string> = {
   keto: "Keto", "low-carb": "Low-Carb", halal: "Halal", kosher: "Kosher",
 };
 
-function buildSystemPrompt(req: AnalyzeImageRequest): string {
+// ─── Remote Prompt Cache ─────────────────────────────────────────────────────
+
+interface RemotePromptRow { preamble: string; guidelines: string; }
+interface PromptCache { data: Record<string, RemotePromptRow>; fetchedAt: number; }
+
+let _promptCache: PromptCache | null = null;
+const PROMPT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+async function fetchRemotePrompts(
+  supabase: ReturnType<typeof createClient>
+): Promise<Record<string, RemotePromptRow>> {
+  const now = Date.now();
+  if (_promptCache && now - _promptCache.fetchedAt < PROMPT_CACHE_TTL_MS) {
+    return _promptCache.data;
+  }
+  try {
+    const { data, error } = await supabase
+      .from("chef_prompts")
+      .select("chef, preamble, guidelines")
+      .eq("enabled", true);
+    if (!error && data && data.length > 0) {
+      const map: Record<string, RemotePromptRow> = {};
+      for (const row of data) {
+        if (row.preamble || row.guidelines) {
+          map[row.chef] = { preamble: row.preamble, guidelines: row.guidelines };
+        }
+      }
+      _promptCache = { data: map, fetchedAt: now };
+      return map;
+    }
+  } catch (e) {
+    console.warn("chef_prompts fetch failed, using hardcoded:", e);
+  }
+  return {};
+}
+
+function buildSystemPrompt(
+  req: AnalyzeImageRequest,
+  remotePrompts: Record<string, RemotePromptRow> = {}
+): string {
   let preamble: string;
   let guidelines: string;
 
@@ -433,11 +719,13 @@ function buildSystemPrompt(req: AnalyzeImageRequest): string {
       PERSONALITY_STYLE_PREAMBLES["theClassic"];
     guidelines = buildCustomGuidelines(req.customChefConfig);
   } else {
-    preamble = PERSONALITY_PREAMBLES[req.chef] || PERSONALITY_PREAMBLES["default"];
-    guidelines = PERSONALITY_GUIDELINES[req.chef] || PERSONALITY_GUIDELINES["default"];
+    const remote = remotePrompts[req.chef];
+    preamble = remote?.preamble || PERSONALITY_PREAMBLES[req.chef] || PERSONALITY_PREAMBLES["default"];
+    guidelines = remote?.guidelines || PERSONALITY_GUIDELINES[req.chef] || PERSONALITY_GUIDELINES["default"];
   }
 
-  let prompt = preamble + "\n\n" + SHARED_SCENE_ANALYSIS + "\n\n" + guidelines + "\n\n" + SHARED_RESPONSE_FORMAT;
+  // RESPONSE_RULES replaces the old SHARED_RESPONSE_FORMAT prose (~1500 tokens saved)
+  let prompt = preamble + "\n\n" + SHARED_SCENE_ANALYSIS + "\n\n" + guidelines + "\n\n" + RESPONSE_RULES;
 
   // Dietary preferences
   if (req.dietaryPreferences && req.dietaryPreferences.length > 0) {
@@ -479,7 +767,51 @@ function buildSystemPrompt(req: AnalyzeImageRequest): string {
     prompt += `\n\nCOURSE TYPE CONSTRAINT (MANDATORY): You MUST create a ${req.courseType} dish. This is non-negotiable — the dish category must be a ${req.courseType} regardless of what the image contains. Use the image purely for visual inspiration (colors, textures, mood), but the resulting dish MUST belong to the ${req.courseType} category. Specifically: Appetizers must be small, shareable starters. Soups must be liquid-based. Salads must be vegetable/grain-forward cold or warm salads. Main Courses must be hearty, protein-centered entrées. Desserts MUST be sweet — cakes, tarts, ice cream, pastries, puddings, cookies, chocolate creations, fruit desserts, etc. NEVER generate a savory dish for a Dessert course. Amuse-Bouche must be single-bite palate teasers. If the image shows something savory but the course is Dessert, find a creative sweet interpretation inspired by the image's colors and textures.`;
   }
 
+  // Culture reimagine
+  if (req.cultureName) {
+    prompt += `\n\nCULTURE IMMERSION (MANDATORY): Reimagine this dish as it would be prepared in the ${req.cultureName} culinary tradition. Use authentic techniques, spices, flavor profiles, presentation styles, and dish formats native to ${req.cultureName} cuisine. Every component — from cooking method to plating — should reflect ${req.cultureName} culinary culture. Be specific and authentic, not a caricature.`;
+  }
+
+  // Global skill level (non-custom chefs)
+  if (req.skillLevel && req.chef !== "custom") {
+    const skillMap: Record<string, string> = { beginner: "beginner", homeCook: "homeCook", adventurous: "professional" };
+    const mapped = skillMap[req.skillLevel] || "homeCook";
+    const directive = SKILL_LEVEL_DIRECTIVES[mapped];
+    if (directive && mapped !== "homeCook") {
+      prompt += `\n\n${directive}`;
+    }
+  }
+
+  if (req.simplifyMode) {
+    prompt += `\n\nSIMPLIFY MODE (MANDATORY): Create a dramatically simplified version of this dish. Rules:
+* Maximum 5 ingredients per component — fewer is better
+* ONLY basic techniques: boil, pan-fry, bake, mix, roast, sauté, toast — no sous vide, tempering, or multi-stage reductions
+* Total cook time MUST be under 30 minutes
+* Use only common pantry-friendly ingredients available at any grocery store — no specialty items
+* Keep the visual spirit and flavor profile of the original but make execution accessible to anyone
+* The dish should still be delicious — simple does not mean bland
+* Set difficulty to "Easy"`;
+  }
+
   return prompt;
+}
+
+// ─── JSON Validation ────────────────────────────────────────────────────────
+
+function validateRecipeResponse(recipe: unknown): void {
+  const r = recipe as Record<string, unknown>;
+  const required = ["dish_name", "components", "cooking_steps", "color_palette", "image_generation_prompt"];
+  for (const field of required) {
+    if (r[field] == null) {
+      throw new Error(`Recipe validation failed: missing required field "${field}"`);
+    }
+  }
+  if (!Array.isArray(r.components) || r.components.length === 0) {
+    throw new Error("Recipe validation failed: components must be a non-empty array");
+  }
+  if (!Array.isArray(r.cooking_steps) || r.cooking_steps.length === 0) {
+    throw new Error("Recipe validation failed: cooking_steps must be a non-empty array");
+  }
 }
 
 // ─── AI Provider Calls ──────────────────────────────────────────────────────
@@ -502,8 +834,6 @@ async function callGemini(
   systemPrompt: string,
   isFusion: boolean
 ): Promise<AnalyzeImageResponse> {
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
-
   const parts: Record<string, unknown>[] = [];
   for (const base64Image of images) {
     parts.push({
@@ -519,10 +849,11 @@ async function callGemini(
       temperature: 0.9,
       maxOutputTokens: 8192,
       responseMimeType: "application/json",
+      responseSchema: RESPONSE_SCHEMA,
     },
   };
 
-  const response = await fetch(endpoint, {
+  const response = await fetch(GEMINI_ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(requestBody),
@@ -545,6 +876,7 @@ async function callGemini(
 
   const rawJSON = stripMarkdownFences(text);
   const recipe = JSON.parse(rawJSON);
+  validateRecipeResponse(recipe);
   return { recipe, rawJSON };
 }
 
@@ -602,6 +934,7 @@ async function callClaude(
 
   const rawJSON = stripMarkdownFences(text);
   const recipe = JSON.parse(rawJSON);
+  validateRecipeResponse(recipe);
   return { recipe, rawJSON };
 }
 
@@ -612,22 +945,32 @@ Deno.serve(async (req) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  // Authenticate user (optional for guests)
+  const requestStart = Date.now();
+
+  // Authenticate user (optional for guests).
+  // Prefer x-user-token (bypasses gateway JWT validation for expired tokens).
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   let userId: string | null = null;
 
-  const authHeader = req.headers.get("Authorization");
-  if (authHeader) {
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (!authError && user) {
-      userId = user.id;
+  const userToken = req.headers.get("x-user-token")
+    || req.headers.get("Authorization")?.replace("Bearer ", "") || null;
+  console.log("Auth headers — x-user-token present:", !!req.headers.get("x-user-token"), "Authorization present:", !!req.headers.get("Authorization"));
+  if (userToken) {
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser(userToken);
+      console.log("getUser result — userId:", user?.id, "authError:", authError);
+      if (!authError && user) {
+        userId = user.id;
+      }
+    } catch (e) {
+      console.error("getUser threw:", e);
     }
   }
 
   // Per-user rate limiting (authenticated users only)
   if (userId) {
-    const { data: allowed } = await supabase.rpc("check_rate_limit", {
+    console.log("Rate limiting check for userId:", userId);
+    const { data: allowed, error: rlError } = await supabase.rpc("check_rate_limit", {
       p_user_id: userId,
       p_function_name: "analyze-image",
       p_window_minutes: 1,
@@ -641,9 +984,20 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Server-side credit enforcement (authenticated users only)
+  // Parse body early — images needed for screening before credit deduction
+  let body: AnalyzeImageRequest;
+  try {
+    body = await req.json();
+  } catch {
+    return Response.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
+  if (!body.images || !Array.isArray(body.images) || body.images.length === 0) {
+    return Response.json({ error: "images array is required" }, { status: 400 });
+  }
+
   let creditPool: string | null = null;
-  let creditBalances: Record<string, number> | null = null;
+  let creditBalances: Record<string, number | string | null> | null = null;
 
   if (userId) {
     // Read free generation limit from remote_config
@@ -655,17 +1009,51 @@ Deno.serve(async (req) => {
         .eq("key", "free_generation_limit")
         .single();
       if (configRow?.value != null) {
-        freeLimit = typeof configRow.value === "number" ? configRow.value : parseInt(String(configRow.value), 10) || 5;
+        freeLimit = typeof configRow.value === "number"
+          ? configRow.value
+          : parseInt(String(configRow.value), 10) || 5;
       }
     } catch {
       // Fall back to default
     }
 
-    const { data: deductResult, error: deductError } = await supabase.rpc("deduct_credit", {
-      p_user_id: userId,
-      p_free_limit: freeLimit,
-    });
+    // Run content screening and credit deduction in parallel.
+    // screenForSafety errors are caught inline so Promise.all never rejects.
+    const screenPromise = screenForSafety(body.images)
+      .catch((err: unknown) => ({ safe: false as const, reason: "screening_error" as const, _err: err }));
 
+    const [screenResult, { data: deductResult, error: deductError }] = await Promise.all([
+      screenPromise,
+      supabase.rpc("deduct_credit", { p_user_id: userId, p_free_limit: freeLimit }),
+    ]);
+
+    console.log(`⏱ screening+credit parallel: ${Date.now() - requestStart}ms`);
+    console.log("deductResult:", JSON.stringify(deductResult), "deductError:", deductError);
+
+    // Handle screening service error (fail-closed: reject rather than pass silently)
+    if ("_err" in screenResult) {
+      if (deductResult?.success && deductResult?.pool) {
+        try { await supabase.rpc("refund_credit", { p_user_id: userId, p_pool: deductResult.pool }); } catch (_) {}
+      }
+      console.error("Screening service error:", (screenResult as { _err: unknown })._err);
+      return Response.json(
+        { error: "Content screening unavailable. Please try again." },
+        { status: 503 }
+      );
+    }
+
+    // Handle content rejection
+    if (!screenResult.safe) {
+      if (deductResult?.success && deductResult?.pool) {
+        try { await supabase.rpc("refund_credit", { p_user_id: userId, p_pool: deductResult.pool }); } catch (_) {}
+      }
+      return Response.json(
+        { error: "content_rejected", reason: screenResult.reason },
+        { status: 422 }
+      );
+    }
+
+    // Handle credit deduction errors
     if (deductError) {
       console.error("deduct_credit RPC error:", deductError);
       return Response.json({ error: "Credit check failed" }, { status: 500 });
@@ -693,33 +1081,42 @@ Deno.serve(async (req) => {
       subscription_credits: deductResult.subscription_credits,
       rollover_credits: deductResult.rollover_credits,
       free_usage_count: deductResult.free_usage_count,
+      pool: creditPool,
     };
+  } else {
+    // Guest: screening only (fail-closed)
+    try {
+      const screenResult = await screenForSafety(body.images);
+      if (!screenResult.safe) {
+        return Response.json(
+          { error: "content_rejected", reason: screenResult.reason },
+          { status: 422 }
+        );
+      }
+    } catch (screenError) {
+      console.error("Screening error (guest):", screenError);
+      return Response.json(
+        { error: "Content screening unavailable. Please try again." },
+        { status: 503 }
+      );
+    }
   }
 
   try {
-    const body: AnalyzeImageRequest = await req.json();
-
-    if (!body.images || !Array.isArray(body.images) || body.images.length === 0) {
-      // Refund if we already deducted
-      if (userId && creditPool) {
-        await supabase.rpc("refund_credit", { p_user_id: userId, p_pool: creditPool }).catch(() => {});
-      }
-      return Response.json(
-        { error: "images array is required" },
-        { status: 400 }
-      );
-    }
-
     const provider = body.provider === "claude" ? "claude" : "gemini";
     const isFusion = body.images.length > 1;
-    const systemPrompt = buildSystemPrompt(body);
+    const remotePrompts = await fetchRemotePrompts(supabase);
+    const systemPrompt = buildSystemPrompt(body, remotePrompts);
 
+    const aiStart = Date.now();
     let result: AnalyzeImageResponse;
     if (provider === "claude") {
       result = await callClaude(body.images, systemPrompt, isFusion);
     } else {
       result = await callGemini(body.images, systemPrompt, isFusion);
     }
+    console.log(`⏱ AI call (${provider}): ${Date.now() - aiStart}ms`);
+    console.log(`⏱ analyze-image total: ${Date.now() - requestStart}ms`);
 
     // Response size limit: 500KB for recipe JSON
     const responseWithCredits = creditBalances
@@ -734,9 +1131,8 @@ Deno.serve(async (req) => {
   } catch (error: unknown) {
     // Refund credit on AI failure
     if (userId && creditPool) {
-      await supabase.rpc("refund_credit", { p_user_id: userId, p_pool: creditPool }).catch((e: unknown) => {
-        console.error("refund_credit failed:", e);
-      });
+      try { await supabase.rpc("refund_credit", { p_user_id: userId, p_pool: creditPool }); }
+      catch (e) { console.error("refund_credit failed:", e); }
     }
 
     if (error && typeof error === "object" && "isRateLimit" in error) {

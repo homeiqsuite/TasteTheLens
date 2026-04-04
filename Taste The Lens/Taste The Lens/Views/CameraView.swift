@@ -15,6 +15,7 @@ struct CameraView: View {
     @State private var isCapturing = false
     @State private var currentTipIndex = 0
     @State private var tipRotationTask: Task<Void, Never>?
+    @State private var tooltipTask: Task<Void, Never>?
     private let cameraTips = [
         "Point at anything. Art, architecture, a sunset. Tap to taste.",
         "Good lighting helps AI see more detail",
@@ -24,6 +25,8 @@ struct CameraView: View {
     @AppStorage("hasSeenFusionTooltip") private var hasSeenFusionTooltip = false
     @AppStorage("hasSeenChefTooltip") private var hasSeenChefTooltip = false
     @State private var showChefTooltip = false
+    @State private var chefButtonOffset: CGFloat = 0
+    @State private var isViewVisible = false
 
     var onPhotoCaptured: (UIImage) -> Void
     var onFusionPhotoCaptured: (([UIImage]) -> Void)?
@@ -115,32 +118,9 @@ struct CameraView: View {
 
                         Spacer()
 
-                        // Chef picker
-                        VStack(spacing: 4) {
-                            if showChefTooltip {
-                                CoachTooltip(
-                                    text: "Your chef shapes recipe style and ingredients",
-                                    icon: "person.crop.circle",
-                                    pointer: .down
-                                ) {
-                                    showChefTooltip = false
-                                    hasSeenChefTooltip = true
-                                }
-                                .transition(.opacity)
-                            }
-
-                            Button {
-                                onChefTapped()
-                            } label: {
-                                let chef = ChefPersonality(rawValue: selectedChef) ?? .defaultChef
-                                Image(systemName: chef.icon)
-                                    .font(.system(size: 22, weight: .medium))
-                                    .foregroundStyle(Theme.darkTextSecondary)
-                                    .frame(width: 50, height: 50)
-                                    .background(Color.black.opacity(0.3))
-                                    .clipShape(Circle())
-                            }
-                        }
+                        // Chef picker — slides left when tooltip visible, fixed frame so HStack layout is stable
+                        chefButton
+                            .frame(width: 50, height: 50)
                     }
                     .padding(.horizontal, 32)
 
@@ -152,7 +132,7 @@ struct CameraView: View {
                                 hasSeenFusionTooltip = true
                             }
                             .transition(.opacity)
-                            .padding(.bottom, 8)
+                            .padding(.bottom, 24)
                         }
 
                         Spacer()
@@ -162,28 +142,39 @@ struct CameraView: View {
 
                 Spacer().frame(height: 40)
             }
-            .animation(.easeInOut(duration: 0.35), value: fusionState.isActive)
+            // Note: animation was intentionally removed from this VStack to prevent
+            // it from leaking into ShutterButton. Fusion transitions are handled
+            // by individual child views (FusionTrayView, hint text Group).
         }
         .task {
             logger.info("Checking camera permission...")
             await cameraManager.checkPermission()
             logger.info("Permission granted: \(cameraManager.permissionGranted)")
-            cameraManager.startSession()
-            logger.info("Camera session started")
+            if cameraManager.permissionGranted {
+                cameraManager.startSession()
+            }
         }
         .onAppear {
+            isViewVisible = true
             isPulsing = true
-            // Show fusion tooltip on first camera open
-            if !hasSeenFusionTooltip {
-                Task {
-                    try? await Task.sleep(for: .seconds(1.5))
+            cameraManager.startSession()
+            // Stagger tooltips: show fusion first, then chef after fusion dismisses
+            tooltipTask = Task {
+                try? await Task.sleep(for: .seconds(1.5))
+                guard !Task.isCancelled, isViewVisible else { return }
+                if !hasSeenFusionTooltip {
                     withAnimation { showFusionTooltip = true }
+                    try? await Task.sleep(for: .seconds(5))
+                    guard !Task.isCancelled, isViewVisible else { return }
                 }
-            }
-            // Show chef tooltip on first camera open (independent of fusion tooltip)
-            if !hasSeenChefTooltip {
-                Task {
-                    try? await Task.sleep(for: .seconds(1.5))
+                if !hasSeenChefTooltip {
+                    try? await Task.sleep(for: .seconds(1))
+                    guard !Task.isCancelled, isViewVisible else { return }
+                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                        chefButtonOffset = -80
+                    }
+                    try? await Task.sleep(for: .seconds(0.3))
+                    guard !Task.isCancelled, isViewVisible else { return }
                     withAnimation { showChefTooltip = true }
                 }
             }
@@ -191,11 +182,19 @@ struct CameraView: View {
             startTipRotation()
         }
         .onDisappear {
+            isViewVisible = false
+            tooltipTask?.cancel()
+            tooltipTask = nil
             tipRotationTask?.cancel()
             tipRotationTask = nil
             cameraManager.stopSession()
             if fusionState.isActive {
                 fusionState.reset()
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            if cameraManager.permissionGranted {
+                cameraManager.startSession()
             }
         }
         .onChange(of: selectedPhotoItem) { _, newItem in
@@ -244,6 +243,23 @@ struct CameraView: View {
             Text("Open Settings to grant camera permission.")
                 .font(.system(size: 14))
                 .foregroundStyle(Theme.darkTextTertiary)
+
+            Button {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            } label: {
+                Text("Open Settings")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(Theme.gold)
+                    .clipShape(Capsule())
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            Task { await cameraManager.checkPermission() }
         }
     }
 
@@ -261,6 +277,46 @@ struct CameraView: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Chef Button + Tooltip
+
+    /// Chef button that slides left to make room for the tooltip, then slides back
+    private var chefButton: some View {
+        Button {
+            onChefTapped()
+        } label: {
+            let chef = ChefPersonality(rawValue: selectedChef) ?? .defaultChef
+            Image(systemName: chef.icon)
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(Theme.darkTextSecondary)
+                .frame(width: 50, height: 50)
+                .background(Color.black.opacity(0.3))
+                .clipShape(Circle())
+        }
+        .overlay(alignment: .bottom) {
+            if showChefTooltip {
+                CoachTooltip(
+                    text: "Pick your chef",
+                    icon: "person.crop.circle",
+                    pointer: .down
+                ) {
+                    dismissChefTooltip()
+                }
+                .fixedSize()
+                .transition(.opacity)
+                .offset(y: -58)
+            }
+        }
+        .offset(x: chefButtonOffset)
+    }
+
+    private func dismissChefTooltip() {
+        showChefTooltip = false
+        hasSeenChefTooltip = true
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+            chefButtonOffset = 0
         }
     }
 
@@ -352,5 +408,132 @@ struct CameraView: View {
         let images = fusionState.capturedImages
         fusionState.reset()
         onFusionPhotoCaptured?(images)
+    }
+}
+
+// MARK: - Preview
+
+#Preview("Chef Tooltip") {
+    // Static preview showing chef button slid left with tooltip above it
+    ZStack {
+        Color.black.ignoresSafeArea()
+
+        VStack {
+            Spacer()
+
+            Text("Good lighting helps AI see more detail")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Theme.darkTextSecondary)
+                .padding(.horizontal, 40)
+
+            Spacer().frame(height: 24)
+
+            ZStack(alignment: .bottom) {
+                HStack {
+                    Image(systemName: "photo.on.rectangle")
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(Theme.darkTextSecondary)
+                        .frame(width: 50, height: 50)
+                        .background(Color.black.opacity(0.3))
+                        .clipShape(Circle())
+
+                    Spacer()
+
+                    Circle()
+                        .stroke(Color.white, lineWidth: 4)
+                        .frame(width: 70, height: 70)
+                        .overlay(
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 58, height: 58)
+                        )
+
+                    Spacer()
+
+                    // Chef button + tooltip, slid left, fixed 50pt frame for stable layout
+                    Image(systemName: "frying.pan")
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(Theme.darkTextSecondary)
+                        .frame(width: 50, height: 50)
+                        .background(Color.black.opacity(0.3))
+                        .clipShape(Circle())
+                        .overlay(alignment: .bottom) {
+                            CoachTooltip(
+                                text: "Pick your chef",
+                                icon: "person.crop.circle",
+                                pointer: .down
+                            ) {}
+                            .fixedSize()
+                            .offset(y: -58)
+                        }
+                        .offset(x: -80)
+                        .frame(width: 50, height: 50)
+                }
+                .padding(.horizontal, 32)
+            }
+            .frame(height: 120)
+
+            Spacer().frame(height: 40)
+        }
+    }
+}
+
+#Preview("Fusion Tooltip") {
+    ZStack {
+        Color.black.ignoresSafeArea()
+
+        VStack {
+            Spacer()
+
+            Text("Point at anything. Art, architecture, a sunset. Tap to taste.")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Theme.darkTextSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+
+            Spacer().frame(height: 24)
+
+            ZStack(alignment: .bottom) {
+                HStack {
+                    Image(systemName: "photo.on.rectangle")
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(Theme.darkTextSecondary)
+                        .frame(width: 50, height: 50)
+                        .background(Color.black.opacity(0.3))
+                        .clipShape(Circle())
+
+                    Spacer()
+
+                    Circle()
+                        .stroke(Color.white, lineWidth: 4)
+                        .frame(width: 70, height: 70)
+                        .overlay(
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 58, height: 58)
+                        )
+
+                    Spacer()
+
+                    Image(systemName: "frying.pan")
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(Theme.darkTextSecondary)
+                        .frame(width: 50, height: 50)
+                        .background(Color.black.opacity(0.3))
+                        .clipShape(Circle())
+                }
+                .padding(.horizontal, 32)
+
+                // Fusion tooltip centered above shutter
+                VStack(spacing: 0) {
+                    FusionTooltip {}
+                        .padding(.bottom, 24)
+                    Spacer()
+                }
+            }
+            .frame(height: 120)
+
+            Spacer().frame(height: 40)
+        }
     }
 }

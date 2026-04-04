@@ -14,20 +14,9 @@ enum PaywallContext {
     var title: String {
         switch self {
         case .outOfGenerations:
-            return "You've used all your tastings"
-        case .featureGated(let feature):
-            switch feature {
-            case .chefPersonalities: return "Unlock All Chefs"
-            case .reimagination: return "Unlock Reimagination"
-            case .cloudSync: return "Unlock Cloud Sync"
-            case .cleanExport: return "Unlock Clean Exports"
-            case .unlimitedSaves: return "Unlock Unlimited Saves"
-            case .fullDashboard: return "Unlock Full Dashboard"
-            case .fullTastingMenus: return "Unlock Tasting Menus"
-            case .fullChallenges: return "Unlock Challenges"
-            case .bulkExport: return "Unlock Bulk Export"
-            default: return "Upgrade to Unlock"
-            }
+            return UsageTracker.shared.canGenerate ? "Get More Credits" : "You're out of credits"
+        case .featureGated:
+            return "Unlock All Features"
         case .topUp:
             return "Get More Credits"
         }
@@ -36,9 +25,9 @@ enum PaywallContext {
     var subtitle: String {
         switch self {
         case .outOfGenerations:
-            return "Buy credits or subscribe for more"
+            return "Buy credits to generate more recipes"
         case .featureGated:
-            return "Subscribe to Chef's Table for premium features"
+            return "Any credit pack purchase unlocks all premium features"
         case .topUp:
             return "Add credits to your balance"
         }
@@ -47,7 +36,7 @@ enum PaywallContext {
     var icon: String {
         switch self {
         case .outOfGenerations: return "sparkles"
-        case .featureGated: return "lock.fill"
+        case .featureGated: return "lock.open.fill"
         case .topUp: return "plus.circle"
         }
     }
@@ -62,8 +51,6 @@ struct PaywallView: View {
     @State private var isPurchasing = false
     @State private var purchasingProductId: String?
     @State private var errorMessage: String?
-    @State private var showSubscriptionNudge = false
-    @State private var showAnnualBilling = false
 
     private let store = StoreManager.shared
     private let usage = UsageTracker.shared
@@ -82,28 +69,14 @@ struct PaywallView: View {
 
                     headerSection
                     creditBalanceBadge
+                    unlockBanner
                     creditPacksSection
-                    subscriptionSection
+                    autoRefillSection
                     errorSection
                     footerButtons
 
                     Spacer().frame(height: 24)
                 }
-            }
-            .sheet(isPresented: $showSubscriptionNudge) {
-                SubscriptionNudgeSheet(
-                    totalSpend: UsageTracker.shared.creditPackTotalSpend,
-                    onViewSubscription: {
-                        UsageTracker.shared.hasSeenSubscriptionNudge = true
-                        showSubscriptionNudge = false
-                        // Stay on paywall so user can see subscription options
-                    },
-                    onDismiss: {
-                        UsageTracker.shared.hasSeenSubscriptionNudge = true
-                        showSubscriptionNudge = false
-                        dismiss()
-                    }
-                )
             }
         }
     }
@@ -141,12 +114,13 @@ struct PaywallView: View {
 
     @ViewBuilder
     private var creditBalanceBadge: some View {
-        if usage.totalAvailableCredits > 0 || usage.purchasedCredits > 0 {
+        let totalCredits = usage.totalAvailableCredits + usage.remainingFreeGenerations
+        if totalCredits > 0 {
             HStack(spacing: 8) {
                 Image(systemName: "circle.grid.3x3.fill")
                     .font(.system(size: 14))
                     .foregroundStyle(Theme.visual)
-                Text("\(usage.totalAvailableCredits + usage.remainingFreeGenerations) credits available")
+                Text("\(totalCredits) credits available")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(Theme.darkTextPrimary)
             }
@@ -158,29 +132,41 @@ struct PaywallView: View {
         }
     }
 
+    // MARK: - Unlock Banner
+
+    @ViewBuilder
+    private var unlockBanner: some View {
+        if !EntitlementManager.shared.hasEverPurchased {
+            HStack(spacing: 10) {
+                Image(systemName: "star.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.gold)
+                Text("Any purchase unlocks all premium features")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.gold)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity)
+            .background(Theme.gold.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Theme.gold.opacity(0.25), lineWidth: 1)
+            )
+            .padding(.horizontal, 24)
+        }
+    }
+
     // MARK: - Credit Packs
 
     private var creditPacksSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("Credit Packs")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.darkTextTertiary)
-                    .textCase(.uppercase)
-                    .tracking(0.5)
-
-                Spacer()
-
-                if EntitlementManager.shared.isSubscriber {
-                    Text("10% subscriber discount")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Theme.gold)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Theme.gold.opacity(0.12))
-                        .clipShape(Capsule())
-                }
-            }
+            Text("Credit Packs")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.darkTextTertiary)
+                .textCase(.uppercase)
+                .tracking(0.5)
 
             if store.creditProducts.isEmpty && store.isLoading {
                 loadingPlaceholder
@@ -196,19 +182,40 @@ struct PaywallView: View {
     private func creditPackButton(product: Product) -> some View {
         let creditCount = StoreManager.creditPackAmounts[product.id] ?? 0
         let isThisPurchasing = purchasingProductId == product.id
+        let isBestValue = product.id == StoreManager.chefsStashPackId
+        let perCredit = creditCount > 0
+            ? String(format: "$%.2f/credit", NSDecimalNumber(decimal: product.price).doubleValue / Double(creditCount))
+            : ""
 
         return Button {
             purchaseProduct(product)
         } label: {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("\(creditCount) credits")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Theme.darkTextPrimary)
+                    HStack(spacing: 6) {
+                        Text("\(creditCount) credits")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Theme.darkTextPrimary)
 
-                    Text(packLabel(for: product.id))
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.darkTextTertiary)
+                        if isBestValue {
+                            Text("Best Value")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(Theme.gold)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Theme.gold.opacity(0.15))
+                                .clipShape(Capsule())
+                        }
+                    }
+
+                    HStack(spacing: 8) {
+                        Text(packLabel(for: product.id))
+                            .font(.system(size: 12))
+                            .foregroundStyle(Theme.darkTextTertiary)
+                        Text(perCredit)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.darkTextHint)
+                    }
                 }
 
                 Spacer()
@@ -226,7 +233,8 @@ struct PaywallView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(Theme.darkStroke, lineWidth: 1)
+                    .stroke(isBestValue ? Theme.gold.opacity(0.4) : Theme.darkStroke,
+                            lineWidth: isBestValue ? 1.5 : 1)
             )
         }
         .buttonStyle(.plain)
@@ -235,200 +243,70 @@ struct PaywallView: View {
 
     private func packLabel(for productId: String) -> String {
         switch productId {
-        case StoreManager.starterPackId: return "Starter Pack"
-        case StoreManager.classicPackId: return "Classic Pack"
-        case StoreManager.pantryPackId: return "Pantry Pack"
+        case StoreManager.tastePackId:      return "Taste"
+        case StoreManager.cookPackId:       return "Cook"
+        case StoreManager.feastPackId:      return "Feast"
+        case StoreManager.chefsStashPackId: return "Chef's Stash"
+        case StoreManager.cellarPackId:     return "Cellar"
         default: return ""
         }
     }
 
-    // MARK: - Subscriptions
+    // MARK: - Auto-Refill
 
     @ViewBuilder
-    private var subscriptionSection: some View {
-        // Don't show subscriptions for top-up context if already subscribed
-        if !(context is PaywallContext && EntitlementManager.shared.isSubscriber) || !isTopUp {
+    private var autoRefillSection: some View {
+        if let autoRefill = store.autoRefillProduct {
             VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text("Or Subscribe")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Theme.darkTextTertiary)
-                        .textCase(.uppercase)
-                        .tracking(0.5)
+                Text("Never Run Out")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.darkTextTertiary)
+                    .textCase(.uppercase)
+                    .tracking(0.5)
 
-                    Spacer()
-                }
+                let isThisPurchasing = purchasingProductId == autoRefill.id
 
-                // Monthly / Annual toggle (only show if annual product exists)
-                if store.chefsTableAnnualProduct != nil {
-                    Picker("Billing", selection: $showAnnualBilling) {
-                        Text("Monthly").tag(false)
-                        Text("Annual").tag(true)
-                    }
-                    .pickerStyle(.segmented)
-                }
-
-                // Chef's Table — Monthly or Annual based on toggle
-                if showAnnualBilling, let annual = store.chefsTableAnnualProduct {
-                    subscriptionCard(
-                        product: annual,
-                        name: "Chef's Table",
-                        credits: "75 credits/month",
-                        features: [
-                            "All chef personalities",
-                            "Recipe reimagination",
-                            "Cloud sync",
-                            "Clean exports (no watermark)",
-                            "Full dashboard & tasting menus"
-                        ],
-                        isRecommended: true,
-                        billingNote: "~$5.83/mo · Save 42%"
-                    )
-                } else if let chefsTable = store.chefsTableProduct {
-                    subscriptionCard(
-                        product: chefsTable,
-                        name: "Chef's Table",
-                        credits: "75 credits/month",
-                        features: [
-                            "All chef personalities",
-                            "Recipe reimagination",
-                            "Cloud sync",
-                            "Clean exports (no watermark)",
-                            "Full dashboard & tasting menus"
-                        ],
-                        isRecommended: true
-                    )
-                }
-
-                // Atelier
-                if let atelier = store.atelierProduct {
-                    subscriptionCard(
-                        product: atelier,
-                        name: "Atelier",
-                        credits: "500 credits/month",
-                        features: [
-                            "Everything in Chef's Table",
-                            "Bulk export",
-                            "Creator & B2B features"
-                        ],
-                        isRecommended: false
-                    )
-                }
-
-                // Legacy fallback
-                if store.chefsTableProduct == nil && store.atelierProduct == nil {
-                    if let monthly = store.monthlyProduct {
-                        subscriptionCard(
-                            product: monthly,
-                            name: "Chef's Table",
-                            credits: "75 credits/month",
-                            features: [
-                                "All chef personalities",
-                                "Recipe reimagination",
-                                "Cloud sync & clean exports"
-                            ],
-                            isRecommended: true
-                        )
-                    }
-                }
-
-                if store.subscriptionProducts.isEmpty && store.isLoading {
-                    loadingPlaceholder
-                }
-            }
-            .padding(.horizontal, 24)
-        }
-    }
-
-    private var isTopUp: Bool {
-        if case .topUp = context { return true }
-        return false
-    }
-
-    private func subscriptionCard(
-        product: Product,
-        name: String,
-        credits: String,
-        features: [String],
-        isRecommended: Bool,
-        billingNote: String? = nil
-    ) -> some View {
-        let isThisPurchasing = purchasingProductId == product.id
-
-        return Button {
-            purchaseProduct(product)
-        } label: {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            Text(name)
+                Button {
+                    purchaseProduct(autoRefill)
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Auto-Refill")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(Theme.darkTextPrimary)
-
-                            if isRecommended {
-                                Text("Recommended")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(Theme.gold)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Theme.gold.opacity(0.15))
-                                    .clipShape(Capsule())
-                            }
+                            Text("30 credits loaded every month. Cancel anytime.")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.darkTextTertiary)
                         }
 
-                        Text(credits)
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.visual)
-                    }
+                        Spacer()
 
-                    Spacer()
-
-                    if isThisPurchasing {
-                        ProgressView().tint(Theme.gold)
-                    } else {
-                        VStack(alignment: .trailing, spacing: 1) {
-                            Text(product.displayPrice)
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(Theme.gold)
-                            if let billingNote {
-                                Text(billingNote)
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundStyle(Theme.gold.opacity(0.8))
-                            } else {
+                        if isThisPurchasing {
+                            ProgressView().tint(Theme.gold)
+                        } else {
+                            VStack(alignment: .trailing, spacing: 1) {
+                                Text(autoRefill.displayPrice)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(Theme.gold)
                                 Text("/month")
                                     .font(.system(size: 11))
                                     .foregroundStyle(Theme.darkTextHint)
                             }
                         }
                     }
+                    .padding(14)
+                    .background(Theme.darkSurface)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Theme.darkStroke, lineWidth: 1)
+                    )
                 }
-
-                // Feature list
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(features, id: \.self) { feature in
-                        HStack(spacing: 8) {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(Theme.gold)
-                            Text(feature)
-                                .font(.system(size: 13))
-                                .foregroundStyle(Theme.darkTextSecondary)
-                        }
-                    }
-                }
+                .buttonStyle(.plain)
+                .disabled(isPurchasing)
             }
-            .padding(16)
-            .background(Theme.darkSurface)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(isRecommended ? Theme.gold.opacity(0.4) : Theme.darkStroke,
-                            lineWidth: isRecommended ? 1.5 : 1)
-            )
+            .padding(.horizontal, 24)
         }
-        .buttonStyle(.plain)
-        .disabled(isPurchasing)
     }
 
     // MARK: - Error
@@ -451,7 +329,7 @@ struct PaywallView: View {
             Button {
                 Task {
                     await store.restorePurchases()
-                    if store.isPro { dismiss() }
+                    if EntitlementManager.shared.hasEverPurchased { dismiss() }
                 }
             } label: {
                 Text("Restore Purchases")
@@ -477,7 +355,6 @@ struct PaywallView: View {
     }
 
     private func purchaseProduct(_ product: Product) {
-        let isCreditPack = StoreManager.creditPackAmounts.keys.contains(product.id)
         Task {
             isPurchasing = true
             purchasingProductId = product.id
@@ -485,13 +362,9 @@ struct PaywallView: View {
             do {
                 let success = try await store.purchase(product)
                 if success {
-                    HapticManager.medium()
-                    // After credit pack purchase, check if we should nudge toward subscription
-                    if isCreditPack && UsageTracker.shared.shouldShowSubscriptionNudge {
-                        showSubscriptionNudge = true
-                    } else {
-                        dismiss()
-                    }
+                    HapticManager.success()
+                    try? await Task.sleep(for: .milliseconds(300))
+                    dismiss()
                 }
             } catch {
                 errorMessage = error.localizedDescription
@@ -500,63 +373,5 @@ struct PaywallView: View {
             isPurchasing = false
             purchasingProductId = nil
         }
-    }
-}
-
-// MARK: - Subscription Upgrade Nudge
-
-private struct SubscriptionNudgeSheet: View {
-    let totalSpend: Double
-    let onViewSubscription: () -> Void
-    let onDismiss: () -> Void
-
-    var body: some View {
-        ZStack {
-            Theme.darkBg.ignoresSafeArea()
-
-            VStack(spacing: 20) {
-                Spacer().frame(height: 24)
-
-                Image(systemName: "lightbulb.fill")
-                    .font(.system(size: 44))
-                    .foregroundStyle(Theme.gold)
-
-                Text("Save with Chef's Table")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(Theme.darkTextPrimary)
-
-                Text("You've spent \(totalSpend, format: .currency(code: "USD")) on credits. Chef's Table gives you **75 credits/month** plus all chef personalities, reimagination, and clean exports for just $9.99/mo.")
-                    .font(.system(size: 15))
-                    .foregroundStyle(Theme.darkTextSecondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
-
-                VStack(spacing: 12) {
-                    Button {
-                        onViewSubscription()
-                    } label: {
-                        Text("View Subscription")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(Theme.darkBg)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(Theme.gold)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                    }
-
-                    Button {
-                        onDismiss()
-                    } label: {
-                        Text("Not now")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Theme.darkTextHint)
-                    }
-                }
-                .padding(.horizontal, 32)
-
-                Spacer()
-            }
-        }
-        .presentationDetents([.medium])
     }
 }

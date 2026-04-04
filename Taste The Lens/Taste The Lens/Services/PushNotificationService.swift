@@ -32,12 +32,16 @@ final class PushNotificationService {
     var preferences = NotificationPreferences.default
     var permissionStatus: UNAuthorizationStatus = .notDetermined
 
-    /// The current FCM token, kept in memory for sign-out cleanup.
-    private var currentFCMToken: String?
+    /// The current FCM token, persisted to UserDefaults so it survives crashes.
+    private var currentFCMToken: String? {
+        didSet { UserDefaults.standard.set(currentFCMToken, forKey: "cachedFCMToken") }
+    }
 
     private var supabase: SupabaseClient { SupabaseManager.shared.client }
 
-    private init() {}
+    private init() {
+        currentFCMToken = UserDefaults.standard.string(forKey: "cachedFCMToken")
+    }
 
     // MARK: - Permission
 
@@ -65,6 +69,18 @@ final class PushNotificationService {
     }
 
     // MARK: - FCM Token Registration
+
+    /// Re-registers the cached FCM token after auth is established.
+    /// The FCM callback often fires before auth restores, so the token is
+    /// saved to currentFCMToken/UserDefaults but never upserted to Supabase.
+    /// Call this after session restore or sign-in to complete registration.
+    func registerCurrentTokenIfNeeded() async {
+        guard let token = currentFCMToken else {
+            logger.info("No cached FCM token to register")
+            return
+        }
+        await registerFCMToken(token)
+    }
 
     private func isValidFCMToken(_ token: String) -> Bool {
         guard !token.isEmpty,

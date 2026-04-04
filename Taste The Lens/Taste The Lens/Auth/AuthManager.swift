@@ -14,6 +14,8 @@ final class AuthManager {
     var isAuthenticated: Bool { currentUser != nil }
     var isGuest: Bool { !isAuthenticated }
     var isLoading = false
+    /// True when a stored session exists but the refresh token has expired
+    var sessionExpired = false
 
     private var supabase: SupabaseClient { SupabaseManager.shared.client }
 
@@ -22,14 +24,51 @@ final class AuthManager {
     // MARK: - Session Restore
 
     func restoreSession() async {
+        sessionExpired = false
         do {
+            // This throws if no stored session exists at all
             let session = try await supabase.auth.session
-            currentUser = session.user
-            logger.info("Session restored for user: \(session.user.id)")
+            do {
+                // This throws if the refresh token has expired
+                let refreshed = try await supabase.auth.refreshSession()
+                currentUser = refreshed.user
+                logger.info("Session restored and validated for user: \(refreshed.user.id)")
+                await PushNotificationService.shared.registerCurrentTokenIfNeeded()
+
+                // Retry persisting Apple full name if a previous attempt failed
+                if let pendingName = UserDefaults.standard.string(forKey: "pendingAppleFullName"), !pendingName.isEmpty {
+                    let existingName = currentUser?.userMetadata["full_name"]?.stringValue
+                    if existingName == nil || existingName?.isEmpty == true {
+                        do {
+                            _ = try await supabase.auth.update(user: .init(data: ["full_name": .string(pendingName)]))
+                            UserDefaults.standard.removeObject(forKey: "pendingAppleFullName")
+                            logger.info("Retried Apple full name persistence successfully")
+                        } catch {
+                            logger.warning("Retry of Apple full name persistence failed: \(error)")
+                        }
+                    } else {
+                        UserDefaults.standard.removeObject(forKey: "pendingAppleFullName")
+                    }
+                }
+            } catch {
+                // Session exists but refresh failed — token is expired
+                logger.warning("Session refresh failed (expired token): \(error)")
+                sessionExpired = true
+                currentUser = nil
+            }
         } catch {
-            logger.info("No existing session to restore")
+            // No stored session at all — clean guest state
+            logger.info("No stored session to restore: \(error)")
             currentUser = nil
         }
+    }
+
+    // MARK: - Invalid Session
+
+    @MainActor
+    func clearInvalidSession() {
+        currentUser = nil
+        logger.warning("Cleared invalid session — user is now a guest")
     }
 
     // MARK: - Sign in with Apple
@@ -43,12 +82,16 @@ final class AuthManager {
         )
         currentUser = session.user
 
-        // Apple only provides fullName on the FIRST sign-in — persist it to auth metadata
+        // Apple only provides fullName on the FIRST sign-in — persist it to auth metadata.
+        // Save to UserDefaults first as a backup, since a network failure here would lose
+        // the name forever (Apple won't provide it again).
         if let fullName, let formatted = PersonNameComponentsFormatter.localizedString(from: fullName, style: .default).nilIfEmpty {
+            UserDefaults.standard.set(formatted, forKey: "pendingAppleFullName")
             let existingName = currentUser?.userMetadata["full_name"]?.stringValue
             if existingName == nil || existingName?.isEmpty == true {
                 _ = try await supabase.auth.update(user: .init(data: ["full_name": .string(formatted)]))
             }
+            UserDefaults.standard.removeObject(forKey: "pendingAppleFullName")
         }
 
         logger.info("Signed in with Apple — user: \(session.user.id)")
@@ -59,6 +102,7 @@ final class AuthManager {
 
         await syncDisplayName()
         await PushNotificationService.shared.requestPermission()
+        await PushNotificationService.shared.registerCurrentTokenIfNeeded()
     }
 
     // MARK: - Email Auth
@@ -87,6 +131,7 @@ final class AuthManager {
         logger.info("Signed in with email — user: \(session.user.id)")
         await syncDisplayName()
         await PushNotificationService.shared.requestPermission()
+        await PushNotificationService.shared.registerCurrentTokenIfNeeded()
     }
 
     // MARK: - Forgot Password
@@ -176,7 +221,10 @@ final class AuthManager {
             .eq("id", value: userId.uuidString)
             .execute()
 
-        // Sign out locally
+        // Clean up all client-side state before signing out
+        UsageTracker.shared.resetForSignOut()
+
+        // Sign out locally (triggers ContentView onChange which resets remaining state)
         try await supabase.auth.signOut()
         currentUser = nil
         logger.info("Account deleted and signed out")
@@ -193,6 +241,13 @@ final class AuthManager {
 
     var email: String {
         currentUser?.email ?? ""
+    }
+
+    var displayEmail: String {
+        let raw = currentUser?.email ?? ""
+        return raw.contains("@privaterelay.appleid.com")
+            ? "Sign in with Apple"
+            : raw
     }
 
     var memberSinceDate: Date {

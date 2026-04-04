@@ -3,6 +3,7 @@ import SwiftData
 
 extension Notification.Name {
     static let reimagineRecipe = Notification.Name("reimagineRecipe")
+    static let simplifyRecipe = Notification.Name("simplifyRecipe")
 }
 
 enum ReimagineCourseType: String, CaseIterable, Identifiable {
@@ -61,6 +62,8 @@ struct RecipeCardView: View {
     @AppStorage("hasSeenMilestone5") private var hasSeenMilestone5 = false
     @AppStorage("hasSeenRecipeWalkthrough") private var hasSeenRecipeWalkthrough = false
     @State private var walkthroughStep: Int? = nil
+    @State private var showCookingMode = false
+    @State private var overlayTask: Task<Void, Never>?
 
     private var cookingSteps: [CookingStep] {
         recipe.effectiveCookingSteps
@@ -108,14 +111,21 @@ struct RecipeCardView: View {
                     }
 
                     // Final step: Completion
-                    CompletionStep(recipe: recipe)
+                    CompletionStep(recipe: recipe, servingCount: servingCount)
                         .tag(totalSteps - 1)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .animation(.easeInOut(duration: 0.25), value: currentStep)
+
+                // Page indicator dots
+                PageIndicatorView(totalSteps: totalSteps, currentStep: currentStep)
+                    .padding(.vertical, 8)
 
                 // Bottom navigation bar
-                StepNavigationBar(currentStep: $currentStep, totalSteps: totalSteps)
+                StepNavigationBar(
+                    currentStep: $currentStep,
+                    totalSteps: totalSteps,
+                    onCookingMode: (currentStep > 0 && currentStep < totalSteps - 1) ? { showCookingMode = true } : nil
+                )
             }
 
             // First-recipe celebration overlay
@@ -147,46 +157,93 @@ struct RecipeCardView: View {
             }
         }
         .onAppear {
-            servingCount = recipe.baseServings
-
-            // Capture before mutation so downstream delay logic reads the pre-mutation value
+            servingCount = max(1, min(99, recipe.baseServings))
             let isFirstRecipe = !hasGeneratedFirstRecipe
-
-            // First-recipe celebration
-            if isFirstRecipe {
-                hasGeneratedFirstRecipe = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            overlayTask?.cancel()
+            overlayTask = Task {
+                if isFirstRecipe {
+                    hasGeneratedFirstRecipe = true
+                    try? await Task.sleep(for: .milliseconds(600))
+                    guard !Task.isCancelled else { return }
                     HapticManager.success()
                     withAnimation(.easeOut(duration: 0.4)) { showCelebration = true }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                        withAnimation(.easeOut(duration: 0.5)) { showCelebration = false }
+                    try? await Task.sleep(for: .seconds(3))
+                    guard !Task.isCancelled else { return }
+                    withAnimation(.easeOut(duration: 0.5)) { showCelebration = false }
+                    // sequence continues in .onChange(of: showCelebration)
+                } else {
+                    let recipeCount = UserDefaults.standard.integer(forKey: "totalRecipeCount")
+                    let hasMilestone: Bool
+                    if recipeCount >= 5 && !hasSeenMilestone5 {
+                        hasSeenMilestone5 = true
+                        milestoneMessage = "5 recipes! Invite friends to a Tasting Menu"
+                        hasMilestone = true
+                    } else if recipeCount >= 3 && !hasSeenMilestone3 {
+                        hasSeenMilestone3 = true
+                        milestoneMessage = "3 dishes created — try a Challenge!"
+                        hasMilestone = true
+                    } else {
+                        hasMilestone = false
+                    }
+
+                    try? await Task.sleep(for: .milliseconds(400))
+                    guard !Task.isCancelled else { return }
+
+                    if hasMilestone {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showMilestoneToast = true }
+                        try? await Task.sleep(for: .seconds(4))
+                        guard !Task.isCancelled else { return }
+                        withAnimation(.easeOut(duration: 0.3)) { showMilestoneToast = false }
+                        // sequence continues in .onChange(of: showMilestoneToast)
+                    } else if !hasSeenRecipeWalkthrough {
+                        withAnimation { walkthroughStep = 0 }
+                        // sequence continues in .onChange(of: walkthroughStep)
+                    } else if !hasSeenAuthPrompt && !AuthManager.shared.isAuthenticated {
+                        showAuthPrompt = true
+                        hasSeenAuthPrompt = true
                     }
                 }
-            } else {
-                // Milestone toasts (only after first recipe, staggered past auth prompt)
-                let recipeCount = UserDefaults.standard.integer(forKey: "totalRecipeCount")
-                if recipeCount >= 3 && !hasSeenMilestone3 {
-                    hasSeenMilestone3 = true
-                    milestoneMessage = "3 dishes created — try a Challenge!"
-                    showMilestoneAfterDelay()
-                } else if recipeCount >= 5 && !hasSeenMilestone5 {
-                    hasSeenMilestone5 = true
-                    milestoneMessage = "5 recipes! Invite friends to a Tasting Menu"
-                    showMilestoneAfterDelay()
-                }
             }
-
-            // Recipe walkthrough: wait for confetti to finish on first recipe, else short delay
-            if !hasSeenRecipeWalkthrough {
-                let delay: Double = isFirstRecipe ? 4.5 : 1.5
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+        }
+        .onDisappear {
+            overlayTask?.cancel()
+            overlayTask = nil
+        }
+        .onChange(of: showCelebration) { oldValue, newValue in
+            guard oldValue && !newValue else { return }
+            overlayTask?.cancel()
+            overlayTask = Task {
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+                if !hasSeenRecipeWalkthrough {
                     withAnimation { walkthroughStep = 0 }
+                } else if !hasSeenAuthPrompt && !AuthManager.shared.isAuthenticated {
+                    showAuthPrompt = true
+                    hasSeenAuthPrompt = true
                 }
             }
-
-            // Auth prompt: only show when no milestone toast is competing
-            if !hasSeenAuthPrompt && !AuthManager.shared.isAuthenticated {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+        }
+        .onChange(of: showMilestoneToast) { oldValue, newValue in
+            guard oldValue && !newValue else { return }
+            overlayTask?.cancel()
+            overlayTask = Task {
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+                if !hasSeenRecipeWalkthrough {
+                    withAnimation { walkthroughStep = 0 }
+                } else if !hasSeenAuthPrompt && !AuthManager.shared.isAuthenticated {
+                    showAuthPrompt = true
+                    hasSeenAuthPrompt = true
+                }
+            }
+        }
+        .onChange(of: walkthroughStep) { oldValue, newValue in
+            guard oldValue != nil && newValue == nil && hasSeenRecipeWalkthrough else { return }
+            overlayTask?.cancel()
+            overlayTask = Task {
+                try? await Task.sleep(for: .milliseconds(500))
+                guard !Task.isCancelled else { return }
+                if !hasSeenAuthPrompt && !AuthManager.shared.isAuthenticated {
                     showAuthPrompt = true
                     hasSeenAuthPrompt = true
                 }
@@ -197,6 +254,9 @@ struct RecipeCardView: View {
         }
         .sheet(isPresented: $showAIReasoning) {
             AIReasoningView(recipe: recipe)
+        }
+        .fullScreenCover(isPresented: $showCookingMode) {
+            CookingModeView(recipe: recipe, servingCount: servingCount)
         }
     }
 
@@ -341,14 +401,25 @@ struct RecipeCardView: View {
         }
     }
 
-    private func showMilestoneAfterDelay() {
-        // Delay past the auth prompt (1.5s) so they don't collide
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showMilestoneToast = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
-                withAnimation(.easeOut(duration: 0.3)) { showMilestoneToast = false }
+}
+
+// MARK: - Page Indicator
+
+private struct PageIndicatorView: View {
+    let totalSteps: Int
+    let currentStep: Int
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<totalSteps, id: \.self) { index in
+                Capsule()
+                    .fill(index == currentStep ? Theme.primary : Theme.cardBorder)
+                    .frame(width: index == currentStep ? 16 : 6, height: 6)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: currentStep)
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Step \(currentStep + 1) of \(totalSteps)")
     }
 }
 

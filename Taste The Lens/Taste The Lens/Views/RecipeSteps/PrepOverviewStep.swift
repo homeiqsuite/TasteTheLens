@@ -8,12 +8,19 @@ struct PrepOverviewStep: View {
     @Binding var servingCount: Int
     @Binding var showAIReasoning: Bool
     @State private var showAIReasoningTooltip = false
+    @State private var highlightedTranslation: Int? = nil
+    @State private var isGeneratingShoppingList = false
+    @State private var showSubstitutionSheet = false
+    @State private var substitutionSheetIngredient: String = ""
+    @State private var substitutionSheetSubs: [String] = []
     @AppStorage("hasSeenAIReasoningTooltip") private var hasSeenAIReasoningTooltip = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: true) {
             VStack(spacing: 0) {
                 descriptionSection
+                chefCommentarySection
+                translationMatrixSection
                 dietaryBadges
                 quickStatsStrip
                 nutritionSection
@@ -31,6 +38,11 @@ struct PrepOverviewStep: View {
                 }
             }
         }
+        .sheet(isPresented: $showSubstitutionSheet) {
+            SubstitutionSheet(ingredient: substitutionSheetIngredient, substitutes: substitutionSheetSubs)
+                .presentationDetents([.height(250)])
+                .presentationBackground(Theme.background)
+        }
     }
 
     // MARK: - Description
@@ -46,6 +58,97 @@ struct PrepOverviewStep: View {
             .padding(.bottom, 8)
     }
 
+
+    // MARK: - Chef Commentary
+
+    @ViewBuilder
+    private var chefCommentarySection: some View {
+        if let commentary = recipe.chefCommentary, !commentary.isEmpty {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: chefCommentaryIcon)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.gold)
+                    .padding(.top, 2)
+
+                Text(commentary)
+                    .font(.system(size: 15, design: .serif))
+                    .italic()
+                    .foregroundStyle(Theme.textSecondary)
+                    .lineSpacing(4)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private var chefCommentaryIcon: String {
+        switch recipe.chefPersonality {
+        case "dooby": return "moon.stars"
+        case "beginner": return "leaf"
+        case "grizzly": return "tree"
+        case "familyChef": return "figure.2.and.child.holdinghands"
+        default: return "quote.opening"
+        }
+    }
+
+    // MARK: - Translation Matrix (Promoted)
+
+    @ViewBuilder
+    private var translationMatrixSection: some View {
+        if !recipe.translationMatrix.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.left.arrow.right")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.primary)
+                    Text("How your photo became a recipe")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+
+                ForEach(Array(recipe.translationMatrix.enumerated()), id: \.offset) { index, item in
+                    Button {
+                        HapticManager.light()
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            highlightedTranslation = highlightedTranslation == index ? nil : index
+                        }
+                    } label: {
+                        HStack(alignment: .top, spacing: 10) {
+                            Text(item.visual)
+                                .font(.system(size: 14))
+                                .foregroundStyle(Theme.visual)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Theme.textQuaternary)
+
+                            Text(item.culinary)
+                                .font(.system(size: 14))
+                                .foregroundStyle(Theme.culinary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(highlightedTranslation == index ? Theme.gold.opacity(0.08) : Color.clear)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(highlightedTranslation == index ? Theme.gold.opacity(0.2) : Color.clear, lineWidth: 0.5)
+                        )
+                    }
+
+                    if index < recipe.translationMatrix.count - 1 {
+                        Theme.divider.frame(height: 1)
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+        }
+    }
 
     // MARK: - Dietary Badges
 
@@ -153,6 +256,24 @@ struct PrepOverviewStep: View {
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.textTertiary)
                     Text("cook")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.textQuaternary)
+                }
+                .frame(maxWidth: .infinity)
+            }
+
+            // Difficulty
+            if let difficulty = recipe.difficulty, !difficulty.isEmpty {
+                dividerLine
+
+                VStack(spacing: 1) {
+                    Image(systemName: difficultyIcon(difficulty))
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundStyle(difficultyColor(difficulty))
+                    Text(difficulty)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textTertiary)
+                    Text("difficulty")
                         .font(.system(size: 10))
                         .foregroundStyle(Theme.textQuaternary)
                 }
@@ -306,6 +427,39 @@ struct PrepOverviewStep: View {
                     ingredientRow(ingredient: ingredient, component: component)
                 }
             }
+
+            // Shopping List export button
+            Button {
+                HapticManager.medium()
+                isGeneratingShoppingList = true
+                DispatchQueue.main.async {
+                    shareShoppingList()
+                    isGeneratingShoppingList = false
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    if isGeneratingShoppingList {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(Theme.primary)
+                    } else {
+                        Image(systemName: "list.clipboard")
+                            .font(.system(size: 14))
+                    }
+                    Text("Shopping List")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundStyle(Theme.primary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .background(Theme.primary.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Theme.primary.opacity(0.2), lineWidth: 0.5)
+                )
+            }
+            .padding(.top, 8)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
@@ -316,75 +470,71 @@ struct PrepOverviewStep: View {
         .padding(.top, 16)
     }
 
+    private func isIngredientHighlighted(_ ingredient: String) -> Bool {
+        guard let index = highlightedTranslation,
+              index < recipe.translationMatrix.count else { return false }
+        let culinaryText = recipe.translationMatrix[index].culinary.lowercased()
+        let ingredientName = IngredientParser.parse(ingredient).name.lowercased()
+        // Check if the culinary description mentions the ingredient or vice versa
+        let culinaryWords = culinaryText.split(separator: " ").map(String.init)
+        let ingredientWords = ingredientName.split(separator: " ").map(String.init)
+        return culinaryWords.contains(where: { word in
+            word.count >= 3 && ingredientWords.contains(where: { $0.contains(word) || word.contains($0) })
+        })
+    }
+
     private func ingredientRow(ingredient: String, component: RecipeComponent) -> some View {
         let key = "\(component.name):\(ingredient)"
         let isChecked = checkedIngredients.contains(key)
-        let isExpanded = expandedSubstitutions.contains(key)
         let subs = component.substitutions?.first(where: { $0.original == ingredient })
+        let highlighted = isIngredientHighlighted(ingredient)
 
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 12) {
-                Button {
-                    HapticManager.selection()
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        if isChecked {
-                            checkedIngredients.remove(key)
-                        } else {
-                            checkedIngredients.insert(key)
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
-                            .font(.system(size: 22))
-                            .foregroundStyle(isChecked ? Theme.checkOn : Theme.checkOff)
-
-                        Text(scaledIngredient(ingredient))
-                            .font(.system(size: 15))
-                            .foregroundStyle(isChecked ? Theme.textTertiary : Theme.textPrimary)
-                            .strikethrough(isChecked, color: Theme.textQuaternary)
+        return HStack(spacing: 12) {
+            Button {
+                HapticManager.selection()
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if isChecked {
+                        checkedIngredients.remove(key)
+                    } else {
+                        checkedIngredients.insert(key)
                     }
                 }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 22))
+                        .foregroundStyle(isChecked ? Theme.checkOn : Theme.checkOff)
 
-                Spacer()
-
-                if let subs, !subs.substitutes.isEmpty {
-                    Button {
-                        HapticManager.light()
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            if isExpanded {
-                                expandedSubstitutions.remove(key)
-                            } else {
-                                expandedSubstitutions.insert(key)
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "arrow.triangle.swap")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Theme.culinary.opacity(0.6))
-                            .rotationEffect(.degrees(isExpanded ? 180 : 0))
-                    }
+                    Text(scaledIngredient(ingredient))
+                        .font(.system(size: 15))
+                        .foregroundStyle(isChecked ? Theme.textTertiary : Theme.textPrimary)
+                        .strikethrough(isChecked, color: Theme.textQuaternary)
                 }
             }
-            .frame(minHeight: 44)
 
-            if isExpanded, let subs {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(subs.substitutes, id: \.self) { sub in
-                        HStack(spacing: 8) {
-                            Text("or")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(Theme.culinary.opacity(0.5))
-                            Text(sub)
-                                .font(.system(size: 14))
-                                .foregroundStyle(Theme.textTertiary)
-                        }
-                    }
+            Spacer()
+
+            if let subs, !subs.substitutes.isEmpty {
+                Button {
+                    HapticManager.light()
+                    substitutionSheetIngredient = ingredient
+                    substitutionSheetSubs = subs.substitutes
+                    showSubstitutionSheet = true
+                } label: {
+                    Image(systemName: "arrow.triangle.swap")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.culinary.opacity(0.6))
                 }
-                .padding(.leading, 34)
-                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .frame(minHeight: 44)
+        .padding(.horizontal, highlighted ? 6 : 0)
+        .padding(.vertical, highlighted ? 2 : 0)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(highlighted ? Theme.gold.opacity(0.1) : Color.clear)
+        )
+        .animation(.easeInOut(duration: 0.3), value: highlighted)
     }
 
     // MARK: - More Details (Deep Dive Panels)
@@ -478,42 +628,6 @@ struct PrepOverviewStep: View {
                                 hasSeenAIReasoningTooltip = true
                             }
                             .transition(.opacity)
-                        }
-                    }
-                }
-
-                Theme.divider.frame(height: 1).padding(.horizontal, 20)
-            }
-
-            // Translation Matrix
-            if !recipe.translationMatrix.isEmpty {
-                detailRow(
-                    icon: "arrow.left.arrow.right",
-                    iconColor: Theme.primary,
-                    title: "Visual to culinary mapping",
-                    sectionKey: "matrix"
-                ) {
-                    VStack(spacing: 8) {
-                        ForEach(recipe.translationMatrix, id: \.self) { item in
-                            HStack(alignment: .top, spacing: 10) {
-                                Text(item.visual)
-                                    .font(.system(size: 14))
-                                    .foregroundStyle(Theme.visual)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                                Image(systemName: "arrow.right")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(Theme.textQuaternary)
-
-                                Text(item.culinary)
-                                    .font(.system(size: 14))
-                                    .foregroundStyle(Theme.culinary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-
-                            if item != recipe.translationMatrix.last {
-                                Theme.divider.frame(height: 1)
-                            }
                         }
                     }
                 }
@@ -667,6 +781,33 @@ struct PrepOverviewStep: View {
     private func scaledNutrient(_ baseValue: Int) -> Int {
         guard recipe.baseServings > 0 else { return baseValue }
         return Int(Double(baseValue) * Double(servingCount) / Double(recipe.baseServings))
+    }
+
+    private func shareShoppingList() {
+        let text = ShoppingListGenerator.generate(from: recipe, servingCount: servingCount)
+        let activityVC = UIActivityViewController(activityItems: [text], applicationActivities: nil)
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootVC = windowScene.keyWindow?.rootViewController else { return }
+        var presenter = rootVC
+        while let presented = presenter.presentedViewController { presenter = presented }
+        activityVC.popoverPresentationController?.sourceView = presenter.view
+        presenter.present(activityVC, animated: true)
+    }
+
+    private func difficultyIcon(_ difficulty: String) -> String {
+        switch difficulty {
+        case "Easy": return "gauge.open.with.lines.needle.33percent"
+        case "Advanced": return "gauge.open.with.lines.needle.84percent.exclamation"
+        default: return "gauge.open.with.lines.needle.50percent"
+        }
+    }
+
+    private func difficultyColor(_ difficulty: String) -> Color {
+        switch difficulty {
+        case "Easy": return Theme.visual
+        case "Advanced": return Theme.culinary
+        default: return Theme.primary
+        }
     }
 
     private func approachLabel(_ approach: String) -> String {

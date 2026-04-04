@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import PhotosUI
 import Auth
 import os
@@ -7,6 +8,8 @@ private let logger = makeLogger(category: "ChallengeDetail")
 
 struct ChallengeDetailView: View {
     let challenge: ChallengeDTO
+
+    @Environment(\.modelContext) private var modelContext
 
     @State private var submissions: [ChallengeSubmissionDTO] = []
     @State private var dishImage: UIImage?
@@ -22,6 +25,16 @@ struct ChallengeDetailView: View {
     @State private var selectedWinnerId: String?
     @State private var showDeclareWinnerConfirmation = false
     @State private var isDeclaring = false
+
+    // Ratings
+    @State private var myRatings: [String: Int] = [:]
+
+    // Full-screen photo
+    @State private var fullscreenPhotoURL: String?
+
+    // Save recipe
+    @State private var isSavingRecipe = false
+    @State private var recipeSaved = false
 
     private let challengeService = ChallengeService.shared
     private let authManager = AuthManager.shared
@@ -68,6 +81,12 @@ struct ChallengeDetailView: View {
         .sheet(isPresented: $showAuthPrompt) {
             AuthPromptSheet()
         }
+        .fullScreenCover(item: Binding(
+            get: { fullscreenPhotoURL.map { FullscreenURL(url: $0) } },
+            set: { fullscreenPhotoURL = $0?.url }
+        )) { item in
+            FullscreenPhotoView(url: item.url)
+        }
         .alert("Declare Winner?", isPresented: $showDeclareWinnerConfirmation) {
             Button("Declare Winner", role: .destructive) {
                 Task { await declareWinner() }
@@ -81,6 +100,7 @@ struct ChallengeDetailView: View {
         .task {
             localWinnerSubmissionId = challenge.winnerSubmissionId
             isCreator = authManager.currentUser?.id.uuidString.lowercased() == challenge.creatorId
+            checkIfRecipeSaved()
             async let loadImage: Void = loadDishImage()
             async let loadSubs: Void = loadSubmissions()
             async let checkSubmitted: Void = checkIfSubmitted()
@@ -130,6 +150,21 @@ struct ChallengeDetailView: View {
                     .lineSpacing(4)
             }
 
+            if let keywords = challenge.keywords, !keywords.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(keywords, id: \.self) { keyword in
+                            Text(keyword)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Theme.darkTextSecondary)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 5)
+                                .background(Capsule().fill(Theme.darkSurface))
+                        }
+                    }
+                }
+            }
+
             HStack(spacing: 16) {
                 if localWinnerSubmissionId != nil {
                     Label("Winner declared", systemImage: "trophy.fill")
@@ -146,45 +181,82 @@ struct ChallengeDetailView: View {
         .glassCard()
     }
 
-    // MARK: - Action Button
+    // MARK: - Action Buttons
 
     @ViewBuilder
     private var actionButton: some View {
         if challengeIsEnded {
-            // Challenge ended — show disabled state
-            HStack(spacing: 8) {
-                Image(systemName: localWinnerSubmissionId != nil ? "trophy.fill" : "clock.badge.checkmark")
-                Text(localWinnerSubmissionId != nil ? "Challenge Complete" : "Challenge Ended")
-                    .font(.system(size: 16, weight: .bold))
-            }
-            .foregroundStyle(Theme.darkTextTertiary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(Theme.darkSurface)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-        } else {
-            // Active challenge — accept button
-            Button {
-                HapticManager.medium()
-                if authManager.isAuthenticated {
-                    showSubmitSheet = true
-                } else {
-                    showAuthPrompt = true
-                }
-            } label: {
+            // Challenge ended — show status + save option
+            HStack(spacing: 12) {
                 HStack(spacing: 8) {
-                    Image(systemName: hasSubmitted ? "checkmark.circle.fill" : "flame.fill")
-                    Text(hasSubmitted ? "Submitted" : "Accept Challenge")
+                    Image(systemName: localWinnerSubmissionId != nil ? "trophy.fill" : "clock.badge.checkmark")
+                    Text(localWinnerSubmissionId != nil ? "Complete" : "Ended")
                         .font(.system(size: 16, weight: .bold))
                 }
-                .foregroundStyle(hasSubmitted ? Theme.darkTextTertiary : Theme.darkBg)
+                .foregroundStyle(Theme.darkTextTertiary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .background(hasSubmitted ? Theme.darkSurface : Theme.gold)
+                .background(Theme.darkSurface)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
+
+                saveRecipeButton
             }
-            .disabled(hasSubmitted)
+        } else {
+            // Active challenge — accept + save
+            HStack(spacing: 12) {
+                Button {
+                    HapticManager.medium()
+                    if authManager.isAuthenticated {
+                        showSubmitSheet = true
+                    } else {
+                        showAuthPrompt = true
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: hasSubmitted ? "checkmark.circle.fill" : "flame.fill")
+                        Text(hasSubmitted ? "Submitted" : "Accept")
+                            .font(.system(size: 16, weight: .bold))
+                    }
+                    .foregroundStyle(hasSubmitted ? Theme.darkTextTertiary : Theme.darkBg)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(hasSubmitted ? Theme.darkSurface : Theme.gold)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                }
+                .disabled(hasSubmitted)
+
+                saveRecipeButton
+            }
         }
+    }
+
+    private var saveRecipeButton: some View {
+        Button {
+            HapticManager.medium()
+            Task { await saveRecipe() }
+        } label: {
+            HStack(spacing: 8) {
+                if isSavingRecipe {
+                    ProgressView()
+                        .tint(Theme.darkBg)
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: recipeSaved ? "checkmark.circle.fill" : "bookmark.fill")
+                }
+                Text(recipeSaved ? "Saved" : "Save")
+                    .font(.system(size: 16, weight: .bold))
+            }
+            .foregroundStyle(recipeSaved ? Theme.darkTextTertiary : Theme.gold)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(recipeSaved ? Theme.darkSurface : Theme.gold.opacity(0.15))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(recipeSaved ? .clear : Theme.gold.opacity(0.4), lineWidth: 1)
+            )
+        }
+        .disabled(isSavingRecipe || recipeSaved)
     }
 
     // MARK: - Submissions
@@ -251,6 +323,9 @@ struct ChallengeDetailView: View {
                             .padding(6)
                     }
                 }
+                .onTapGesture {
+                    fullscreenPhotoURL = submission.photoUrl
+                }
 
             // Winner label
             if isWinner {
@@ -305,6 +380,33 @@ struct ChallengeDetailView: View {
                     }
                 }
             }
+
+            // Star ratings
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 2) {
+                    ForEach(1...5, id: \.self) { star in
+                        Button {
+                            guard authManager.isAuthenticated else { return }
+                            myRatings[submission.id] = star
+                            Task {
+                                try? await challengeService.rateSubmission(submissionId: submission.id, stars: star)
+                                submissions = (try? await challengeService.fetchSubmissions(challengeId: challenge.id)) ?? submissions
+                            }
+                        } label: {
+                            Image(systemName: star <= (myRatings[submission.id] ?? 0) ? "star.fill" : "star")
+                                .font(.system(size: 12))
+                                .foregroundStyle(star <= (myRatings[submission.id] ?? 0) ? Theme.gold : Theme.darkTextHint)
+                        }
+                        .disabled(!authManager.isAuthenticated)
+                    }
+                }
+
+                if let avg = submission.averageRating, let count = submission.ratingCount, count > 0 {
+                    Text(String(format: "%.1f · %d rating%@", avg, count, count == 1 ? "" : "s"))
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.darkTextHint)
+                }
+            }
         }
         .glassCard(cornerRadius: 14)
         .overlay(
@@ -313,8 +415,11 @@ struct ChallengeDetailView: View {
         )
         .task {
             if authManager.isAuthenticated {
-                let voted = await challengeService.hasUpvoted(submissionId: submission.id)
-                if voted { upvotedIds.insert(submission.id) }
+                async let voted = challengeService.hasUpvoted(submissionId: submission.id)
+                async let rating = challengeService.getUserRating(submissionId: submission.id)
+                let (v, r) = await (voted, rating)
+                if v { upvotedIds.insert(submission.id) }
+                if let r { myRatings[submission.id] = r }
             }
         }
     }
@@ -375,6 +480,28 @@ struct ChallengeDetailView: View {
         }
     }
 
+    private func checkIfRecipeSaved() {
+        let recipeId = challenge.recipeId
+        let descriptor = FetchDescriptor<Recipe>(predicate: #Predicate { $0.remoteId == recipeId })
+        recipeSaved = (try? modelContext.fetchCount(descriptor)) ?? 0 > 0
+    }
+
+    private func saveRecipe() async {
+        isSavingRecipe = true
+        defer { isSavingRecipe = false }
+
+        do {
+            let recipe = try await challengeService.fetchChallengeRecipe(recipeId: challenge.recipeId)
+            modelContext.insert(recipe)
+            try modelContext.save()
+            recipeSaved = true
+            HapticManager.success()
+            logger.info("Saved challenge recipe \(challenge.recipeId) locally")
+        } catch {
+            logger.error("Failed to save challenge recipe: \(error)")
+        }
+    }
+
     private func declareWinner() async {
         guard let submissionId = selectedWinnerId else { return }
         isDeclaring = true
@@ -390,6 +517,61 @@ struct ChallengeDetailView: View {
             HapticManager.success()
         } catch {
             logger.error("Failed to declare winner: \(error)")
+        }
+    }
+}
+
+// MARK: - Helpers
+
+private struct FullscreenURL: Identifiable {
+    let id = UUID()
+    let url: String
+}
+
+private struct FullscreenPhotoView: View {
+    let url: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var scale: CGFloat = 1.0
+    @State private var lastScale: CGFloat = 1.0
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+
+            AsyncImage(url: URL(string: url)) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .scaleEffect(scale)
+                        .gesture(
+                            MagnificationGesture()
+                                .onChanged { value in
+                                    scale = max(1.0, lastScale * value)
+                                }
+                                .onEnded { _ in
+                                    lastScale = scale
+                                    if scale < 1.0 {
+                                        withAnimation(.spring()) { scale = 1.0 }
+                                        lastScale = 1.0
+                                    }
+                                }
+                        )
+                default:
+                    ProgressView().tint(.white)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 28))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .padding(16)
+            }
         }
     }
 }

@@ -43,44 +43,58 @@ struct EdgeFunctionError: LocalizedError {
     let body: String
     var errorDescription: String? {
         if statusCode == 402 { return "You've run out of credits. Purchase more to continue creating recipes." }
+        if statusCode == 422 { return rejectionReason ?? "Image not suitable for recipe generation." }
         if statusCode == 429 { return "Too many requests. Please wait a moment and try again." }
+        if statusCode == 503 { return "Content screening unavailable. Please try again." }
         return "Server error (\(statusCode)). Please try again."
     }
     var isInsufficientCredits: Bool { statusCode == 402 }
+    var isContentRejected: Bool { statusCode == 422 }
     var isRateLimit: Bool { statusCode == 429 }
-    var isRetryable: Bool { statusCode >= 500 }
+    var isRetryable: Bool { statusCode >= 500 && statusCode != 503 }
+
+    /// Parses the rejection reason from a 422 response body.
+    var rejectionReason: String? {
+        guard isContentRejected,
+              let data = body.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let reason = json["reason"] as? String else { return nil }
+        return reason
+    }
 }
 
 // MARK: - Edge Function Response Types
-
-struct ScreenImageResponse: Codable {
-    let safe: Bool
-    let reason: String
-}
 
 struct CreditBalance: Codable {
     let purchased_credits: Int
     let subscription_credits: Int
     let rollover_credits: Int
     let free_usage_count: Int
+    let pool: String?
+}
+
+struct AnalysisUsage: Codable {
+    let provider: String
+    let model: String
+    let inputTokens: Int
+    let outputTokens: Int
+    let costUsd: Double
 }
 
 struct AnalyzeImageResponse: Codable {
     let recipe: ClaudeRecipeResponse
     let rawJSON: String
     let credits: CreditBalance?
+    let usage: AnalysisUsage?
 }
 
 struct GenerateImageResponse: Codable {
     let imageData: String
     let mimeType: String
+    let costUsd: Double?
 }
 
 // MARK: - Edge Function Request Types
-
-struct ScreenImageRequest: Encodable {
-    let images: [String]
-}
 
 struct AnalyzeImageRequest: Encodable {
     let images: [String]
@@ -92,6 +106,9 @@ struct AnalyzeImageRequest: Encodable {
     let softAvoiding: [String]
     let budgetLimit: Double?
     let courseType: String?
+    let cultureName: String?
+    let simplifyMode: Bool?
+    let skillLevel: String?
 }
 
 struct CustomChefConfigPayload: Encodable {
@@ -116,6 +133,10 @@ final class ImageAnalysisPipeline: Identifiable {
     var partialIngredients: [String] = []
     var startTime: Date?
     var isFusion: Bool = false
+    /// Set when image generation fails but the recipe was still created successfully
+    var imageGenerationFailed: Bool = false
+
+    private var creditPool: String?
 
     private var supabase: SupabaseClient { SupabaseManager.shared.client }
 
@@ -124,8 +145,16 @@ final class ImageAnalysisPipeline: Identifiable {
         await MainActor.run { NetworkMonitor.shared.isConnected }
     }
 
+    /// Returns the user's access token if authenticated, or nil for guests.
+    private func userAccessToken() async -> String? {
+        guard AuthManager.shared.isAuthenticated,
+              let session = try? await supabase.auth.session else { return nil }
+        return session.accessToken
+    }
+
     /// Calls a Supabase edge function directly via URLSession, bypassing SDK auth handling.
-    /// This prevents hangs when the SDK tries to resolve auth tokens for guests.
+    /// Always authenticates with the anon key (so the gateway never rejects expired JWTs).
+    /// The user's token is passed in a custom x-user-token header for the function to read.
     private func invokeEdgeFunction<Request: Encodable, Response: Decodable>(
         _ functionName: String,
         body: Request
@@ -135,20 +164,19 @@ final class ImageAnalysisPipeline: Identifiable {
             throw URLError(.badURL)
         }
 
+        let encodedBody = try JSONEncoder().encode(body)
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(AppConfig.supabaseAnonKey, forHTTPHeaderField: "apikey")
-
-        // Include user JWT if authenticated, otherwise just the anon key
-        if AuthManager.shared.isAuthenticated,
-           let session = try? await supabase.auth.session {
-            request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
-        } else {
-            request.setValue("Bearer \(AppConfig.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        // Always use anon key for Authorization so the Supabase gateway never returns 401.
+        request.setValue("Bearer \(AppConfig.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        // Pass user JWT in a custom header — the edge function reads it for optional auth.
+        if let userToken = await userAccessToken() {
+            request.setValue(userToken, forHTTPHeaderField: "x-user-token")
         }
-
-        request.httpBody = try JSONEncoder().encode(body)
+        request.httpBody = encodedBody
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -177,13 +205,13 @@ final class ImageAnalysisPipeline: Identifiable {
         self.imageGenModel = model
     }
 
-    func process(image: UIImage, modelContext: ModelContext, hardExcluding: [String] = [], softAvoiding: [String] = [], budgetLimit: Double? = nil, courseType: String? = nil) async {
+    func process(image: UIImage, modelContext: ModelContext, hardExcluding: [String] = [], softAvoiding: [String] = [], budgetLimit: Double? = nil, courseType: String? = nil, cultureName: String? = nil, simplifyMode: Bool = false) async {
         guard await checkConnectivity() else {
             logger.error("No network connectivity")
             state = .failed("No internet connection. Please check your network and try again.")
             return
         }
-        logger.info("Pipeline started — hardExclude: \(hardExcluding), softAvoid: \(softAvoiding.count) items, budget: \(budgetLimit?.description ?? "none"), courseType: \(courseType ?? "none")")
+        logger.info("Pipeline started — hardExclude: \(hardExcluding), softAvoid: \(softAvoiding.count) items, budget: \(budgetLimit?.description ?? "none"), courseType: \(courseType ?? "none"), culture: \(cultureName ?? "none")")
         startTime = Date()
         await LiveActivityManager.shared.startGeneration()
 
@@ -204,26 +232,7 @@ final class ImageAnalysisPipeline: Identifiable {
         base64Image = inspirationData.base64EncodedString()
 
         do {
-            // Step 0: Content screening via edge function
-            state = .screeningImage
-            processingStatus = "Checking image..."
-            await LiveActivityManager.shared.updatePhase("Screening", progress: 0.1, status: "Checking image...")
-            logger.info("Screening image for content safety... (payload: \(base64Image.count) chars, auth: \(AuthManager.shared.isAuthenticated))")
-
-            let screening: ScreenImageResponse = try await withTimeout(seconds: 30) {
-                try await withExponentialBackoff {
-                    try await self.invokeEdgeFunction("screen-image", body: ScreenImageRequest(images: [base64Image]))
-                }
-            }
-            try Task.checkCancellation()
-            if !screening.safe {
-                logger.info("Image rejected: \(screening.reason)")
-                state = .rejected(screening.reason)
-                return
-            }
-            logger.info("Image passed screening: \(screening.reason)")
-
-            // Step 1: Recipe analysis via edge function
+            // Step 1: Recipe analysis (screening is now performed server-side in parallel with credit deduction)
             state = .analyzingImage
             processingStatus = "Extracting palette..."
             await LiveActivityManager.shared.updatePhase("Analyzing", progress: 0.35, status: "Extracting palette...")
@@ -236,17 +245,26 @@ final class ImageAnalysisPipeline: Identifiable {
                 hardExcluding: hardExcluding,
                 softAvoiding: softAvoiding,
                 budgetLimit: budgetLimit,
-                courseType: courseType
+                courseType: courseType,
+                cultureName: cultureName,
+                simplifyMode: simplifyMode
             )
 
+            let analysisStart = Date()
             let analysisResponse: AnalyzeImageResponse = try await withTimeout(seconds: 90) {
                 try await withExponentialBackoff {
                     try await self.invokeEdgeFunction("analyze-image", body: analysisRequest)
                 }
             }
+            logger.info("⏱ analyze-image: \(String(format: "%.1f", Date().timeIntervalSince(analysisStart)))s")
             // Update local credit cache from server response
             if let credits = analysisResponse.credits {
-                UsageTracker.shared.updateFromServer(credits)
+                await MainActor.run { UsageTracker.shared.updateFromServer(credits) }
+                creditPool = credits.pool
+            } else if AuthManager.shared.isAuthenticated {
+                // No credits in response — server may not have resolved the user token.
+                // Sync usage from server so the UI reflects the actual state.
+                Task { await UsageTracker.shared.syncUsageFromServer() }
             }
             let recipeResponse = analysisResponse.recipe
             let rawJSON = analysisResponse.rawJSON
@@ -268,22 +286,33 @@ final class ImageAnalysisPipeline: Identifiable {
 
             var generatedImageData: Data? = nil
             var imageURL: String = ""
-            do {
-                let genResponse: GenerateImageResponse = try await withTimeout(seconds: 120) {
-                    try await withExponentialBackoff {
-                        try await self.invokeEdgeFunction("generate-image", body: GenerateImageRequest(
-                            prompt: recipeResponse.imageGenerationPrompt,
-                            provider: self.imageGenModel.edgeFunctionKey
-                        ))
+            var imageCostUsd: Double? = nil
+
+            // Re-check connectivity before starting image gen — avoids a 120s timeout if network dropped
+            if await checkConnectivity() {
+                do {
+                    let genStart = Date()
+                    let genResponse: GenerateImageResponse = try await withTimeout(seconds: 120) {
+                        try await withExponentialBackoff {
+                            try await self.invokeEdgeFunction("generate-image", body: GenerateImageRequest(
+                                prompt: recipeResponse.imageGenerationPrompt,
+                                provider: self.imageGenModel.edgeFunctionKey
+                            ))
+                        }
                     }
+                    generatedImageData = Data(base64Encoded: genResponse.imageData)
+                    imageURL = genResponse.mimeType
+                    imageCostUsd = genResponse.costUsd
+                    logger.info("⏱ generate-image (\(self.imageGenModel.displayName)): \(String(format: "%.1f", Date().timeIntervalSince(genStart)))s — \(generatedImageData?.count ?? 0) bytes")
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    logger.error("Image generation failed, continuing without image: \(error)")
+                    imageGenerationFailed = true
                 }
-                generatedImageData = Data(base64Encoded: genResponse.imageData)
-                imageURL = genResponse.mimeType
-                logger.info("\(self.imageGenModel.displayName) response — image: \(generatedImageData?.count ?? 0) bytes")
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                logger.error("Image generation failed, continuing without image: \(error)")
+            } else {
+                logger.warning("Skipping image generation — network lost after analysis")
+                imageGenerationFailed = true
             }
 
             // Step 3: Create Recipe
@@ -307,10 +336,14 @@ final class ImageAnalysisPipeline: Identifiable {
                 nutrition: recipeResponse.nutrition,
                 prepTime: recipeResponse.prepTime,
                 cookTime: recipeResponse.cookTime,
-                cookingSteps: recipeResponse.cookingSteps ?? []
+                difficulty: recipeResponse.difficulty,
+                chefCommentary: recipeResponse.chefCommentary,
+                cookingSteps: recipeResponse.cookingSteps ?? [],
+                isSimplified: simplifyMode
             )
 
             completedRecipe = recipe
+            creditPool = nil
             state = .complete
             // Guest users: track usage locally (server doesn't enforce for unauthenticated users)
             UsageTracker.shared.incrementGuestUsage()
@@ -319,11 +352,35 @@ final class ImageAnalysisPipeline: Identifiable {
                 updateWidgetData(recipe: recipe)
             }
             await LiveActivityManager.shared.endGeneration(dishName: recipe.dishName)
+
+            // Track generation cost
+            AnalyticsClient.shared.trackRecipeGeneration(
+                analysisProvider: analysisResponse.usage?.provider,
+                analysisModel: analysisResponse.usage?.model,
+                analysisInputTokens: analysisResponse.usage?.inputTokens,
+                analysisOutputTokens: analysisResponse.usage?.outputTokens,
+                analysisCostUsd: analysisResponse.usage?.costUsd,
+                imageProvider: imageGenModel.edgeFunctionKey,
+                imageCostUsd: imageCostUsd,
+                captureMode: "single",
+                imageCount: 1,
+                chefPersonality: chef.rawValue
+            )
+
+            if let start = startTime {
+                logger.info("⏱ Pipeline total: \(String(format: "%.1f", Date().timeIntervalSince(start)))s")
+            }
             logger.info("Pipeline complete — recipe ready")
 
         } catch is CancellationError {
             logger.info("Pipeline cancelled")
+            await refundCreditIfNeeded()
             await LiveActivityManager.shared.cancelGeneration()
+        } catch let error as EdgeFunctionError where error.isContentRejected {
+            let reason = error.rejectionReason ?? "Image not suitable for recipe generation."
+            logger.info("Image rejected by server: \(reason)")
+            state = .rejected(reason)
+            await LiveActivityManager.shared.endGeneration(dishName: nil)
         } catch let error as EdgeFunctionError where error.isInsufficientCredits {
             logger.warning("Insufficient credits — prompting purchase")
             state = .insufficientCredits
@@ -331,6 +388,7 @@ final class ImageAnalysisPipeline: Identifiable {
         } catch {
             logger.error("Pipeline failed: \(error)")
             logger.error("Pipeline error type: \(type(of: error)), description: \(String(describing: error))")
+            await refundCreditIfNeeded()
             state = .failed(error.localizedDescription)
             await LiveActivityManager.shared.endGeneration(dishName: nil)
         }
@@ -338,7 +396,7 @@ final class ImageAnalysisPipeline: Identifiable {
 
     // MARK: - Fusion Mode
 
-    func processFusion(images: [UIImage], modelContext: ModelContext, hardExcluding: [String] = [], softAvoiding: [String] = [], budgetLimit: Double? = nil, courseType: String? = nil) async {
+    func processFusion(images: [UIImage], modelContext: ModelContext, hardExcluding: [String] = [], softAvoiding: [String] = [], budgetLimit: Double? = nil, courseType: String? = nil, cultureName: String? = nil, simplifyMode: Bool = false) async {
         guard !images.isEmpty else {
             logger.error("Fusion pipeline called with no images")
             state = .failed("No images provided for fusion.")
@@ -369,26 +427,7 @@ final class ImageAnalysisPipeline: Identifiable {
         logger.info("All \(allImageData.count) fusion images converted to JPEG")
 
         do {
-            // Step 0: Content screening via edge function
-            state = .screeningImage
-            processingStatus = "Checking images..."
-            await LiveActivityManager.shared.updatePhase("Screening", progress: 0.1, status: "Checking images...")
-            logger.info("Screening \(images.count) images for content safety... (auth: \(AuthManager.shared.isAuthenticated))")
-
-            let screening: ScreenImageResponse = try await withTimeout(seconds: 30) {
-                try await withExponentialBackoff {
-                    try await self.invokeEdgeFunction("screen-image", body: ScreenImageRequest(images: base64Images))
-                }
-            }
-            try Task.checkCancellation()
-            if !screening.safe {
-                logger.info("Fusion image rejected: \(screening.reason)")
-                state = .rejected(screening.reason)
-                return
-            }
-            logger.info("All fusion images passed screening")
-
-            // Step 1: Recipe analysis via edge function
+            // Step 1: Recipe analysis (screening is now performed server-side in parallel with credit deduction)
             state = .analyzingImage
             processingStatus = "Blending visual worlds..."
             await LiveActivityManager.shared.updatePhase("Analyzing", progress: 0.35, status: "Fusing visual DNA...")
@@ -401,17 +440,24 @@ final class ImageAnalysisPipeline: Identifiable {
                 hardExcluding: hardExcluding,
                 softAvoiding: softAvoiding,
                 budgetLimit: budgetLimit,
-                courseType: courseType
+                courseType: courseType,
+                cultureName: cultureName,
+                simplifyMode: simplifyMode
             )
 
+            let analysisStart = Date()
             let analysisResponse: AnalyzeImageResponse = try await withTimeout(seconds: 90) {
                 try await withExponentialBackoff {
                     try await self.invokeEdgeFunction("analyze-image", body: analysisRequest)
                 }
             }
+            logger.info("⏱ analyze-image (fusion): \(String(format: "%.1f", Date().timeIntervalSince(analysisStart)))s")
             // Update local credit cache from server response
             if let credits = analysisResponse.credits {
-                UsageTracker.shared.updateFromServer(credits)
+                await MainActor.run { UsageTracker.shared.updateFromServer(credits) }
+                creditPool = credits.pool
+            } else if AuthManager.shared.isAuthenticated {
+                Task { await UsageTracker.shared.syncUsageFromServer() }
             }
             let recipeResponse = analysisResponse.recipe
             let rawJSON = analysisResponse.rawJSON
@@ -432,22 +478,33 @@ final class ImageAnalysisPipeline: Identifiable {
 
             var generatedImageData: Data? = nil
             var imageURL: String = ""
-            do {
-                let genResponse: GenerateImageResponse = try await withTimeout(seconds: 120) {
-                    try await withExponentialBackoff {
-                        try await self.invokeEdgeFunction("generate-image", body: GenerateImageRequest(
-                            prompt: recipeResponse.imageGenerationPrompt,
-                            provider: self.imageGenModel.edgeFunctionKey
-                        ))
+            var imageCostUsd: Double? = nil
+
+            // Re-check connectivity before starting image gen — avoids a 120s timeout if network dropped
+            if await checkConnectivity() {
+                do {
+                    let genStart = Date()
+                    let genResponse: GenerateImageResponse = try await withTimeout(seconds: 120) {
+                        try await withExponentialBackoff {
+                            try await self.invokeEdgeFunction("generate-image", body: GenerateImageRequest(
+                                prompt: recipeResponse.imageGenerationPrompt,
+                                provider: self.imageGenModel.edgeFunctionKey
+                            ))
+                        }
                     }
+                    generatedImageData = Data(base64Encoded: genResponse.imageData)
+                    imageURL = genResponse.mimeType
+                    imageCostUsd = genResponse.costUsd
+                    logger.info("⏱ generate-image (fusion, \(self.imageGenModel.displayName)): \(String(format: "%.1f", Date().timeIntervalSince(genStart)))s — \(generatedImageData?.count ?? 0) bytes")
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch {
+                    logger.error("Image generation failed, continuing without image: \(error)")
+                    imageGenerationFailed = true
                 }
-                generatedImageData = Data(base64Encoded: genResponse.imageData)
-                imageURL = genResponse.mimeType
-                logger.info("\(self.imageGenModel.displayName) response — image: \(generatedImageData?.count ?? 0) bytes")
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                logger.error("Image generation failed, continuing without image: \(error)")
+            } else {
+                logger.warning("Skipping fusion image generation — network lost after analysis")
+                imageGenerationFailed = true
             }
 
             // Step 3: Create Recipe with fusion data
@@ -479,12 +536,15 @@ final class ImageAnalysisPipeline: Identifiable {
                 nutrition: recipeResponse.nutrition,
                 prepTime: recipeResponse.prepTime,
                 cookTime: recipeResponse.cookTime,
+                difficulty: recipeResponse.difficulty,
+                chefCommentary: recipeResponse.chefCommentary,
                 cookingSteps: recipeResponse.cookingSteps ?? [],
                 isFusion: true,
                 additionalInspirationImagesData: additionalData
             )
 
             completedRecipe = recipe
+            creditPool = nil
             state = .complete
             // Guest users: track usage locally (server doesn't enforce for unauthenticated users)
             UsageTracker.shared.incrementGuestUsage()
@@ -493,20 +553,64 @@ final class ImageAnalysisPipeline: Identifiable {
                 updateWidgetData(recipe: recipe)
             }
             await LiveActivityManager.shared.endGeneration(dishName: recipe.dishName)
+
+            // Track generation cost
+            AnalyticsClient.shared.trackRecipeGeneration(
+                analysisProvider: analysisResponse.usage?.provider,
+                analysisModel: analysisResponse.usage?.model,
+                analysisInputTokens: analysisResponse.usage?.inputTokens,
+                analysisOutputTokens: analysisResponse.usage?.outputTokens,
+                analysisCostUsd: analysisResponse.usage?.costUsd,
+                imageProvider: imageGenModel.edgeFunctionKey,
+                imageCostUsd: imageCostUsd,
+                captureMode: "fusion",
+                imageCount: images.count,
+                chefPersonality: chef.rawValue
+            )
+
+            if let start = startTime {
+                logger.info("⏱ Fusion pipeline total: \(String(format: "%.1f", Date().timeIntervalSince(start)))s")
+            }
             logger.info("Fusion pipeline complete — recipe ready")
 
         } catch is CancellationError {
             logger.info("Fusion pipeline cancelled")
+            await refundCreditIfNeeded()
             await LiveActivityManager.shared.cancelGeneration()
+        } catch let error as EdgeFunctionError where error.isContentRejected {
+            let reason = error.rejectionReason ?? "Image not suitable for recipe generation."
+            logger.info("Fusion image rejected by server: \(reason)")
+            state = .rejected(reason)
+            await LiveActivityManager.shared.endGeneration(dishName: nil)
         } catch let error as EdgeFunctionError where error.isInsufficientCredits {
             logger.warning("Insufficient credits — prompting purchase")
             state = .insufficientCredits
             await LiveActivityManager.shared.endGeneration(dishName: nil)
         } catch {
             logger.error("Fusion pipeline failed: \(error)")
+            await refundCreditIfNeeded()
             state = .failed(error.localizedDescription)
             await LiveActivityManager.shared.endGeneration(dishName: nil)
         }
+    }
+
+    // MARK: - Credit Refund
+
+    /// Refunds the credit deducted during analysis if the pipeline fails or is cancelled after deduction.
+    private func refundCreditIfNeeded() async {
+        guard let pool = creditPool,
+              let userId = AuthManager.shared.currentUser?.id.uuidString else { return }
+
+        do {
+            try await SupabaseManager.shared.client
+                .rpc("refund_credit", params: ["p_user_id": userId, "p_pool": pool])
+                .execute()
+            logger.info("Credit refunded to pool: \(pool)")
+            await UsageTracker.shared.syncCreditsFromServer()
+        } catch {
+            logger.error("Failed to refund credit: \(error)")
+        }
+        creditPool = nil
     }
 
     // MARK: - Analysis Request Builder
@@ -517,7 +621,9 @@ final class ImageAnalysisPipeline: Identifiable {
         hardExcluding: [String],
         softAvoiding: [String],
         budgetLimit: Double?,
-        courseType: String?
+        courseType: String?,
+        cultureName: String? = nil,
+        simplifyMode: Bool = false
     ) -> AnalyzeImageRequest {
         let dietaryPrefs = DietaryPreference.current()
 
@@ -530,6 +636,8 @@ final class ImageAnalysisPipeline: Identifiable {
             )
         }
 
+        let userSkillLevel = UserDefaults.standard.string(forKey: "userSkillLevel")
+
         return AnalyzeImageRequest(
             images: base64Images,
             provider: "gemini",
@@ -539,7 +647,10 @@ final class ImageAnalysisPipeline: Identifiable {
             hardExcluding: hardExcluding,
             softAvoiding: softAvoiding,
             budgetLimit: budgetLimit,
-            courseType: courseType
+            courseType: courseType,
+            cultureName: cultureName,
+            simplifyMode: simplifyMode ? true : nil,
+            skillLevel: userSkillLevel
         )
     }
 

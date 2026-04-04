@@ -1,0 +1,348 @@
+{
+  "identifier" : "8A2F4B6C-1D3E-4A5F-9B7C-2E8D0F1A3B5C",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "1.99",
+      "familyShareable" : false,
+      "internalID" : "C010",
+      "localizations" : [
+        {
+          "description" : "10 recipe credits. Credits never expire. Any purchase unlocks all premium features.",
+          "displayName" : "Taste",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.tastethelens.credits.taste",
+      "referenceName" : "Taste — 10 Credits",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "4.99",
+      "familyShareable" : false,
+      "internalID" : "C011",
+      "localizations" : [
+        {
+          "description" : "30 recipe credits. Credits never expire. Any purchase unlocks all premium features.",
+          "displayName" : "Cook",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.tastethelens.credits.cook",
+      "referenceName" : "Cook — 30 Credits",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "9.99",
+      "familyShareable" : false,
+      "internalID" : "C012",
+      "localizations" : [
+        {
+          "description" : "75 recipe credits. Credits never expire. Any purchase unlocks all premium features.",
+          "displayName" : "Feast",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.tastethelens.credits.feast",
+      "referenceName" : "Feast — 75 Credits",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "19.99",
+      "familyShareable" : false,
+      "internalID" : "C013",
+      "localizations" : [
+        {
+          "description" : "175 recipe credits. Credits never expire. Best value per credit.",
+          "displayName" : "Chef's Stash",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.tastethelens.credits.chefstash",
+      "referenceName" : "Chef's Stash — 175 Credits",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "49.99",
+      "familyShareable" : false,
+      "internalID" : "C014",
+      "localizations" : [
+        {
+          "description" : "600 recipe credits. Credits never expire. For teams and power creators.",
+          "displayName" : "Cellar",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.tastethelens.credits.cellar",
+      "referenceName" : "Cellar — 600 Credits",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "1.99",
+      "familyShareable" : false,
+      "internalID" : "C001",
+      "localizations" : [
+        {
+          "description" : "10 recipe credits. Credits never expire.",
+          "displayName" : "Starter Pack (Legacy)",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.tastethelens.credits.starter",
+      "referenceName" : "Starter Pack — 10 Credits (Legacy)",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "8.99",
+      "familyShareable" : false,
+      "internalID" : "C002",
+      "localizations" : [
+        {
+          "description" : "50 recipe credits. Credits never expire.",
+          "displayName" : "Classic Pack (Legacy)",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.tastethelens.credits.classic",
+      "referenceName" : "Classic Pack — 50 Credits (Legacy)",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "14.99",
+      "familyShareable" : false,
+      "internalID" : "C003",
+      "localizations" : [
+        {
+          "description" : "90 recipe credits. Credits never expire.",
+          "displayName" : "Pantry Pack (Legacy)",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.tastethelens.credits.pantry",
+      "referenceName" : "Pantry Pack — 90 Credits (Legacy)",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "APP001",
+    "_developerTeamID" : "TEAM_ID",
+    "_failTransactionsEnabled" : false,
+    "_lastInitializedDate" : null,
+    "_locale" : "en_US",
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Load Products"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Purchase"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Verification"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Store Sync"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Subscription Status"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "App Transaction"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Manage Subscriptions Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Refund Request Sheet"
+      },
+      {
+        "current" : null,
+        "enabled" : false,
+        "name" : "Offer Code Redeem Sheet"
+      }
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "SG001",
+      "localizations" : [
+
+      ],
+      "name" : "Taste The Lens Subscriptions",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "3.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "S010",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "30 credits auto-loaded every month. Never run out. Cancel anytime.",
+              "displayName" : "Auto-Refill",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.tastethelens.autorefill.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Auto-Refill Monthly",
+          "subscriptionGroupID" : "SG001",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "49.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "S001",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Legacy subscription. Credits now granted as purchased credits on renewal.",
+              "displayName" : "Atelier (Legacy)",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.tastethelens.atelier.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Atelier Monthly (Legacy)",
+          "subscriptionGroupID" : "SG001",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "9.99",
+          "familyShareable" : false,
+          "groupNumber" : 3,
+          "internalID" : "S002",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Legacy subscription. Credits now granted as purchased credits on renewal.",
+              "displayName" : "Chef's Table (Legacy)",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.tastethelens.chefstable.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Chef's Table Monthly (Legacy)",
+          "subscriptionGroupID" : "SG001",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "69.99",
+          "familyShareable" : false,
+          "groupNumber" : 3,
+          "internalID" : "S003",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Legacy subscription. Credits now granted as purchased credits on renewal.",
+              "displayName" : "Chef's Table Annual (Legacy)",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.tastethelens.chefstable.annual",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Chef's Table Annual (Legacy)",
+          "subscriptionGroupID" : "SG001",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "9.99",
+          "familyShareable" : false,
+          "groupNumber" : 4,
+          "internalID" : "S004",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Legacy monthly subscription.",
+              "displayName" : "Pro Monthly (Legacy)",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.tastethelens.pro.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Pro Monthly (Legacy)",
+          "subscriptionGroupID" : "SG001",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "49.99",
+          "familyShareable" : false,
+          "groupNumber" : 4,
+          "internalID" : "S005",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Legacy annual subscription.",
+              "displayName" : "Pro Annual (Legacy)",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.tastethelens.pro.annual",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Pro Annual (Legacy)",
+          "subscriptionGroupID" : "SG001",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

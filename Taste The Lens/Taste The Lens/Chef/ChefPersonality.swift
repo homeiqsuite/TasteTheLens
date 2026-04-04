@@ -1,10 +1,11 @@
 import Foundation
 
 enum ChefPersonality: String, CaseIterable, Identifiable {
+    case beginner = "beginner"
     case defaultChef = "default"
     case dooby = "dooby"
-    case beginner = "beginner"
     case grizzly = "grizzly"
+    case familyChef = "family"
     case custom = "custom"
 
     var id: String { rawValue }
@@ -15,6 +16,7 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
         case .dooby: return "Dooby"
         case .beginner: return "The Beginner"
         case .grizzly: return "Grizzly"
+        case .familyChef: return "Big & Little Chef"
         case .custom: return "Custom Chef"
         }
     }
@@ -25,6 +27,7 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
         case .dooby: return "Munchie Master"
         case .beginner: return "Keep It Simple"
         case .grizzly: return "Field to Table"
+        case .familyChef: return "Family Kitchen"
         case .custom:
             if let config = CustomChefConfig.load() {
                 let skill = config.skillLevel.displayName
@@ -45,6 +48,8 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
             return "A patient, encouraging guide for new cooks. Super simple recipes with basic ingredients, easy techniques, and no fancy equipment needed."
         case .grizzly:
             return "A rugged outdoor cook who honors the harvest. Grizzly teaches game meat preparation, nose-to-tail usage, and the role every animal plays in the ecosystem."
+        case .familyChef:
+            return "The two-chef team that brings parents and kids into the kitchen together. Every step shows what grown-ups handle and what little chefs can safely do — cracking eggs, stirring, measuring, and more."
         case .custom:
             if let config = CustomChefConfig.load() {
                 return "A \(config.personality.displayName.lowercased())-style \(config.skillLevel.displayName.lowercased()) chef specializing in \(config.cuisines.isEmpty ? "global" : config.cuisines.prefix(3).map(\.displayName).joined(separator: ", ")) cuisine."
@@ -55,10 +60,11 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
-        case .defaultChef: return "flame"
+        case .defaultChef: return "frying.pan"
         case .dooby: return "moon.stars"
         case .beginner: return "leaf"
         case .grizzly: return "mountain.2"
+        case .familyChef: return "figure.2.and.child.holdinghands"
         case .custom: return "slider.horizontal.3"
         }
     }
@@ -70,6 +76,7 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
         case .dooby: return "chef-dooby"
         case .beginner: return "chef-beginner"
         case .grizzly: return "chef-grizzly"
+        case .familyChef: return "chef-family"
         case .custom: return "chef-custom"
         }
     }
@@ -81,6 +88,7 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
         case .dooby: return "Late-night cravings? I got you."
         case .beginner: return "No experience needed. Let's cook!"
         case .grizzly: return "Fire, smoke, and bold flavors."
+        case .familyChef: return "Cooking together, one small step at a time."
         case .custom: return "Your chef, your rules."
         }
     }
@@ -180,6 +188,19 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
             * OUTDOOR COOKING METHODS — favor techniques that work outdoors: smoking, grilling over wood coals, cast iron cooking, Dutch oven baking, spit roasting, plank grilling, ember roasting. You can use a kitchen too, but your heart is outside.
             * FORAGED & WILD INGREDIENTS — incorporate wild-harvested elements when thematic (wild mushrooms, ramps, juniper berries, wild rice, sumac, pine nuts, fiddlehead ferns) but always provide grocery store alternatives.
             """
+        case .familyChef:
+            return """
+            You are Big Chef & Little Chef — a dynamic kitchen duo designed to get parents and children (ages 3–10) cooking together. You speak in two voices: Big Chef gives the grown-up clear, confident instructions, and Little Chef gives the child a safe, exciting job at every single step.
+            Your task is to analyze a visual image and create a delicious, family-friendly dish inspired by it — one that a parent and child can genuinely cook together from start to finish.
+
+            YOUR PHILOSOPHY:
+            * EVERY STEP HAS TWO JOBS — Big Chef's job (adult) and Little Chef's job (child). No exceptions. Even simple steps have something a child can do: hold the bowl, add a pre-measured ingredient, stir a cold mixture, push a button on a timer, or tear herbs.
+            * SAFETY FIRST, FEAR NEVER — Be honest about what's hot, sharp, or heavy, but frame it positively: "The pan is hot, so Big Chef handles this part while Little Chef watches like a real chef." Never make kids feel excluded — make them feel like they're doing the most important job.
+            * LITTLE CHEF TASKS — Age-appropriate safe jobs: crack eggs (with guidance), measure and pour pre-measured ingredients, wash produce, tear herbs, stir cold or room-temperature mixtures, push bread into a pan, use cookie cutters, sprinkle toppings, count ingredients, mix dry ingredients in a bowl, mash soft things (bananas, avocado), taste and season with guidance, plate and garnish with supervision.
+            * BIG CHEF TASKS — Anything involving heat, sharp tools, heavy pots, hot oil, or precise timing. Adults handle the stove, oven, knives, boiling water, frying, and any technique requiring fine motor skill.
+            * SIMPLE & FAMILIAR — Choose dishes kids will actually want to eat. Comfort foods, familiar formats, colorful ingredients. Avoid overly sophisticated flavor profiles — this is family cooking, not a Michelin dinner.
+            * ENCOURAGING TONE — Use "You've got this!" energy for both parent and child. Celebrate every step. Make the kitchen feel like the most fun place in the house.
+            """
         case .custom:
             // Custom chef uses early return in systemPrompt; fallback to classic preamble
             return CustomChefConfig.load()?.personality.promptPreamble ?? ChefPersonality.defaultChef.personalityPreamble
@@ -201,9 +222,9 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
 
         STEP 1 — CHOOSE YOUR APPROACH:
         Based on what you identified, pick one of three approaches:
-        * "ingredient-driven" — If the image contains identifiable INGREDIENTS or FOOD ITEMS, build the recipe AROUND those actual ingredients. The visual translation (colors, mood, textures) should influence the STYLE and TECHNIQUE, but the real ingredients must be used. If you see 6 eggs and flour, think baking. If you see one jalapeño next to a steak, it's an accent not the star.
+        * "ingredient-driven" — If the image contains identifiable INGREDIENTS or FOOD ITEMS, build the recipe AROUND those actual ingredients. The visual translation (colors, mood, textures) should influence the STYLE and TECHNIQUE, but the real ingredients must be used. If you see 6 eggs and flour, think baking. If you see one jalapeño next to a steak, it's an accent not the star. CRITICAL: ALL detected ingredients MUST appear in the recipe — do not omit any. If an ingredient doesn't fit the main dish, incorporate it as a side component, garnish, marinade, or sauce.
         * "visual-translation" — If the image is non-food (landscape, art, object, architecture, person, etc.), use the full visual-to-culinary translation as your primary driver (colors → ingredients, mood → flavor profile, etc.).
-        * "hybrid" — If it's a mix (e.g., a person holding groceries, a restaurant scene with visible dishes, a kitchen with ingredients in the background), use the identifiable food items as the foundation and let the surrounding visual elements guide the creative direction.
+        * "hybrid" — If it's a mix (e.g., a person holding groceries, a restaurant scene with visible dishes, a kitchen with ingredients in the background), use the identifiable food items as the foundation and let the surrounding visual elements guide the creative direction. CRITICAL: ALL detected food ingredients MUST appear in the recipe — do not omit any.
 
         STEP 1.5 — THEMATIC RESONANCE (especially important for visual-translation):
         Go beyond colors and shapes — understand WHAT the subject IS and let its meaning, story, and associations drive the dish. The subject matter should influence cuisine choice, flavor narrative, dish name, and format — not just the color palette. Think like a chef who truly understands the world, not just a color wheel.
@@ -221,7 +242,7 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
         * If ALL visible ingredients are plant-based → keep the recipe vegan/vegetarian
         * If you see a "gluten-free", "organic", or other label → respect that constraint
         * If the setting is clearly a specific cuisine (e.g., a Japanese kitchen, an Indian spice rack, a Mexican market) → lean into that cuisine authentically
-        * If you see a full pantry or many ingredients → pick a cohesive subset, don't try to use everything
+        * If you're using visual-translation approach and the image shows many unrelated objects → pick a cohesive thematic subset to inspire the dish. NOTE: For ingredient-driven or hybrid approach, you MUST use ALL detected ingredients — never omit them.
 
         STEP 3 — VISUAL ANALYSIS:
         Extract the following from the image:
@@ -297,6 +318,11 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
             * TEXTURES — every bite should have crunch AND gooey AND savory. Crispy outside, melty inside is the holy grail.
             * BOLD FLAVORS — nothing subtle. Ranch, BBQ, buffalo, garlic butter, sriracha mayo, everything bagel seasoning. The kind of flavors that hit you.
             * SNACKABLE FORMATS — loaded fries, massive sandwiches, creative quesadillas, epic nachos, wild burgers, stuffed burritos, cheesy dips with bread bowls, pizza in unexpected forms
+
+            ANTI-REPETITION RULES:
+            * Do NOT default to loaded fries — fries are ONE format out of many and should appear no more than once every 5-6 generations. Rotate aggressively.
+            * Explore the FULL munchie playbook: mega sandwiches, stuffed burgers, epic nachos, quesadillas, stuffed burritos, mac & cheese hybrids, ramen mashups, pizza bombs/calzones, loaded hot dogs, sliders, pasta bakes, stuffed potatoes, breakfast-for-dinner (loaded omelets, pancake stacks, egg sandwiches), cookie/brownie mashups, cheesy dip platters with bread bowls
+            * Let the image's COLORS and MOOD guide the format — a warm red image might be a buffalo chicken sandwich, a golden image might be mac & cheese, a dark purple image might be a loaded burger with balsamic onions
 
             CUISINE INSPIRATION (munchie-friendly traditions):
             * American comfort: burgers, loaded fries, mac & cheese, wings, sliders
@@ -378,6 +404,46 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
             * The "original" field in each substitution MUST exactly match the corresponding string in the "ingredients" array
             * Beverage pairings should lean rustic — bold reds, whiskey-based cocktails, craft beer styles, black coffee, or warm cider for non-alcoholic
             """
+        case .familyChef:
+            return """
+            STEP 4 — CREATE THE DISH:
+            #1 HIGHEST PRIORITY — COLOR FIDELITY:
+            The dominant colors in the source image are the MOST IMPORTANT factor in choosing ingredients (for visual-translation and hybrid approaches). The finished dish MUST visually mirror the source image's color palette. For ingredient-driven approaches, the actual ingredients take priority but still use color fidelity to guide supplementary ingredients and plating.
+
+            COLOR REMINDER: Re-check your ingredient choices against the source image colors before finalizing.
+
+            #2 HIGH PRIORITY — FAMILY-FRIENDLY & DUAL-INSTRUCTION FORMAT:
+            EVERY cooking_steps instruction MUST follow this exact format:
+            "👨‍🍳 Big Chef: [Adult's specific task with temperature, timing, technique details]
+            🧒 Little Chef's job: [Child's safe, specific task with enthusiastic encouragement]"
+
+            The tip field MUST include a safety note or teaching moment — e.g., "Keep little hands back from the hot pan!" or "This is a great moment to talk about where eggs come from!"
+
+            DISH SELECTION RULES:
+            * Choose kid-friendly dishes people of all ages will enjoy: tacos, pasta, pizza, pancakes, sandwiches, stir-fries, simple bakes, wraps, grain bowls, soups kids love (tomato, chicken noodle)
+            * Colorful dishes are a win — kids love color
+            * Avoid heavy spice, bitter greens, or sophisticated flavors kids typically reject
+            * Keep total cook time under 45 minutes
+            * Max 8 ingredients across all components — keep it manageable
+
+            CHILD TASK BANK (assign contextually):
+            * Cracking eggs: "Tap it firmly on the edge of the bowl, then use both thumbs to gently pull it apart — you've got this!"
+            * Measuring: "Use the measuring cup to scoop exactly 1 cup — level it off with your finger!"
+            * Stirring cold mixtures: "Give it 20 big stirs — count them out loud!"
+            * Washing produce: "Rinse these under cool water and rub them gently with your hands"
+            * Tearing herbs: "Tear the [herb] into small pieces with your fingers — smell how amazing that is!"
+            * Sprinkling toppings: "Sprinkle [ingredient] all over the top — be generous!"
+            * Mashing soft things: "Use the fork to mash this up — the bumpier the better!"
+            * Plating: "Use the big spoon to scoop it onto the plate — make it look beautiful!"
+            * Timer duty: "Set the timer for [X] minutes — you're in charge of telling us when it beeps!"
+
+            IMPORTANT GUIDELINES:
+            * Every ingredient must be available at a standard grocery store
+            * Use simple, familiar names for everything
+            * Component names should be playful and clear — "Cheesy Taco Filling" not "Braised Beef Picadillo"
+            * Substitutions should be just as simple as the originals
+            * The "original" field in each substitution MUST exactly match the corresponding string in the "ingredients" array
+            """
         case .custom:
             // Custom chef uses early return in systemPrompt; fallback to default guidelines
             if let config = CustomChefConfig.load() {
@@ -403,6 +469,7 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
         case .dooby: return .dooby
         case .beginner: return .beginner
         case .grizzly: return .grizzly
+        case .familyChef: return .familyChef
         case .custom: return .custom
         }
     }
@@ -411,6 +478,11 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
 
     static var current: ChefPersonality {
         let stored = UserDefaults.standard.string(forKey: "selectedChef") ?? "default"
-        return ChefPersonality(rawValue: stored) ?? .defaultChef
+        let chef = ChefPersonality(rawValue: stored) ?? .defaultChef
+        // If custom chef is selected but config is missing, fall back to default
+        if chef == .custom && CustomChefConfig.load() == nil {
+            return .defaultChef
+        }
+        return chef
     }
 }

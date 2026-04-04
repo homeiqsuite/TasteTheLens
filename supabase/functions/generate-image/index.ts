@@ -10,6 +10,14 @@ const PHOTOGRAPHY_SUFFIX =
 
 type Provider = "imagen4" | "imagen4fast" | "fluxpro" | "fluxschnell";
 
+// Flat cost per image generation (USD estimates)
+const IMAGE_COST_USD: Record<Provider, number> = {
+  imagen4:     0.040,
+  imagen4fast: 0.020,
+  fluxpro:     0.050,
+  fluxschnell: 0.003,
+};
+
 interface GenerateImageRequest {
   prompt: string;
   provider: Provider;
@@ -18,11 +26,13 @@ interface GenerateImageRequest {
 interface GenerateImageResponse {
   imageData: string; // base64
   mimeType: string;
+  costUsd: number;
 }
 
 async function generateWithImagen(
   prompt: string,
-  model: string
+  model: string,
+  costUsd: number
 ): Promise<GenerateImageResponse> {
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predict?key=${GEMINI_API_KEY}`;
 
@@ -57,12 +67,14 @@ async function generateWithImagen(
   return {
     imageData: prediction.bytesBase64Encoded,
     mimeType: prediction.mimeType || "image/png",
+    costUsd,
   };
 }
 
 async function generateWithFlux(
   prompt: string,
-  variant: "pro" | "schnell"
+  variant: "pro" | "schnell",
+  costUsd: number
 ): Promise<GenerateImageResponse> {
   const endpoint =
     variant === "pro"
@@ -120,6 +132,7 @@ async function generateWithFlux(
   return {
     imageData,
     mimeType: "image/jpeg",
+    costUsd,
   };
 }
 
@@ -128,14 +141,16 @@ Deno.serve(async (req) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  // Authenticate user (optional for guests)
+  // Authenticate user (optional for guests).
+  // Prefer x-user-token (bypasses gateway JWT validation for expired tokens).
+  // Fall back to Authorization for SDK-based callers.
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   let userId: string | null = null;
 
-  const authHeader = req.headers.get("Authorization");
-  if (authHeader) {
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+  const userToken = req.headers.get("x-user-token")
+    || req.headers.get("Authorization")?.replace("Bearer ", "") || null;
+  if (userToken) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser(userToken);
     if (!authError && user) {
       userId = user.id;
     }
@@ -183,20 +198,22 @@ Deno.serve(async (req) => {
       case "imagen4":
         result = await generateWithImagen(
           enhancedPrompt,
-          "imagen-4.0-generate-001"
+          "imagen-4.0-generate-001",
+          IMAGE_COST_USD.imagen4
         );
         break;
       case "imagen4fast":
         result = await generateWithImagen(
           enhancedPrompt,
-          "imagen-4.0-fast-generate-001"
+          "imagen-4.0-fast-generate-001",
+          IMAGE_COST_USD.imagen4fast
         );
         break;
       case "fluxpro":
-        result = await generateWithFlux(enhancedPrompt, "pro");
+        result = await generateWithFlux(enhancedPrompt, "pro", IMAGE_COST_USD.fluxpro);
         break;
       case "fluxschnell":
-        result = await generateWithFlux(enhancedPrompt, "schnell");
+        result = await generateWithFlux(enhancedPrompt, "schnell", IMAGE_COST_USD.fluxschnell);
         break;
     }
 

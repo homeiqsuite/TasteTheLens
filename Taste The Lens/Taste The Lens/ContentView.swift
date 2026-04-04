@@ -88,7 +88,11 @@ struct ContentView: View {
                     processingIndex: OfflineCaptureQueue.shared.processingIndex,
                     onProcess: {
                         Task {
+                            let countBefore = OfflineCaptureQueue.shared.queueCount
                             await OfflineCaptureQueue.shared.processQueue(modelContext: modelContext)
+                            if countBefore > 0 && OfflineCaptureQueue.shared.queueCount == 0 {
+                                vm.showTemporaryNotice("All queued photos processed")
+                            }
                         }
                     }
                 )
@@ -192,6 +196,12 @@ struct ContentView: View {
         .sheet(isPresented: $showDisplayNamePrompt) {
             DisplayNamePromptView()
         }
+        .onReceive(NotificationCenter.default.publisher(for: .displayNameDismissedWithoutSaving)) { _ in
+            vm.showTemporaryNotice("Set your display name in Settings > Profile")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: SignInView.dismissedWithEmailForm)) { _ in
+            vm.showTemporaryNotice("You can sign in anytime from Settings")
+        }
         .onReceive(NotificationCenter.default.publisher(for: .reimagineRecipe)) { notification in
             vm.handleReimaginNotification(notification)
         }
@@ -229,11 +239,13 @@ struct ContentView: View {
     @State private var showChefPicker = false
     @State private var showBudgetTooltip = false
     @AppStorage("hasSeenBudgetTooltip") private var hasSeenBudgetTooltip = false
+    @AppStorage("totalCaptureCount") private var totalCaptureCount = 0
 
     private var cameraScreen: some View {
         ZStack {
             CameraView(
                 onPhotoCaptured: { image in
+                    totalCaptureCount += 1
                     vm.handlePhotoCaptured(image)
                 },
                 onFusionPhotoCaptured: { images in
@@ -331,9 +343,9 @@ struct ContentView: View {
             }
         }
         .onAppear {
-            if !hasSeenBudgetTooltip {
+            if totalCaptureCount >= 3 && !hasSeenBudgetTooltip {
                 Task {
-                    try? await Task.sleep(for: .seconds(2.0))
+                    try? await Task.sleep(for: .seconds(1.0))
                     withAnimation { showBudgetTooltip = true }
                 }
             }
@@ -395,7 +407,7 @@ struct ContentView: View {
             ZStack {
                 Theme.darkBg.ignoresSafeArea()
 
-                ChefSelectionView()
+                ChefSelectionView(context: .forThisRecipe)
                     .padding(.horizontal, 20)
                     .padding(.top, 24)
             }
@@ -547,64 +559,109 @@ struct ContentView: View {
 private struct PrivacyNoticeSheet: View {
     let onAccept: () -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var showDetails = false
 
     var body: some View {
         NavigationStack {
             ZStack {
                 Theme.darkBg.ignoresSafeArea()
 
-                VStack(spacing: 20) {
-                    Image(systemName: "shield.checkered")
-                        .font(.system(size: 48))
-                        .foregroundStyle(Theme.visual)
-                        .padding(.top, 32)
+                ScrollView {
+                    VStack(spacing: 20) {
+                        Image(systemName: "shield.checkered")
+                            .font(.system(size: 48))
+                            .foregroundStyle(Theme.visual)
+                            .padding(.top, 32)
 
-                    Text("How Your Photos Are Used")
-                        .font(.system(size: 22, weight: .bold, design: .serif))
-                        .foregroundStyle(Theme.darkTextPrimary)
+                        Text("How Your Photos Are Used")
+                            .font(.system(size: 22, weight: .bold, design: .serif))
+                            .foregroundStyle(Theme.darkTextPrimary)
 
-                    Text("When you capture a photo, it's sent to AI services to analyze the scene and generate your recipe. Photos are processed in real-time and are not stored on external servers beyond processing.")
-                        .font(.system(size: 15))
-                        .foregroundStyle(Theme.darkTextSecondary)
-                        .multilineTextAlignment(.center)
+                        Text("When you capture a photo, it's sent to AI services to analyze the scene and generate your recipe. Photos are processed in real-time and are not stored on external servers beyond processing.")
+                            .font(.system(size: 15))
+                            .foregroundStyle(Theme.darkTextSecondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+
+                        // Expandable details
+                        VStack(alignment: .leading, spacing: 12) {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showDetails.toggle()
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text("What do we use this for?")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundStyle(Theme.visual)
+                                    Image(systemName: showDetails ? "chevron.up" : "chevron.down")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(Theme.visual)
+                                }
+                            }
+
+                            if showDetails {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    privacyBullet("Your photo is sent to AI to identify ingredients and scene context")
+                                    privacyBullet("Photos are not stored permanently on any server")
+                                    privacyBullet("No photo data is shared with third parties for advertising")
+                                    privacyBullet("Accepting this notice is required to process your photo")
+                                }
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 24)
 
-                    Button {
-                        if let url = URL(string: "https://tastethelens.com/privacy") {
-                            UIApplication.shared.open(url)
+                        Button {
+                            if let url = URL(string: "https://tastethelens.com/privacy") {
+                                UIApplication.shared.open(url)
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "doc.text")
+                                    .font(.system(size: 13))
+                                Text("Privacy Policy")
+                                    .font(.system(size: 14, weight: .medium))
+                                Image(systemName: "arrow.up.right")
+                                    .font(.system(size: 11))
+                            }
+                            .foregroundStyle(Theme.darkTextTertiary)
                         }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "doc.text")
-                                .font(.system(size: 13))
-                            Text("Privacy Policy")
-                                .font(.system(size: 14, weight: .medium))
-                            Image(systemName: "arrow.up.right")
-                                .font(.system(size: 11))
+
+                        Spacer().frame(height: 20)
+
+                        Button {
+                            onAccept()
+                        } label: {
+                            Text("I Understand")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(Theme.darkBg)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(Theme.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
                         }
-                        .foregroundStyle(Theme.darkTextTertiary)
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 32)
                     }
-
-                    Spacer()
-
-                    Button {
-                        onAccept()
-                    } label: {
-                        Text("I Understand")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(Theme.darkBg)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(Theme.primary)
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 32)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
         }
         .interactiveDismissDisabled()
+    }
+
+    private func privacyBullet(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Circle()
+                .fill(Theme.visual.opacity(0.6))
+                .frame(width: 5, height: 5)
+                .padding(.top, 6)
+            Text(text)
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.darkTextTertiary)
+        }
     }
 }

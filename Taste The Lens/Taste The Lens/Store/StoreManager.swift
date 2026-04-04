@@ -10,94 +10,92 @@ final class StoreManager {
     static let shared = StoreManager()
 
     private(set) var products: [Product] = []
-    private(set) var currentTier: SubscriptionTier = .free
     private(set) var isLoading = false
     private(set) var hasCheckedStatus = false
 
+    /// Whether the user has an active legacy subscription (detected via StoreKit)
+    private(set) var hasActiveLegacySubscription = false
+
     // MARK: - Product IDs
 
-    // Legacy (kept for migration)
-    static let legacyMonthlyId = "com.tastethelens.pro.monthly"
-    static let legacyAnnualId = "com.tastethelens.pro.annual"
+    // New credit packs (pure credits model)
+    static let tastePackId      = "com.tastethelens.credits.taste"       // 10 credits, $1.99
+    static let cookPackId       = "com.tastethelens.credits.cook"        // 30 credits, $4.99
+    static let feastPackId      = "com.tastethelens.credits.feast"       // 75 credits, $9.99
+    static let chefsStashPackId = "com.tastethelens.credits.chefstash"   // 175 credits, $19.99
+    static let cellarPackId     = "com.tastethelens.credits.cellar"      // 600 credits, $49.99
 
-    // Credit packs (consumable)
-    static let starterPackId = "com.tastethelens.credits.starter"   // 10 credits, $1.99
-    static let classicPackId = "com.tastethelens.credits.classic"   // 50 credits, $8.99
-    static let pantryPackId  = "com.tastethelens.credits.pantry"    // 90 credits, $14.99 (reduced from 100 for margin optimization)
+    // Auto-refill subscription (convenience, no feature gates)
+    static let autoRefillMonthlyId = "com.tastethelens.autorefill.monthly"  // $3.99/mo → 30 credits
 
-    // Subscriptions (auto-renewable)
-    static let chefsTableMonthlyId = "com.tastethelens.chefstable.monthly"  // $9.99/mo
-    static let chefsTableAnnualId  = "com.tastethelens.chefstable.annual"   // $69.99/yr (~$5.83/mo, save 42%)
-    static let atelierMonthlyId    = "com.tastethelens.atelier.monthly"     // $49.99/mo — planned increase to $69.99/mo (App Store Connect)
+    // Legacy credit packs (kept for transaction handling of old purchases)
+    static let legacyStarterPackId = "com.tastethelens.credits.starter"
+    static let legacyClassicPackId = "com.tastethelens.credits.classic"
+    static let legacyPantryPackId  = "com.tastethelens.credits.pantry"
 
-    /// Maps credit pack product IDs to credit amounts
+    // Legacy subscriptions (kept for StoreKit entitlement detection)
+    static let legacyMonthlyId         = "com.tastethelens.pro.monthly"
+    static let legacyAnnualId          = "com.tastethelens.pro.annual"
+    static let legacyChefsTableMonthly = "com.tastethelens.chefstable.monthly"
+    static let legacyChefsTableAnnual  = "com.tastethelens.chefstable.annual"
+    static let legacyAtelierMonthly    = "com.tastethelens.atelier.monthly"
+
+    /// Maps credit pack product IDs to credit amounts (new + legacy)
     static let creditPackAmounts: [String: Int] = [
-        starterPackId: 10,
-        classicPackId: 50,
-        pantryPackId: 90
+        // New packs
+        tastePackId: 10,
+        cookPackId: 30,
+        feastPackId: 75,
+        chefsStashPackId: 175,
+        cellarPackId: 600,
+        // Legacy packs (for replayed transactions)
+        legacyStarterPackId: 10,
+        legacyClassicPackId: 50,
+        legacyPantryPackId: 90,
     ]
 
-    private static let allProductIds: Set<String> = [
-        legacyMonthlyId, legacyAnnualId,
-        starterPackId, classicPackId, pantryPackId,
-        chefsTableMonthlyId, chefsTableAnnualId, atelierMonthlyId
+    /// Product IDs for the new credit packs (used for display in PaywallView)
+    static let newCreditPackIds: Set<String> = [
+        tastePackId, cookPackId, feastPackId, chefsStashPackId, cellarPackId
     ]
+
+    /// All subscription IDs (legacy + auto-refill)
+    private static let subscriptionIds: Set<String> = [
+        legacyMonthlyId, legacyAnnualId,
+        legacyChefsTableMonthly, legacyChefsTableAnnual, legacyAtelierMonthly,
+        autoRefillMonthlyId
+    ]
+
+    private static let allProductIds: Set<String> = {
+        var ids = newCreditPackIds
+        ids.formUnion(subscriptionIds)
+        ids.formUnion([legacyStarterPackId, legacyClassicPackId, legacyPantryPackId])
+        return ids
+    }()
 
     private var updateListenerTask: Task<Void, Never>?
 
     private init() {
         updateListenerTask = listenForTransactions()
         Task { await loadProducts() }
-        Task { await updateSubscriptionStatus() }
+        Task { await checkLegacySubscription() }
     }
 
     deinit {
         updateListenerTask?.cancel()
     }
 
-    // MARK: - Backward Compatibility
-
-    /// Backward-compatible pro check — true if user has any subscription
-    var isPro: Bool {
-        currentTier != .free
-    }
-
     // MARK: - Product Accessors
 
+    /// New credit pack products, sorted by price (for PaywallView)
     var creditProducts: [Product] {
-        products.filter { Self.creditPackAmounts.keys.contains($0.id) }
+        products.filter { Self.newCreditPackIds.contains($0.id) }
             .sorted { $0.price < $1.price }
     }
 
-    var subscriptionProducts: [Product] {
-        let subIds: Set<String> = [
-            Self.chefsTableMonthlyId, Self.chefsTableAnnualId, Self.atelierMonthlyId,
-            Self.legacyMonthlyId, Self.legacyAnnualId
-        ]
-        return products.filter { subIds.contains($0.id) }
-    }
-
-    var chefsTableProduct: Product? {
-        products.first { $0.id == Self.chefsTableMonthlyId }
-    }
-
-    var chefsTableAnnualProduct: Product? {
-        products.first { $0.id == Self.chefsTableAnnualId }
-    }
-
-    var atelierProduct: Product? {
-        products.first { $0.id == Self.atelierMonthlyId }
-    }
-
-    // Legacy accessors (for existing code that may reference these)
-    var monthlyProduct: Product? {
-        products.first { $0.id == Self.chefsTableMonthlyId }
-            ?? products.first { $0.id == Self.legacyMonthlyId }
-    }
-
-    var annualProduct: Product? {
-        products.first { $0.id == Self.chefsTableAnnualId }
-            ?? products.first { $0.id == Self.legacyAnnualId }
+    /// Auto-refill subscription product (if loaded)
+    var autoRefillProduct: Product? {
+        products.first { $0.id == Self.autoRefillMonthlyId }
     }
 
     // MARK: - Load Products
@@ -117,7 +115,14 @@ final class StoreManager {
     // MARK: - Purchase
 
     func purchase(_ product: Product) async throws -> Bool {
-        let result = try await product.purchase()
+        // Set appAccountToken to the authenticated user's UUID so Apple's
+        // App Store Server Notifications webhook can identify which user
+        // the transaction belongs to.
+        var purchaseOptions: Set<Product.PurchaseOption> = []
+        if let userId = AuthManager.shared.currentUser?.id {
+            purchaseOptions.insert(.appAccountToken(userId))
+        }
+        let result = try await product.purchase(options: purchaseOptions)
 
         switch result {
         case .success(let verification):
@@ -126,29 +131,16 @@ final class StoreManager {
             if let creditCount = Self.creditPackAmounts[product.id] {
                 // Consumable credit pack
                 UsageTracker.shared.addPurchasedCredits(creditCount)
-                UsageTracker.shared.trackCreditPackPurchase(price: product.price)
-                // Unlock clean exports for Classic+ buyers
-                if product.id == Self.classicPackId || product.id == Self.pantryPackId {
-                    UsageTracker.shared.hasPurchasedClassicOrHigher = true
-                }
                 logger.info("Credit pack purchased: \(creditCount) credits from \(product.id)")
-            } else {
-                // Subscription
-                await updateSubscriptionStatus()
-
-                // Update Supabase tier via server-side RPC (validates auth.uid())
-                if AuthManager.shared.isAuthenticated {
-                    let tierValue = tierForProductId(product.id).rawValue
-                    try? await SupabaseManager.shared.client
-                        .rpc("update_subscription_tier", params: ["tier_value": tierValue])
-                        .execute()
-                }
-
-                // Refresh subscription credits
-                let tier = tierForProductId(product.id)
-                if tier != .free {
-                    UsageTracker.shared.refreshSubscriptionCredits(tier: tier)
-                }
+            } else if product.id == Self.autoRefillMonthlyId {
+                // Auto-refill subscription — credits are granted by webhook on renewal.
+                // Mark as paid user for feature unlock.
+                EntitlementManager.shared.hasEverPurchased = true
+                logger.info("Auto-refill subscription purchased")
+            } else if Self.subscriptionIds.contains(product.id) {
+                // Legacy subscription (shouldn't happen on new app, but handle gracefully)
+                EntitlementManager.shared.hasEverPurchased = true
+                logger.info("Legacy subscription purchased: \(product.id)")
             }
 
             await transaction.finish()
@@ -171,77 +163,31 @@ final class StoreManager {
 
     func restorePurchases() async {
         try? await AppStore.sync()
-        await updateSubscriptionStatus()
+        await checkLegacySubscription()
+        // Re-sync credits from server in case webhooks granted credits
+        await UsageTracker.shared.syncCreditsFromServer()
     }
 
-    // MARK: - Subscription Status
+    // MARK: - Legacy Subscription Detection
 
-    func updateSubscriptionStatus() async {
-        var detectedTier: SubscriptionTier = .free
+    /// Check if the user has any active legacy subscription via StoreKit.
+    /// This is used to show "Manage in Apple Settings" in SettingsView.
+    func checkLegacySubscription() async {
+        var foundLegacy = false
 
         for await result in Transaction.currentEntitlements {
             if case .verified(let transaction) = result {
-                let tier = tierForProductId(transaction.productID)
-                if tier > detectedTier {
-                    detectedTier = tier
+                if Self.subscriptionIds.contains(transaction.productID) {
+                    foundLegacy = true
+                    // User has an active subscription → they've paid before
+                    EntitlementManager.shared.hasEverPurchased = true
                 }
             }
         }
 
-        // Also check Supabase
-        let supabaseTier = await checkSupabaseTier()
-        if supabaseTier > detectedTier {
-            detectedTier = supabaseTier
-        }
-
-        currentTier = detectedTier
+        hasActiveLegacySubscription = foundLegacy
         hasCheckedStatus = true
-
-        // Clear subscription credits if tier dropped to free
-        if detectedTier == .free {
-            UsageTracker.shared.clearSubscriptionCredits()
-        }
-
-        logger.info("Subscription status: tier=\(detectedTier.displayName)")
-    }
-
-    private func checkSupabaseTier() async -> SubscriptionTier {
-        guard AuthManager.shared.isAuthenticated,
-              let userId = AuthManager.shared.currentUser?.id.uuidString else { return .free }
-
-        do {
-            struct UserTier: Decodable { let subscription_tier: String? }
-            let response = try await SupabaseManager.shared.client
-                .from("users")
-                .select("subscription_tier")
-                .eq("id", value: userId)
-                .limit(1)
-                .execute()
-            let users = try JSONDecoder().decode([UserTier].self, from: response.data)
-            guard let user = users.first else { return .free }
-
-            switch user.subscription_tier {
-            case "pro", "chefsTable": return .chefsTable
-            case "atelier": return .atelier
-            default: return .free
-            }
-        } catch {
-            logger.warning("Failed to check Supabase tier: \(error)")
-            return .free
-        }
-    }
-
-    // MARK: - Tier Mapping
-
-    private func tierForProductId(_ productId: String) -> SubscriptionTier {
-        switch productId {
-        case Self.chefsTableMonthlyId, Self.chefsTableAnnualId, Self.legacyMonthlyId, Self.legacyAnnualId:
-            return .chefsTable
-        case Self.atelierMonthlyId:
-            return .atelier
-        default:
-            return .free
-        }
+        logger.info("Legacy subscription check: \(foundLegacy ? "active" : "none")")
     }
 
     // MARK: - Transaction Listener
@@ -250,7 +196,14 @@ final class StoreManager {
         Task.detached {
             for await result in Transaction.updates {
                 if case .verified(let transaction) = result {
-                    await self.updateSubscriptionStatus()
+                    // Handle replayed consumable transactions (e.g. app crashed before finish)
+                    if Self.creditPackAmounts[transaction.productID] != nil {
+                        // The server is authoritative, so sync to reconcile
+                        await UsageTracker.shared.syncCreditsFromServer()
+                        logger.info("Replayed consumable transaction: \(transaction.productID)")
+                    }
+                    // Re-check for legacy/auto-refill subscriptions
+                    await self.checkLegacySubscription()
                     await transaction.finish()
                 }
             }

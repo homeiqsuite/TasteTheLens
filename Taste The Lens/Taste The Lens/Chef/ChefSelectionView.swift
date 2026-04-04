@@ -1,17 +1,44 @@
 import SwiftUI
 
+enum ChefSelectionContext {
+    case defaultChef
+    case forThisRecipe
+
+    var title: String {
+        switch self {
+        case .defaultChef: return "Your Chef"
+        case .forThisRecipe: return "Chef for this recipe"
+        }
+    }
+
+    var subtitle: String? {
+        switch self {
+        case .defaultChef: return nil
+        case .forThisRecipe: return "Applies to this generation only"
+        }
+    }
+}
+
 struct ChefSelectionView: View {
+    var context: ChefSelectionContext = .defaultChef
     @AppStorage("selectedChef") private var selectedChef = "default"
     @State private var showPaywall = false
     @State private var showCustomChefEditor = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Your Chef")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.darkTextSecondary)
-                .textCase(.uppercase)
-                .tracking(1.2)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(context.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Theme.darkTextSecondary)
+                    .textCase(.uppercase)
+                    .tracking(1.2)
+                if let subtitle = context.subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.darkTextHint)
+                }
+            }
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {

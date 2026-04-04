@@ -32,9 +32,14 @@ final class Recipe {
     var nutrition: NutritionInfo?
     var prepTime: String?
     var cookTime: String?
+    var difficulty: String?
+    var chefCommentary: String?
 
     // Step-based cooking
     var cookingSteps: [CookingStep] = []
+
+    // Simplified Mode
+    var isSimplified: Bool = false
 
     // Fusion Mode
     var isFusion: Bool = false
@@ -61,7 +66,10 @@ final class Recipe {
         nutrition: NutritionInfo? = nil,
         prepTime: String? = nil,
         cookTime: String? = nil,
+        difficulty: String? = nil,
+        chefCommentary: String? = nil,
         cookingSteps: [CookingStep] = [],
+        isSimplified: Bool = false,
         isFusion: Bool = false,
         additionalInspirationImagesData: [Data]? = nil
     ) {
@@ -82,12 +90,15 @@ final class Recipe {
         self.updatedAt = Date()
         self.claudeRawResponse = claudeRawResponse
         self.chefPersonality = chefPersonality
-        self.baseServings = baseServings
+        self.baseServings = max(1, baseServings)
         self.estimatedCalories = estimatedCalories
         self.nutrition = nutrition
         self.prepTime = prepTime
         self.cookTime = cookTime
+        self.difficulty = difficulty
+        self.chefCommentary = chefCommentary
         self.cookingSteps = cookingSteps
+        self.isSimplified = isSimplified
         self.isFusion = isFusion
         self.additionalInspirationImagesData = additionalInspirationImagesData
     }
@@ -130,11 +141,13 @@ struct CookingStep: Codable, Hashable {
     var instruction: String
     var ingredientsUsed: [String]
     var tip: String?
+    var littleChef: String?
 
     enum CodingKeys: String, CodingKey {
         case instruction
         case ingredientsUsed = "ingredients_used"
         case tip
+        case littleChef = "little_chef"
     }
 }
 

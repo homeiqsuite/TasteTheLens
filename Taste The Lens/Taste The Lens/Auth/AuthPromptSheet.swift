@@ -5,6 +5,7 @@ struct AuthPromptSheet: View {
     @State private var showSignIn = false
 
     private let gold = Theme.gold
+    private let authManager = AuthManager.shared
 
     var body: some View {
         VStack(spacing: 20) {
@@ -59,6 +60,11 @@ struct AuthPromptSheet: View {
         .background(Theme.darkBg)
         .sheet(isPresented: $showSignIn) {
             SignInView()
+        }
+        .onChange(of: authManager.isAuthenticated) { _, isAuthenticated in
+            if isAuthenticated {
+                dismiss()
+            }
         }
     }
 }

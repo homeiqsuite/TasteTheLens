@@ -119,7 +119,7 @@ struct ProfileView: View {
                     }
                 }
             } message: {
-                Text("Your local recipes will remain on this device.")
+                Text("You'll stay signed in on other devices. Your local recipes will remain on this device.")
             }
             .sheet(isPresented: $showDeletionSheet) {
                 AccountDeletionSheet(modelContext: modelContext) {
@@ -266,7 +266,7 @@ private struct AccountDeletionSheet: View {
             displayName: authManager.displayName,
             email: authManager.email,
             memberSince: authManager.memberSinceDate,
-            subscriptionTier: StoreManager.shared.currentTier.displayName
+            subscriptionTier: EntitlementManager.shared.hasEverPurchased ? "Credits" : "Free"
         )
 
         let jsonData = DataExporter.exportJSON(recipes: recipes, user: userInfo)

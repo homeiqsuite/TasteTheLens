@@ -12,6 +12,15 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // Set explicit URL cache limits to prevent "cache storage usage exceeds limit" warnings.
+        // The app makes large AI API calls and downloads generated images — without explicit limits
+        // iOS hits its own internal threshold and purges the entire persistent cache.
+        URLCache.shared = URLCache(
+            memoryCapacity: 10 * 1024 * 1024,   // 10 MB in-memory
+            diskCapacity: 50 * 1024 * 1024,      // 50 MB on-disk
+            directory: nil
+        )
+
         FirebaseApp.configure()
         Messaging.messaging().delegate = self
         UNUserNotificationCenter.current().delegate = self

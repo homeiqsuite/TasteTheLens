@@ -11,7 +11,6 @@ struct ChallengeSubmitView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedItem: PhotosPickerItem?
     @State private var selectedImageData: Data?
-    @State private var caption = ""
     @State private var isSubmitting = false
     @State private var errorMessage: String?
     @State private var referenceImage: UIImage?
@@ -32,9 +31,6 @@ struct ChallengeSubmitView: View {
 
                         // Photo picker
                         photoPickerSection
-
-                        // Caption
-                        captionField
 
                         // Submit
                         submitButton
@@ -162,29 +158,6 @@ struct ChallengeSubmitView: View {
         }
     }
 
-    // MARK: - Caption
-
-    private var captionField: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Caption (optional)")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Theme.darkTextTertiary)
-
-            TextField("How did it turn out?", text: $caption)
-                .font(.system(size: 15))
-                .foregroundStyle(Theme.darkTextPrimary)
-                .padding(14)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Theme.darkSurface)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Theme.darkStroke, lineWidth: 0.5)
-                )
-        }
-    }
-
     // MARK: - Submit
 
     private var submitButton: some View {
@@ -226,7 +199,7 @@ struct ChallengeSubmitView: View {
             try await challengeService.submitAttempt(
                 challengeId: challenge.id,
                 photoData: compressed,
-                caption: caption.isEmpty ? nil : caption
+                caption: nil
             )
             HapticManager.success()
             onSubmit()

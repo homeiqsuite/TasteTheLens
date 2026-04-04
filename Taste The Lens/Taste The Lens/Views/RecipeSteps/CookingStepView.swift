@@ -6,6 +6,9 @@ struct CookingStepView: View {
     let cookingStep: CookingStep
     @Binding var checkedIngredients: Set<String>
     @Binding var servingCount: Int
+    @State private var showSubstitutionSheet = false
+    @State private var substitutionSheetIngredient: String = ""
+    @State private var substitutionSheetSubs: [String] = []
 
     /// Resolved ingredients for this step — uses explicit `ingredientsUsed` if available,
     /// otherwise scans the instruction text against all component ingredients.
@@ -87,6 +90,34 @@ struct CookingStepView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)
 
+                // Little Chef section (Family Chef mode)
+                if let littleChef = cookingStep.littleChef, !littleChef.isEmpty {
+                    HStack(alignment: .top, spacing: 10) {
+                        Text("🧒")
+                            .font(.system(size: 14))
+                            .padding(.top, 2)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Little Chef's Job")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(Theme.onboardingCapture)
+                            Text(littleChef)
+                                .font(.system(size: 14))
+                                .foregroundStyle(Theme.textSecondary)
+                                .lineSpacing(4)
+                        }
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.onboardingCapture.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Theme.onboardingCapture.opacity(0.2), lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .padding(.horizontal, 16)
+                }
+
                 // Cooking tip
                 if let tip = cookingStep.tip, !tip.isEmpty {
                     HStack(alignment: .top, spacing: 10) {
@@ -120,36 +151,57 @@ struct CookingStepView: View {
             }
         }
         .scrollBounceBehavior(.basedOnSize, axes: .vertical)
+        .sheet(isPresented: $showSubstitutionSheet) {
+            SubstitutionSheet(ingredient: substitutionSheetIngredient, substitutes: substitutionSheetSubs)
+                .presentationDetents([.height(250)])
+                .presentationBackground(Theme.background)
+        }
     }
 
     private func stepIngredientRow(ingredient: String, component: RecipeComponent) -> some View {
         let key = "\(component.name):\(ingredient)"
         let isChecked = checkedIngredients.contains(key)
+        let subs = component.substitutions?.first(where: { $0.original == ingredient })
 
-        return Button {
-            HapticManager.selection()
-            withAnimation(.easeInOut(duration: 0.2)) {
-                if isChecked {
-                    checkedIngredients.remove(key)
-                } else {
-                    checkedIngredients.insert(key)
+        return HStack(spacing: 10) {
+            Button {
+                HapticManager.selection()
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if isChecked {
+                        checkedIngredients.remove(key)
+                    } else {
+                        checkedIngredients.insert(key)
+                    }
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 20))
+                        .foregroundStyle(isChecked ? Theme.checkOn : Theme.checkOff)
+
+                    Text(scaledIngredient(ingredient))
+                        .font(.system(size: 15))
+                        .foregroundStyle(isChecked ? Theme.textTertiary : Theme.textPrimary)
+                        .strikethrough(isChecked, color: Theme.textQuaternary)
                 }
             }
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20))
-                    .foregroundStyle(isChecked ? Theme.checkOn : Theme.checkOff)
 
-                Text(scaledIngredient(ingredient))
-                    .font(.system(size: 15))
-                    .foregroundStyle(isChecked ? Theme.textTertiary : Theme.textPrimary)
-                    .strikethrough(isChecked, color: Theme.textQuaternary)
+            Spacer()
 
-                Spacer()
+            if let subs, !subs.substitutes.isEmpty {
+                Button {
+                    HapticManager.light()
+                    substitutionSheetIngredient = ingredient
+                    substitutionSheetSubs = subs.substitutes
+                    showSubstitutionSheet = true
+                } label: {
+                    Image(systemName: "arrow.triangle.swap")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.culinary.opacity(0.6))
+                }
             }
-            .frame(minHeight: 36)
         }
+        .frame(minHeight: 36)
     }
 
     private func ingredientMatches(_ a: String, _ b: String) -> Bool {
