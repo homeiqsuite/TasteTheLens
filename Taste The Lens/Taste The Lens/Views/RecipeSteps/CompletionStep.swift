@@ -2,13 +2,21 @@ import SwiftUI
 
 struct CompletionStep: View {
     let recipe: Recipe
+    let servingCount: Int
     @State private var exportImage: UIImage?
+    @State private var storiesExportImage: UIImage?
     @State private var showAuthPrompt = false
+    @State private var showPaywall = false
     @State private var showCreateChallenge = false
     @State private var isCreatingChallenge = false
     @State private var challengeError: String?
     @State private var showBudgetInput = false
     @State private var budgetAmount: Double = 15
+    @State private var showCulturePicker = false
+    @State private var showReimaginTooltip = false
+    @State private var isGeneratingShoppingList = false
+    @State private var isRenderingShareImage = false
+    @AppStorage("hasSeenReimaginTooltip") private var hasSeenReimaginTooltip = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -35,13 +43,28 @@ struct CompletionStep: View {
                 // Action buttons
                 VStack(spacing: 12) {
                     // Share Image
-                    Button {
-                        shareRecipeImage()
+                    Menu {
+                        Button {
+                            renderAndShare(format: .square)
+                        } label: {
+                            Label("Share Square (1:1)", systemImage: "square")
+                        }
+                        Button {
+                            renderAndShare(format: .stories)
+                        } label: {
+                            Label("Share to Stories (9:16)", systemImage: "rectangle.portrait")
+                        }
                     } label: {
                         HStack(spacing: 8) {
-                            Image(systemName: "photo")
-                                .font(.system(size: 14))
-                            Text("Share Image")
+                            if isRenderingShareImage {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .tint(Theme.darkTextPrimary)
+                            } else {
+                                Image(systemName: "photo")
+                                    .font(.system(size: 14))
+                            }
+                            Text(isRenderingShareImage ? "Rendering..." : "Share Image")
                                 .font(.system(size: 15, weight: .semibold))
                         }
                         .foregroundStyle(Theme.darkTextPrimary)
@@ -51,6 +74,68 @@ struct CompletionStep: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                     }
 
+
+                    // Shopping List
+                    Button {
+                        HapticManager.medium()
+                        isGeneratingShoppingList = true
+                        DispatchQueue.main.async {
+                            shareShoppingList()
+                            isGeneratingShoppingList = false
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            if isGeneratingShoppingList {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .tint(Theme.textPrimary)
+                            } else {
+                                Image(systemName: "list.clipboard")
+                                    .font(.system(size: 14))
+                            }
+                            Text("Shopping List")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                        .foregroundStyle(Theme.textPrimary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(Theme.buttonBg)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+
+                    // Simplify
+                    Button {
+                        simplifyRecipe()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "leaf")
+                                .font(.system(size: 14))
+                            Text("Simplify")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                        .foregroundStyle(Theme.visual)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(Theme.visual.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(Theme.visual.opacity(0.2), lineWidth: 0.5)
+                        )
+                    }
+
+                    // Reimagine tooltip
+                    if showReimaginTooltip {
+                        CoachTooltip(
+                            text: "Generate a fresh take on this dish",
+                            icon: "arrow.trianglehead.2.clockwise",
+                            pointer: .down
+                        ) {
+                            showReimaginTooltip = false
+                            hasSeenReimaginTooltip = true
+                        }
+                        .transition(.opacity)
+                    }
 
                     // Reimagine
                     Menu {
@@ -73,6 +158,12 @@ struct CompletionStep: View {
                         } label: {
                             Label("On a Budget", systemImage: "dollarsign.circle")
                         }
+                        Divider()
+                        Button {
+                            showCulturePicker = true
+                        } label: {
+                            Label("Culture", systemImage: "globe")
+                        }
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.trianglehead.2.clockwise")
@@ -92,7 +183,7 @@ struct CompletionStep: View {
                         throwTheGauntlet()
                     } label: {
                         HStack(spacing: 8) {
-                            Image(systemName: "flag.checkered")
+                            Image(systemName: EntitlementManager.shared.requiresUpgrade(for: .fullChallenges) ? "lock.fill" : "flag.checkered")
                                 .font(.system(size: 14))
                             Text("Throw the Gauntlet")
                                 .font(.system(size: 15, weight: .semibold))
@@ -106,6 +197,7 @@ struct CompletionStep: View {
                                 .stroke(Theme.gold.opacity(0.3), lineWidth: 1)
                         )
                         .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .opacity(EntitlementManager.shared.requiresUpgrade(for: .fullChallenges) ? 0.6 : 1)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -114,8 +206,19 @@ struct CompletionStep: View {
             }
         }
         .scrollBounceBehavior(.basedOnSize, axes: .vertical)
+        .onAppear {
+            if !hasSeenReimaginTooltip {
+                Task {
+                    try? await Task.sleep(for: .seconds(1.5))
+                    withAnimation { showReimaginTooltip = true }
+                }
+            }
+        }
         .sheet(isPresented: $showAuthPrompt) {
             AuthPromptSheet()
+        }
+        .sheet(isPresented: $showPaywall) {
+            PaywallView(context: .featureGated(.fullChallenges))
         }
         .sheet(isPresented: $showCreateChallenge) {
             challengeConfirmationSheet
@@ -123,11 +226,44 @@ struct CompletionStep: View {
         .sheet(isPresented: $showBudgetInput) {
             budgetInputSheet
         }
+        .sheet(isPresented: $showCulturePicker) {
+            CulturePickerView { selected in
+                showCulturePicker = false
+                reimagineRecipe(cultureName: selected)
+            }
+        }
     }
 
     // MARK: - Actions
 
-    private func reimagineRecipe(as courseType: String? = nil, budgetLimit: Double? = nil) {
+    private func simplifyRecipe() {
+        guard EntitlementManager.shared.hasAccess(to: .reimagination) else {
+            NotificationCenter.default.post(name: .simplifyRecipe, object: nil, userInfo: [
+                "showPaywall": true,
+                "paywallContext": "reimagination"
+            ])
+            return
+        }
+        guard UsageTracker.shared.canGenerate else {
+            NotificationCenter.default.post(name: .simplifyRecipe, object: nil, userInfo: ["showPaywall": true])
+            return
+        }
+        NotificationCenter.default.post(
+            name: .simplifyRecipe,
+            object: nil,
+            userInfo: [
+                "excludeDishName": recipe.dishName,
+                "inspirationImageData": recipe.inspirationImageData
+            ]
+        )
+    }
+
+    private func shareShoppingList() {
+        let text = ShoppingListGenerator.generate(from: recipe, servingCount: servingCount)
+        presentShareSheet(items: [text])
+    }
+
+    private func reimagineRecipe(as courseType: String? = nil, budgetLimit: Double? = nil, cultureName: String? = nil) {
         guard EntitlementManager.shared.hasAccess(to: .reimagination) else {
             NotificationCenter.default.post(name: .reimagineRecipe, object: nil, userInfo: [
                 "showPaywall": true,
@@ -149,6 +285,9 @@ struct CompletionStep: View {
         if let budgetLimit {
             userInfo["budgetLimit"] = budgetLimit
         }
+        if let cultureName {
+            userInfo["cultureName"] = cultureName
+        }
         NotificationCenter.default.post(
             name: .reimagineRecipe,
             object: nil,
@@ -157,6 +296,10 @@ struct CompletionStep: View {
     }
 
     private func throwTheGauntlet() {
+        guard !EntitlementManager.shared.requiresUpgrade(for: .fullChallenges) else {
+            showPaywall = true
+            return
+        }
         guard AuthManager.shared.isAuthenticated else {
             showAuthPrompt = true
             return
@@ -164,19 +307,51 @@ struct CompletionStep: View {
         showCreateChallenge = true
     }
 
-    private func renderExportImage() {
-        let renderer = ImageRenderer(content:
-            SideBySideExportView(recipe: recipe)
-                .frame(width: 1080, height: 1080)
-        )
-        renderer.scale = 3.0
-        exportImage = renderer.uiImage
-    }
+    private enum ShareFormat { case square, stories }
 
-    private func shareRecipeImage() {
-        if exportImage == nil { renderExportImage() }
-        guard let exportImage else { return }
-        presentShareSheet(items: [exportImage])
+    private func renderAndShare(format: ShareFormat) {
+        isRenderingShareImage = true
+        // Check cache first
+        switch format {
+        case .square:
+            if let exportImage {
+                isRenderingShareImage = false
+                presentShareSheet(items: [exportImage])
+                return
+            }
+        case .stories:
+            if let storiesExportImage {
+                isRenderingShareImage = false
+                presentShareSheet(items: [storiesExportImage])
+                return
+            }
+        }
+        // Render on next run loop to let spinner appear
+        DispatchQueue.main.async {
+            let image: UIImage?
+            switch format {
+            case .square:
+                let renderer = ImageRenderer(content:
+                    SideBySideExportView(recipe: recipe)
+                        .frame(width: 1080, height: 1080)
+                )
+                renderer.scale = 2.0
+                image = renderer.uiImage
+                exportImage = image
+            case .stories:
+                let renderer = ImageRenderer(content:
+                    StoriesExportView(recipe: recipe)
+                        .frame(width: 1080, height: 1920)
+                )
+                renderer.scale = 2.0
+                image = renderer.uiImage
+                storiesExportImage = image
+            }
+            isRenderingShareImage = false
+            if let image {
+                presentShareSheet(items: [image])
+            }
+        }
     }
 
 
@@ -340,5 +515,104 @@ struct CompletionStep: View {
             }
             .presentationDetents([.medium])
         }
+    }
+}
+
+// MARK: - Culture Picker
+
+private struct CultureEntry: Identifiable {
+    let id = UUID()
+    let flag: String
+    let name: String
+}
+
+private let cultures: [CultureEntry] = [
+    .init(flag: "🇫🇷", name: "French"),
+    .init(flag: "🇯🇵", name: "Japanese"),
+    .init(flag: "🇲🇽", name: "Mexican"),
+    .init(flag: "🇮🇳", name: "Indian"),
+    .init(flag: "🇨🇳", name: "Chinese"),
+    .init(flag: "🇰🇷", name: "Korean"),
+    .init(flag: "🇹🇭", name: "Thai"),
+    .init(flag: "🇻🇳", name: "Vietnamese"),
+    .init(flag: "🇲🇦", name: "Moroccan"),
+    .init(flag: "🇹🇷", name: "Turkish"),
+    .init(flag: "🇵🇪", name: "Peruvian"),
+    .init(flag: "🇧🇷", name: "Brazilian"),
+    .init(flag: "🇯🇲", name: "Jamaican"),
+    .init(flag: "🇬🇷", name: "Greek"),
+    .init(flag: "🇪🇹", name: "Ethiopian"),
+    .init(flag: "🇳🇬", name: "Nigerian"),
+    .init(flag: "🇦🇷", name: "Argentine"),
+    .init(flag: "🇵🇭", name: "Filipino"),
+    .init(flag: "🇱🇧", name: "Lebanese"),
+    .init(flag: "🇮🇷", name: "Persian"),
+    .init(flag: "🇪🇸", name: "Spanish"),
+    .init(flag: "🇩🇪", name: "German"),
+    .init(flag: "🇵🇱", name: "Polish"),
+    .init(flag: "🇸🇪", name: "Swedish"),
+    .init(flag: "🇺🇸", name: "American"),
+    .init(flag: "🇮🇹", name: "Italian"),
+]
+
+struct CulturePickerView: View {
+    let onSelect: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    private let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Theme.darkBg.ignoresSafeArea()
+
+                ScrollView {
+                    LazyVGrid(columns: columns, spacing: 12) {
+                        ForEach(cultures) { culture in
+                            Button {
+                                onSelect(culture.name)
+                            } label: {
+                                VStack(spacing: 6) {
+                                    Text(culture.flag)
+                                        .font(.system(size: 36))
+                                    Text(culture.name)
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(Theme.darkTextSecondary)
+                                        .lineLimit(1)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(Theme.darkSurface)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                            }
+                            .buttonStyle(PressedScaleButtonStyle())
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    .padding(.bottom, 32)
+                }
+            }
+            .navigationTitle("Choose a Culture")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Theme.darkBg, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundStyle(Theme.gold)
+                }
+            }
+            .presentationDetents([.medium, .large])
+        }
+    }
+}
+
+private struct PressedScaleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .opacity(configuration.isPressed ? 0.85 : 1.0)
+            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }

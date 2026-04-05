@@ -3,6 +3,7 @@ import SwiftData
 
 extension Notification.Name {
     static let reimagineRecipe = Notification.Name("reimagineRecipe")
+    static let simplifyRecipe = Notification.Name("simplifyRecipe")
 }
 
 enum ReimagineCourseType: String, CaseIterable, Identifiable {
@@ -43,6 +44,7 @@ enum ReimagineCourseType: String, CaseIterable, Identifiable {
 
 struct RecipeCardView: View {
     let recipe: Recipe
+    var isOnboardingFlow: Bool = false
     @Environment(\.modelContext) private var modelContext
     @State private var currentStep: Int = 0
     @State private var checkedIngredients: Set<String> = []
@@ -51,7 +53,17 @@ struct RecipeCardView: View {
     @State private var servingCount: Int = 2
     @State private var showAIReasoning = false
     @State private var showAuthPrompt = false
+    @State private var showCelebration = false
+    @State private var showMilestoneToast = false
+    @State private var milestoneMessage = ""
     @AppStorage("hasSeenAuthPrompt") private var hasSeenAuthPrompt = false
+    @AppStorage("hasGeneratedFirstRecipe") private var hasGeneratedFirstRecipe = false
+    @AppStorage("hasSeenMilestone3") private var hasSeenMilestone3 = false
+    @AppStorage("hasSeenMilestone5") private var hasSeenMilestone5 = false
+    @AppStorage("hasSeenRecipeWalkthrough") private var hasSeenRecipeWalkthrough = false
+    @State private var walkthroughStep: Int? = nil
+    @State private var showCookingMode = false
+    @State private var overlayTask: Task<Void, Never>?
 
     private var cookingSteps: [CookingStep] {
         recipe.effectiveCookingSteps
@@ -99,20 +111,139 @@ struct RecipeCardView: View {
                     }
 
                     // Final step: Completion
-                    CompletionStep(recipe: recipe)
+                    CompletionStep(recipe: recipe, servingCount: servingCount)
                         .tag(totalSteps - 1)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
-                .animation(.easeInOut(duration: 0.25), value: currentStep)
+
+                // Page indicator dots
+                PageIndicatorView(totalSteps: totalSteps, currentStep: currentStep)
+                    .padding(.vertical, 8)
 
                 // Bottom navigation bar
-                StepNavigationBar(currentStep: $currentStep, totalSteps: totalSteps)
+                StepNavigationBar(
+                    currentStep: $currentStep,
+                    totalSteps: totalSteps,
+                    onCookingMode: (currentStep > 0 && currentStep < totalSteps - 1) ? { showCookingMode = true } : nil
+                )
+            }
+
+            // First-recipe celebration overlay
+            if showCelebration {
+                ConfettiView()
+                    .ignoresSafeArea()
+
+                // Toast message
+                VStack {
+                    celebrationToast
+                    Spacer()
+                }
+                .transition(.opacity)
+            }
+
+            // Recipe walkthrough
+            if let step = walkthroughStep {
+                walkthroughOverlay(step: step)
+                    .transition(.opacity)
+            }
+
+            // Milestone toast
+            if showMilestoneToast {
+                VStack {
+                    milestoneToastView
+                    Spacer()
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .onAppear {
-            servingCount = recipe.baseServings
-            if !hasSeenAuthPrompt && !AuthManager.shared.isAuthenticated {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            servingCount = max(1, min(99, recipe.baseServings))
+            let isFirstRecipe = !hasGeneratedFirstRecipe
+            overlayTask?.cancel()
+            overlayTask = Task {
+                if isFirstRecipe {
+                    hasGeneratedFirstRecipe = true
+                    try? await Task.sleep(for: .milliseconds(600))
+                    guard !Task.isCancelled else { return }
+                    HapticManager.success()
+                    withAnimation(.easeOut(duration: 0.4)) { showCelebration = true }
+                    try? await Task.sleep(for: .seconds(3))
+                    guard !Task.isCancelled else { return }
+                    withAnimation(.easeOut(duration: 0.5)) { showCelebration = false }
+                    // sequence continues in .onChange(of: showCelebration)
+                } else {
+                    let recipeCount = UserDefaults.standard.integer(forKey: "totalRecipeCount")
+                    let hasMilestone: Bool
+                    if recipeCount >= 5 && !hasSeenMilestone5 {
+                        hasSeenMilestone5 = true
+                        milestoneMessage = "5 recipes! Invite friends to a Tasting Menu"
+                        hasMilestone = true
+                    } else if recipeCount >= 3 && !hasSeenMilestone3 {
+                        hasSeenMilestone3 = true
+                        milestoneMessage = "3 dishes created — try a Challenge!"
+                        hasMilestone = true
+                    } else {
+                        hasMilestone = false
+                    }
+
+                    try? await Task.sleep(for: .milliseconds(400))
+                    guard !Task.isCancelled else { return }
+
+                    if hasMilestone {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) { showMilestoneToast = true }
+                        try? await Task.sleep(for: .seconds(4))
+                        guard !Task.isCancelled else { return }
+                        withAnimation(.easeOut(duration: 0.3)) { showMilestoneToast = false }
+                        // sequence continues in .onChange(of: showMilestoneToast)
+                    } else if !hasSeenRecipeWalkthrough {
+                        withAnimation { walkthroughStep = 0 }
+                        // sequence continues in .onChange(of: walkthroughStep)
+                    } else if !hasSeenAuthPrompt && !AuthManager.shared.isAuthenticated {
+                        showAuthPrompt = true
+                        hasSeenAuthPrompt = true
+                    }
+                }
+            }
+        }
+        .onDisappear {
+            overlayTask?.cancel()
+            overlayTask = nil
+        }
+        .onChange(of: showCelebration) { oldValue, newValue in
+            guard oldValue && !newValue else { return }
+            overlayTask?.cancel()
+            overlayTask = Task {
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+                if !hasSeenRecipeWalkthrough {
+                    withAnimation { walkthroughStep = 0 }
+                } else if !hasSeenAuthPrompt && !AuthManager.shared.isAuthenticated {
+                    showAuthPrompt = true
+                    hasSeenAuthPrompt = true
+                }
+            }
+        }
+        .onChange(of: showMilestoneToast) { oldValue, newValue in
+            guard oldValue && !newValue else { return }
+            overlayTask?.cancel()
+            overlayTask = Task {
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { return }
+                if !hasSeenRecipeWalkthrough {
+                    withAnimation { walkthroughStep = 0 }
+                } else if !hasSeenAuthPrompt && !AuthManager.shared.isAuthenticated {
+                    showAuthPrompt = true
+                    hasSeenAuthPrompt = true
+                }
+            }
+        }
+        .onChange(of: walkthroughStep) { oldValue, newValue in
+            guard oldValue != nil && newValue == nil && hasSeenRecipeWalkthrough else { return }
+            overlayTask?.cancel()
+            overlayTask = Task {
+                try? await Task.sleep(for: .milliseconds(500))
+                guard !Task.isCancelled else { return }
+                if !hasSeenAuthPrompt && !AuthManager.shared.isAuthenticated {
                     showAuthPrompt = true
                     hasSeenAuthPrompt = true
                 }
@@ -124,6 +255,171 @@ struct RecipeCardView: View {
         .sheet(isPresented: $showAIReasoning) {
             AIReasoningView(recipe: recipe)
         }
+        .fullScreenCover(isPresented: $showCookingMode) {
+            CookingModeView(recipe: recipe, servingCount: servingCount)
+        }
+    }
+
+    // MARK: - Celebration Toast
+
+    private var celebrationToast: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "party.popper")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.gold)
+            Text("Your first dish! You're a natural.")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(
+            Capsule()
+                .fill(Theme.cardSurface)
+                .overlay(
+                    Capsule()
+                        .stroke(Theme.gold.opacity(0.5), lineWidth: 1)
+                )
+        )
+        .padding(.top, 60)
+    }
+
+    // MARK: - Milestone Toast
+
+    private var milestoneToastView: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "star.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.gold)
+            Text(milestoneMessage)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Theme.textPrimary)
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    Capsule()
+                        .stroke(Theme.gold.opacity(0.3), lineWidth: 1)
+                )
+        )
+        .padding(.top, 60)
+    }
+
+    // MARK: - Recipe Walkthrough
+
+    private let walkthroughSteps = [
+        (text: "Swipe left to see cooking steps", icon: "hand.draw", pointer: TooltipPointer.down),
+    ]
+
+    // Vertical positions (as fraction of screen height) to anchor each tooltip
+    private let walkthroughAnchors: [CGFloat] = [
+        0.55,  // Step 0: Near the step indicator / top of content
+    ]
+
+    private func walkthroughOverlay(step: Int) -> some View {
+        VStack(spacing: 0) {
+            // Skip button — top trailing (hidden for onboarding flow)
+            if !isOnboardingFlow {
+                HStack {
+                    Spacer()
+                    Button {
+                        withAnimation(.easeOut(duration: 0.25)) { walkthroughStep = nil }
+                        hasSeenRecipeWalkthrough = true
+                    } label: {
+                        Text("Skip")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Theme.textTertiary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                            .background(
+                                Capsule()
+                                    .fill(Color.black.opacity(0.25))
+                            )
+                    }
+                    .padding(.top, 16)
+                    .padding(.trailing, 20)
+                }
+            } else {
+                Color.clear.frame(height: 16)
+            }
+
+            Spacer()
+
+            // Positioned tooltip anchor
+            GeometryReader { proxy in
+                let anchorY = proxy.size.height * walkthroughAnchors[step]
+
+                VStack(spacing: 0) {
+                    if walkthroughSteps[step].pointer == .down {
+                        Spacer()
+                            .frame(height: anchorY)
+                        CoachTooltip(
+                            text: walkthroughSteps[step].text,
+                            icon: walkthroughSteps[step].icon,
+                            pointer: walkthroughSteps[step].pointer,
+                            autoDismissSeconds: 8
+                        ) {
+                            advanceWalkthrough()
+                        }
+                        .id(step)
+                    } else {
+                        CoachTooltip(
+                            text: walkthroughSteps[step].text,
+                            icon: walkthroughSteps[step].icon,
+                            pointer: walkthroughSteps[step].pointer,
+                            autoDismissSeconds: 8
+                        ) {
+                            advanceWalkthrough()
+                        }
+                        .id(step)
+                        Spacer()
+                            .frame(height: proxy.size.height - anchorY - 60)
+                    }
+                }
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+    }
+
+    private func advanceWalkthrough() {
+        guard let step = walkthroughStep else { return }
+        let nextStep = step + 1
+        if nextStep < walkthroughSteps.count {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                walkthroughStep = nextStep
+            }
+        } else {
+            withAnimation(.easeOut(duration: 0.25)) {
+                walkthroughStep = nil
+            }
+            hasSeenRecipeWalkthrough = true
+        }
+    }
+
+}
+
+// MARK: - Page Indicator
+
+private struct PageIndicatorView: View {
+    let totalSteps: Int
+    let currentStep: Int
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<totalSteps, id: \.self) { index in
+                Capsule()
+                    .fill(index == currentStep ? Theme.primary : Theme.cardBorder)
+                    .frame(width: index == currentStep ? 16 : 6, height: 6)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: currentStep)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Step \(currentStep + 1) of \(totalSteps)")
     }
 }
 

@@ -14,6 +14,12 @@ struct ProfileView: View {
     private let bg = Theme.darkBg
     private let gold = Theme.gold
 
+    private var displayEmail: String {
+        authManager.email.hasSuffix("@privaterelay.appleid.com")
+            ? "Private Email (via Apple)"
+            : authManager.email
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -33,9 +39,15 @@ struct ProfileView: View {
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundStyle(Theme.darkTextPrimary)
 
-                        Text(authManager.email)
-                            .font(.system(size: 14))
-                            .foregroundStyle(Theme.darkTextTertiary)
+                        HStack(spacing: 4) {
+                            if authManager.email.hasSuffix("@privaterelay.appleid.com") {
+                                Image(systemName: "apple.logo")
+                                    .font(.system(size: 12))
+                            }
+                            Text(displayEmail)
+                                .font(.system(size: 14))
+                        }
+                        .foregroundStyle(Theme.darkTextTertiary)
 
                         Text("Member since \(authManager.memberSinceDate.formatted(.dateTime.month(.wide).year()))")
                             .font(.system(size: 12))
@@ -107,7 +119,7 @@ struct ProfileView: View {
                     }
                 }
             } message: {
-                Text("Your local recipes will remain on this device.")
+                Text("You'll stay signed in on other devices. Your local recipes will remain on this device.")
             }
             .sheet(isPresented: $showDeletionSheet) {
                 AccountDeletionSheet(modelContext: modelContext) {
@@ -254,7 +266,7 @@ private struct AccountDeletionSheet: View {
             displayName: authManager.displayName,
             email: authManager.email,
             memberSince: authManager.memberSinceDate,
-            subscriptionTier: StoreManager.shared.currentTier.displayName
+            subscriptionTier: EntitlementManager.shared.hasEverPurchased ? "Credits" : "Free"
         )
 
         let jsonData = DataExporter.exportJSON(recipes: recipes, user: userInfo)

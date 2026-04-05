@@ -8,6 +8,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @State private var showDeleteAccountConfirmation = false
+    @State private var showSignOutConfirmation = false
     @State private var showSignIn = false
     @State private var showProfile = false
     @State private var showPaywall = false
@@ -20,89 +21,56 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 28) {
-                    // Account Section
+                VStack(spacing: 32) {
+                    // Account
                     settingsSection("Account") {
-                        accountRow
-                    }
-
-                    // Chef Selection
-                    ChefSelectionView()
-                        .padding(.horizontal, 16)
-
-                    // Dietary Preferences
-                    DietaryPreferenceSection()
-                        .padding(.horizontal, 16)
-
-                    // Subscription & Credits Section
-                    settingsSection("Plan & Credits") {
                         VStack(spacing: 0) {
-                            // Tier badge
-                            HStack(spacing: 12) {
-                                Image(systemName: EntitlementManager.shared.isSubscriber ? "crown.fill" : "sparkles")
-                                    .font(.system(size: 15))
-                                    .foregroundStyle(Theme.primary)
-                                    .frame(width: 24)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(StoreManager.shared.currentTier.displayName)
-                                        .font(.system(size: 15, weight: .medium))
-                                        .foregroundStyle(Theme.textPrimary)
-
-                                    Text(UsageTracker.shared.creditBalanceDescription)
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(Theme.textTertiary)
-                                }
-                                Spacer()
-                                if !EntitlementManager.shared.isSubscriber {
-                                    Button { showPaywall = true } label: {
-                                        Text("Upgrade")
-                                            .font(.system(size: 13, weight: .semibold))
-                                            .foregroundStyle(Theme.primary)
-                                            .padding(.horizontal, 14)
-                                            .padding(.vertical, 7)
-                                            .background(
-                                                Capsule()
-                                                    .stroke(Theme.primary, lineWidth: 1)
-                                            )
-                                    }
-                                }
-                            }
-                            .padding(14)
-
-                            // Credit refresh countdown for subscribers
-                            if let daysLeft = UsageTracker.shared.daysUntilCreditRefresh {
+                            accountRow
+                            if authManager.isAuthenticated {
                                 settingsDivider
-                                HStack(spacing: 12) {
-                                    Image(systemName: "clock.arrow.circlepath")
-                                        .font(.system(size: 15))
-                                        .foregroundStyle(Theme.textTertiary)
-                                        .frame(width: 24)
-                                    Text("Credits refresh in \(daysLeft) days")
-                                        .font(.system(size: 13))
-                                        .foregroundStyle(Theme.textTertiary)
-                                    Spacer()
-                                }
-                                .padding(14)
-                            }
-
-                            // Buy more credits button
-                            settingsDivider
-                            settingsButton("Buy More Credits", icon: "plus.circle", color: Theme.primary) {
-                                showPaywall = true
-                            }
-
-                            if EntitlementManager.shared.isSubscriber {
-                                settingsDivider
-                                settingsButton("Manage Subscription", icon: "creditcard", color: Theme.textPrimary) {
-                                    if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
-                                        UIApplication.shared.open(url)
-                                    }
+                                settingsButton("Sign Out", icon: "rectangle.portrait.and.arrow.right", color: .red) {
+                                    showSignOutConfirmation = true
                                 }
                             }
                         }
                     }
 
-                    // Notifications Section (authenticated only)
+                    // Cooking Style
+                    cookingStyleSection
+
+                    // Preferences
+                    settingsSection("Preferences") {
+                        NavigationLink {
+                            PreferencesView()
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "slider.horizontal.3")
+                                    .font(.system(size: 15))
+                                    .foregroundStyle(Theme.textPrimary)
+                                    .frame(width: 24)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Dietary & Cooking Preferences")
+                                        .font(.system(size: 15))
+                                        .foregroundStyle(Theme.textPrimary)
+                                    Text("Experience level, dietary restrictions")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(Theme.textTertiary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Theme.textQuaternary)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 13)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    // Credits (featured)
+                    creditsFeaturedSection
+
+                    // Notifications
                     if authManager.isAuthenticated {
                         settingsSection("Notifications") {
                             NavigationLink {
@@ -128,15 +96,13 @@ struct SettingsView: View {
                         }
                     }
 
-                    // App Section
+                    // App
                     settingsSection("App") {
                         VStack(spacing: 0) {
                             settingsButton("Export My Data", icon: "square.and.arrow.up", color: Theme.textPrimary) {
                                 exportData()
                             }
-                            settingsDivider
                             settingsLink("Privacy Policy", icon: "hand.raised", url: "https://tastethelens.com/privacy")
-                            settingsDivider
                             settingsLink("Terms of Service", icon: "doc.text", url: "https://tastethelens.com/terms")
                         }
                     }
@@ -145,7 +111,7 @@ struct SettingsView: View {
                     Text("Taste The Lens v\(appVersion)")
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.textQuaternary)
-                        .padding(.top, 8)
+                        .padding(.top, 4)
 
                     Spacer().frame(height: 40)
                 }
@@ -160,8 +126,17 @@ struct SettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.primary)
                 }
+            }
+            .alert("Sign Out", isPresented: $showSignOutConfirmation) {
+                Button("Sign Out", role: .destructive) {
+                    Task { await authManager.signOut() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("You'll stay signed in on other devices. Your local recipes will remain on this device.")
             }
             .sheet(isPresented: $showSignIn) {
                 SignInView()
@@ -170,7 +145,7 @@ struct SettingsView: View {
                 ProfileView()
             }
             .sheet(isPresented: $showPaywall) {
-                PaywallView(context: EntitlementManager.shared.isSubscriber ? .topUp : .outOfGenerations)
+                PaywallView(context: .topUp)
             }
             .sheet(isPresented: $showExportShare) {
                 if let url = exportFileURL {
@@ -200,7 +175,7 @@ struct SettingsView: View {
                         Text(authManager.displayName)
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(Theme.textPrimary)
-                        Text(authManager.email)
+                        Text(authManager.displayEmail)
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.textTertiary)
                     }
@@ -249,6 +224,139 @@ struct SettingsView: View {
                 }
             }
             .padding(14)
+        }
+    }
+
+    // MARK: - Cooking Style Section
+
+    private var cookingStyleSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Cooking Style")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.textSecondary)
+                .textCase(.uppercase)
+                .tracking(1.2)
+                .padding(.horizontal, 16)
+
+            ChefSelectionView(showHeader: false)
+                .padding(.horizontal, 16)
+        }
+    }
+
+    // MARK: - Credits Featured Section
+
+    private var creditsFeaturedSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Credits")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.textSecondary)
+                .textCase(.uppercase)
+                .tracking(1.2)
+                .padding(.horizontal, 16)
+
+            VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 14) {
+                    // Top row: icon + text
+                    HStack(spacing: 14) {
+                        // Icon tile
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Theme.gold.opacity(0.20))
+                            .frame(width: 44, height: 44)
+                            .overlay {
+                                Image(systemName: "circle.grid.3x3.fill")
+                                    .font(.system(size: 19))
+                                    .foregroundStyle(Theme.primary)
+                            }
+
+                        // Text block
+                        VStack(alignment: .leading, spacing: 3) {
+                            (Text("\(UsageTracker.shared.remainingGenerations) credits")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(Theme.primary)
+                            + Text(" remaining")
+                                .font(.system(size: 15))
+                                .foregroundColor(Theme.textPrimary))
+
+                            Text("Keep creating delicious recipes")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.textTertiary)
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+
+                    // Bottom row: recipes-left + CTA button
+                    HStack {
+                        HStack(spacing: 3) {
+                            Text("✦")
+                                .font(.system(size: 9))
+                                .foregroundStyle(Theme.gold)
+                            Text("= \(UsageTracker.shared.remainingGenerations) recipes left")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Theme.textTertiary)
+                        }
+
+                        Spacer()
+
+                        // CTA button
+                        Button { showPaywall = true } label: {
+                            HStack(spacing: 5) {
+                                Text("Buy More Credits")
+                                    .font(.system(size: 13, weight: .semibold))
+                                Image(systemName: "arrow.right")
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Capsule().fill(Theme.primary))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(16)
+
+                // Legacy subscription (conditional)
+                if StoreManager.shared.hasActiveLegacySubscription {
+                    Divider()
+                        .background(Theme.gold.opacity(0.2))
+                    Button {
+                        if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "creditcard")
+                                .font(.system(size: 13))
+                            Text("Manage Legacy Subscription")
+                                .font(.system(size: 13))
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 11))
+                        }
+                        .foregroundStyle(Theme.textTertiary)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(LinearGradient(
+                        colors: [
+                            Theme.warmCardBg,
+                            Color(red: 0.988, green: 0.949, blue: 0.871), // warm golden cream
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Theme.gold.opacity(0.30), lineWidth: 1)
+            )
+            .padding(.horizontal, 16)
         }
     }
 
@@ -332,8 +440,7 @@ struct SettingsView: View {
     private func refreshSettings() async {
         async let creditsTask: () = UsageTracker.shared.syncCreditsFromServer()
         async let usageTask: () = UsageTracker.shared.syncUsageFromServer()
-        async let subscriptionTask: () = StoreManager.shared.updateSubscriptionStatus()
-        _ = await (creditsTask, usageTask, subscriptionTask)
+        _ = await (creditsTask, usageTask)
         logger.info("Settings refreshed")
     }
 
@@ -346,7 +453,7 @@ struct SettingsView: View {
             displayName: authManager.displayName,
             email: authManager.email,
             memberSince: authManager.memberSinceDate,
-            subscriptionTier: StoreManager.shared.currentTier.displayName
+            subscriptionTier: EntitlementManager.shared.hasEverPurchased ? "Credits" : "Free"
         )
 
         let jsonData = DataExporter.exportJSON(recipes: recipes, user: userInfo)

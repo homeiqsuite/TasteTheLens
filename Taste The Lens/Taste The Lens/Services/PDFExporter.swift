@@ -268,17 +268,28 @@ struct PDFExporter {
                     y += imageHeight + 20
                 }
 
-                // Key ingredients
-                if let firstComponent = recipe.components.first {
+                // All components and their ingredients (#8)
+                if !recipe.components.isEmpty {
                     let sectionAttrs: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 12, weight: .bold), .foregroundColor: goldColor]
-                    NSAttributedString(string: "KEY INGREDIENTS", attributes: sectionAttrs).draw(at: CGPoint(x: margin, y: y))
+                    NSAttributedString(string: "INGREDIENTS", attributes: sectionAttrs).draw(at: CGPoint(x: margin, y: y))
                     y += 20
 
+                    let componentNameFont = UIFont.systemFont(ofSize: 11, weight: .semibold)
                     let ingredientFont = UIFont.systemFont(ofSize: 11)
-                    for ingredient in firstComponent.ingredients.prefix(6) {
-                        let attrs: [NSAttributedString.Key: Any] = [.font: ingredientFont, .foregroundColor: UIColor.darkText]
-                        NSAttributedString(string: "• \(ingredient)", attributes: attrs).draw(at: CGPoint(x: margin, y: y))
-                        y += 16
+
+                    for component in recipe.components {
+                        if recipe.components.count > 1 {
+                            let nameAttrs: [NSAttributedString.Key: Any] = [.font: componentNameFont, .foregroundColor: UIColor.darkText]
+                            NSAttributedString(string: component.name, attributes: nameAttrs).draw(at: CGPoint(x: margin, y: y))
+                            y += 16
+                        }
+                        for ingredient in component.ingredients {
+                            let attrs: [NSAttributedString.Key: Any] = [.font: ingredientFont, .foregroundColor: UIColor.darkText]
+                            let indentX = recipe.components.count > 1 ? margin + 12 : margin
+                            NSAttributedString(string: "• \(ingredient)", attributes: attrs).draw(at: CGPoint(x: indentX, y: y))
+                            y += 16
+                        }
+                        y += 4
                     }
                 }
             }

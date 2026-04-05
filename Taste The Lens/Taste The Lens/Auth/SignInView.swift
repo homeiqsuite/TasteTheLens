@@ -15,7 +15,9 @@ struct SignInView: View {
     @State private var errorMessage: String?
     @State private var successMessage: String?
     @State private var currentNonce: String?
-    @State private var showDisplayNamePrompt = false
+    @State private var showPassword = false
+
+    static let dismissedWithEmailForm = Notification.Name("signInDismissedWithEmailForm")
 
     private let bg = Theme.darkBg
     private let gold = Theme.gold
@@ -112,14 +114,16 @@ struct SignInView: View {
             .background(bg.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
+            .onDisappear {
+                if showEmailForm {
+                    NotificationCenter.default.post(name: SignInView.dismissedWithEmailForm, object: nil)
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Cancel") { dismiss() }
                         .foregroundStyle(gold)
                 }
-            }
-            .sheet(isPresented: $showDisplayNamePrompt, onDismiss: { dismiss() }) {
-                DisplayNamePromptView()
             }
         }
     }
@@ -142,9 +146,39 @@ struct SignInView: View {
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
 
-            SecureField("Password", text: $password)
-                .textFieldStyle(AuthTextFieldStyle())
-                .textContentType(isSignUp ? .newPassword : .password)
+            HStack(spacing: 0) {
+                Group {
+                    if showPassword {
+                        TextField("Password", text: $password)
+                            .textContentType(isSignUp ? .newPassword : .password)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    } else {
+                        SecureField("Password", text: $password)
+                            .textContentType(isSignUp ? .newPassword : .password)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .foregroundStyle(Theme.darkTextPrimary)
+                .font(.system(size: 15))
+
+                Button {
+                    showPassword.toggle()
+                } label: {
+                    Image(systemName: showPassword ? "eye.slash" : "eye")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Theme.darkTextHint)
+                        .frame(width: 44, height: 44)
+                }
+                .padding(.trailing, 4)
+            }
+            .background(Theme.darkStroke)
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Theme.darkStroke, lineWidth: 0.5)
+            )
 
             Button {
                 Task { await handleEmailAuth() }
@@ -206,15 +240,10 @@ struct SignInView: View {
                         nonce: nonce,
                         fullName: credential.fullName
                     )
-                    await UsageTracker.shared.claimSignupBonusIfNeeded()
+                    await UsageTracker.shared.claimWelcomeCreditsIfNeeded()
                     await UsageTracker.shared.syncCreditsFromServer()
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
-
-                    if authManager.needsDisplayName {
-                        showDisplayNamePrompt = true
-                    } else {
-                        dismiss()
-                    }
+                    dismiss()
                 } catch {
                     errorMessage = error.localizedDescription
                     logger.error("Apple sign-in failed: \(error)")
@@ -242,7 +271,7 @@ struct SignInView: View {
             } else {
                 try await authManager.signInWithEmail(email: email, password: password)
             }
-            await UsageTracker.shared.claimSignupBonusIfNeeded()
+            await UsageTracker.shared.claimWelcomeCreditsIfNeeded()
             await UsageTracker.shared.syncCreditsFromServer()
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             dismiss()

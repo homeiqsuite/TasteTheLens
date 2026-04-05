@@ -3,43 +3,6 @@ import os
 
 private let logger = makeLogger(category: "Entitlement")
 
-// MARK: - Subscription Tier
-
-enum SubscriptionTier: String, Codable, Comparable {
-    case free
-    case chefsTable
-    case atelier
-
-    /// Numeric priority for comparison (free < chefsTable < atelier)
-    private var priority: Int {
-        switch self {
-        case .free: return 0
-        case .chefsTable: return 1
-        case .atelier: return 2
-        }
-    }
-
-    static func < (lhs: SubscriptionTier, rhs: SubscriptionTier) -> Bool {
-        lhs.priority < rhs.priority
-    }
-
-    var displayName: String {
-        switch self {
-        case .free: return "Free"
-        case .chefsTable: return "Chef's Table"
-        case .atelier: return "Atelier"
-        }
-    }
-
-    var monthlyCredits: Int {
-        switch self {
-        case .free: return 0
-        case .chefsTable: return 75
-        case .atelier: return 500
-        }
-    }
-}
-
 // MARK: - Feature
 
 enum Feature: CaseIterable {
@@ -52,44 +15,40 @@ enum Feature: CaseIterable {
     case fullDashboard
     case fullTastingMenus
     case fullChallenges
-    case bulkExport
 }
 
 // MARK: - Entitlement Manager
 
+/// Pure credits entitlement model: any credit purchase unlocks all premium features.
+/// Free users (who have never purchased) get watermarked exports only.
 @Observable
 final class EntitlementManager {
     static let shared = EntitlementManager()
 
     private init() {}
 
-    var tier: SubscriptionTier {
-        StoreManager.shared.currentTier
-    }
-
-    var isSubscriber: Bool {
-        tier == .chefsTable || tier == .atelier
+    /// Whether the user has ever purchased credits (synced from server via `has_ever_purchased`
+    /// column, also set locally on credit pack purchase for immediate UI feedback).
+    var hasEverPurchased: Bool {
+        get { UserDefaults.standard.bool(forKey: "hasEverPurchased") }
+        set {
+            UserDefaults.standard.set(newValue, forKey: "hasEverPurchased")
+            logger.info("hasEverPurchased set to \(newValue)")
+        }
     }
 
     func hasAccess(to feature: Feature) -> Bool {
         switch feature {
         case .generation:
-            // Generation access is handled by UsageTracker (credits/free gens)
+            // Generation access is handled by UsageTracker (credits available)
             return true
-        case .chefPersonalities, .reimagination, .cloudSync, .cleanExport,
-             .unlimitedSaves, .fullDashboard, .fullTastingMenus, .fullChallenges:
-            return isSubscriber
-        case .bulkExport:
-            return tier == .atelier
+        default:
+            // All premium features unlock with any purchase
+            return hasEverPurchased
         }
     }
 
     func requiresUpgrade(for feature: Feature) -> Bool {
         !hasAccess(to: feature)
-    }
-
-    /// Discount multiplier for credit pack purchases (subscribers get 10% off)
-    var creditDiscountMultiplier: Double {
-        isSubscriber ? 0.9 : 1.0
     }
 }

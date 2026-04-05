@@ -13,6 +13,10 @@ final class ChallengeService {
     var isLoading = false
     var hasMorePastChallenges = false
 
+    // Dashboard-specific state (decoupled from feed)
+    var dashboardChallenges: [ChallengeDTO] = []
+    var dashboardState: DashboardChallengeState = .loading
+
     private var supabase: SupabaseClient { SupabaseManager.shared.client }
 
     private init() {}
@@ -52,24 +56,43 @@ final class ChallengeService {
         let durationHours = RemoteConfigManager.shared.challengeDurationHours
         let endsAt = ISO8601DateFormatter().string(from: Calendar.current.date(byAdding: .hour, value: durationHours, to: Date())!)
 
+        let keywords = Self.extractKeywords(from: recipe)
+
+        struct ChallengeInsert: Encodable {
+            let creator_id: String
+            let recipe_id: String
+            let title: String
+            let description: String
+            let inspiration_image_path: String
+            let dish_image_path: String
+            let status: String
+            let ends_at: String
+            let keywords: [String]
+        }
+
         let challenge: ChallengeDTO = try await supabase
             .from("challenges")
-            .insert([
-                "creator_id": userId,
-                "recipe_id": recipeId,
-                "title": recipe.dishName,
-                "description": recipe.recipeDescription,
-                "inspiration_image_path": inspirationPath ?? "",
-                "dish_image_path": dishPath ?? "",
-                "status": "active",
-                "ends_at": endsAt
-            ])
+            .insert(ChallengeInsert(
+                creator_id: userId,
+                recipe_id: recipeId,
+                title: recipe.dishName,
+                description: recipe.recipeDescription,
+                inspiration_image_path: inspirationPath ?? "",
+                dish_image_path: dishPath ?? "",
+                status: "active",
+                ends_at: endsAt,
+                keywords: keywords
+            ))
             .select()
             .single()
             .execute()
             .value
 
         logger.info("Created challenge: \(challenge.id)")
+        AnalyticsClient.shared.track("challenge_created", properties: [
+            "challenge_id": challenge.id,
+            "recipe_id": recipeId,
+        ])
         return challenge
     }
 
@@ -131,6 +154,46 @@ final class ChallengeService {
         logger.info("Fetched \(result.count) challenges (filter: \(filter.rawValue), offset: \(offset))")
     }
 
+    // MARK: - Dashboard Challenges
+
+    func fetchDashboardChallenges() async {
+        let nowISO = ISO8601DateFormatter().string(from: Date())
+
+        do {
+            let active: [ChallengeDTO] = try await supabase
+                .from("challenges")
+                .select()
+                .eq("status", value: "active")
+                .gt("ends_at", value: nowISO)
+                .order("created_at", ascending: false)
+                .limit(5)
+                .execute()
+                .value
+
+            if !active.isEmpty {
+                dashboardChallenges = active
+                dashboardState = .activeChallenges
+            } else {
+                // Check if any past challenges exist
+                let past: [ChallengeDTO] = try await supabase
+                    .from("challenges")
+                    .select()
+                    .or("status.eq.completed,ends_at.lt.\(nowISO)")
+                    .limit(1)
+                    .execute()
+                    .value
+
+                dashboardChallenges = []
+                dashboardState = past.isEmpty ? .noChallengesAtAll : .noActiveButHasPast
+            }
+        } catch {
+            if (error as? URLError)?.code == .cancelled || error is CancellationError { return }
+            logger.error("Failed to fetch dashboard challenges: \(error)")
+            dashboardChallenges = []
+            dashboardState = .noChallengesAtAll
+        }
+    }
+
     // MARK: - Fetch Submissions
 
     func fetchSubmissions(challengeId: String) async throws -> [ChallengeSubmissionDTO] {
@@ -176,6 +239,9 @@ final class ChallengeService {
             .execute()
 
         logger.info("Submitted attempt for challenge \(challengeId)")
+        AnalyticsClient.shared.track("challenge_submission_created", properties: [
+            "challenge_id": challengeId,
+        ])
     }
 
     // MARK: - Upvote
@@ -191,6 +257,9 @@ final class ChallengeService {
         ]).execute()
 
         logger.info("Upvoted submission \(submissionId)")
+        AnalyticsClient.shared.track("challenge_upvoted", properties: [
+            "submission_id": submissionId,
+        ])
     }
 
     func removeUpvote(submissionId: String) async throws {
@@ -280,6 +349,151 @@ final class ChallengeService {
         return try? supabase.storage
             .from("challenge-photos")
             .getPublicURL(path: path)
+    }
+
+    // MARK: - Ratings
+
+    func rateSubmission(submissionId: String, stars: Int) async throws {
+        guard let userId = AuthManager.shared.currentUser?.id.uuidString.lowercased() else {
+            throw ChallengeError.notAuthenticated
+        }
+        struct RatingUpsert: Encodable {
+            let submission_id: String
+            let user_id: String
+            let stars: Int
+        }
+        try await supabase
+            .from("challenge_submission_ratings")
+            .upsert(RatingUpsert(submission_id: submissionId, user_id: userId, stars: stars),
+                    onConflict: "submission_id,user_id")
+            .execute()
+        logger.info("Rated submission \(submissionId) with \(stars) stars")
+    }
+
+    func getUserRating(submissionId: String) async -> Int? {
+        guard let userId = AuthManager.shared.currentUser?.id.uuidString.lowercased() else { return nil }
+        do {
+            struct RatingRow: Decodable { let stars: Int }
+            let result: [RatingRow] = try await supabase
+                .from("challenge_submission_ratings")
+                .select("stars")
+                .eq("submission_id", value: submissionId)
+                .eq("user_id", value: userId)
+                .limit(1)
+                .execute()
+                .value
+            return result.first?.stars
+        } catch {
+            return nil
+        }
+    }
+
+    // MARK: - Fetch Challenge Recipe
+
+    func fetchChallengeRecipe(recipeId: String) async throws -> Recipe {
+        let dto: SupabaseRecipeDTO = try await supabase
+            .from("recipes")
+            .select()
+            .eq("id", value: recipeId)
+            .single()
+            .execute()
+            .value
+
+        // Download inspiration image
+        var inspirationData = Data()
+        if let path = dto.inspirationImagePath {
+            do {
+                inspirationData = try await supabase.storage
+                    .from("inspiration-images")
+                    .download(path: path)
+            } catch {
+                logger.warning("Failed to download inspiration image: \(error)")
+            }
+        }
+
+        // Download dish image
+        var dishImageData: Data?
+        if let path = dto.dishImagePath {
+            do {
+                dishImageData = try await supabase.storage
+                    .from("dish-images")
+                    .download(path: path)
+            } catch {
+                logger.warning("Failed to download dish image: \(error)")
+            }
+        }
+
+        return dto.toRecipe(inspirationData: inspirationData, dishImageData: dishImageData)
+    }
+
+    // MARK: - Keyword Extraction
+
+    static func extractKeywords(from recipe: Recipe) -> [String] {
+        var keywords: Set<String> = ["AI-Generated"]
+
+        // Chef-based
+        let chef = ChefPersonality.current
+        switch chef {
+        case .dooby: keywords.insert("Comfort Food")
+        case .grizzly: keywords.insert("Outdoor")
+        case .beginner: keywords.insert("Beginner-Friendly")
+        case .familyChef: keywords.insert("Family-Friendly")
+        default: keywords.insert("World Cuisine")
+        }
+
+        // Collect all ingredient text
+        let allIngredients = recipe.components
+            .flatMap(\.ingredients)
+            .joined(separator: " ")
+            .lowercased()
+        let allSteps = recipe.cookingSteps
+            .map(\.instruction)
+            .joined(separator: " ")
+            .lowercased()
+        let allText = allIngredients + " " + allSteps + " " + recipe.recipeDescription.lowercased()
+
+        // Spicy
+        let spicyTerms = ["jalapeño", "jalapeno", "habanero", "serrano", "sriracha", "chili", "chilli", "cayenne", "hot sauce", "red pepper flake", "ghost pepper"]
+        if spicyTerms.contains(where: { allIngredients.contains($0) }) {
+            keywords.insert("Spicy")
+        }
+
+        // Sweet
+        let sweetTerms = ["chocolate", "caramel", "honey", "maple syrup", "sugar", "vanilla", "dessert", "cake", "cookie", "brownie", "ice cream"]
+        if sweetTerms.contains(where: { allText.contains($0) }) {
+            keywords.insert("Sweet")
+        }
+
+        // Savory & Umami
+        let umamiTerms = ["miso", "soy sauce", "fish sauce", "anchovy", "worcestershire", "parmesan", "mushroom", "umami"]
+        if umamiTerms.contains(where: { allIngredients.contains($0) }) {
+            keywords.insert("Savory")
+        }
+
+        // Cooking method
+        if allSteps.contains("grill") || allSteps.contains("bbq") || allSteps.contains("barbecue") {
+            keywords.insert("Grilled")
+        }
+        if allSteps.contains("bake") || allSteps.contains("oven") || allSteps.contains("roast") {
+            keywords.insert("Baked")
+        }
+        if allSteps.contains("fry") || allSteps.contains("crisp") || allSteps.contains("crunch") {
+            keywords.insert("Crispy")
+        }
+
+        // Time-based (parse numeric minutes from cookTime)
+        if let cookTime = recipe.cookTime {
+            let digits = cookTime.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()
+            if let minutes = Int(digits) {
+                if minutes < 25 { keywords.insert("Quick") }
+                else if minutes > 60 { keywords.insert("Slow-Cooked") }
+            }
+        }
+
+        // Cap at 5, always keeping AI-Generated
+        var result = Array(keywords.filter { $0 != "AI-Generated" }.prefix(4))
+        result.append("AI-Generated")
+        return result
     }
 }
 

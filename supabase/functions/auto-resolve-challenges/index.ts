@@ -35,13 +35,13 @@ Deno.serve(async (req) => {
     let resolved = 0;
 
     for (const challenge of expiredChallenges) {
-      // Get submission with highest upvote count (tie-break: earliest created_at)
+      // Get submission with best average rating (tie-break: most ratings)
       const { data: topSubmission } = await supabase
         .from("challenge_submissions")
         .select("id, user_id")
         .eq("challenge_id", challenge.id)
-        .order("upvote_count", { ascending: false })
-        .order("created_at", { ascending: true })
+        .order("average_rating", { ascending: false })
+        .order("rating_count", { ascending: false })
         .limit(1)
         .single();
 

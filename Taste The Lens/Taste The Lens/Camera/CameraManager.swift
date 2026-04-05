@@ -1,5 +1,8 @@
 @preconcurrency import AVFoundation
 import UIKit
+import os
+
+private let logger = makeLogger(category: "Camera")
 
 @Observable
 final class CameraManager: NSObject {
@@ -18,6 +21,34 @@ final class CameraManager: NSObject {
 
     override init() {
         super.init()
+        setupObservers()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    private func setupObservers() {
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(sessionWasInterrupted),
+            name: AVCaptureSession.wasInterruptedNotification, object: session
+        )
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(sessionInterruptionEnded),
+            name: AVCaptureSession.interruptionEndedNotification, object: session
+        )
+    }
+
+    @objc private nonisolated func sessionWasInterrupted(_ notification: Notification) {
+        logger.warning("Camera session interrupted")
+        Task { @MainActor in
+            self.isSessionRunning = false
+        }
+    }
+
+    @objc private nonisolated func sessionInterruptionEnded(_ notification: Notification) {
+        logger.info("Camera session interruption ended — restarting")
+        startSession()
     }
 
     func checkPermission() async {
@@ -34,6 +65,10 @@ final class CameraManager: NSObject {
     func startSession() {
         guard permissionGranted else { return }
         sessionQueue.async { [self] in
+            if self.session.isRunning {
+                logger.info("Camera session already running — skipping start")
+                return
+            }
             self.configureSession()
         }
     }
@@ -42,7 +77,14 @@ final class CameraManager: NSObject {
         sessionQueue.async { [self] in
             guard self.session.isRunning else { return }
             self.session.stopRunning()
+            logger.info("Camera session stopped")
             Task { @MainActor in
+                // Resume any pending capture continuation so callers don't hang indefinitely
+                if let continuation = self.continuation {
+                    continuation.resume(throwing: CameraError.captureFailure)
+                    self.continuation = nil
+                    self.isCaptureInFlight = false
+                }
                 self.isSessionRunning = false
             }
         }
@@ -68,23 +110,46 @@ final class CameraManager: NSObject {
         session.beginConfiguration()
         session.sessionPreset = .photo
 
-        guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back),
-              let input = try? AVCaptureDeviceInput(device: camera) else {
+        // Clear existing inputs/outputs for clean reconfiguration
+        for input in session.inputs { session.removeInput(input) }
+        for output in session.outputs { session.removeOutput(output) }
+
+        guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back)
+                ?? AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front) else {
+            logger.error("No camera device found")
+            session.commitConfiguration()
+            return
+        }
+
+        let input: AVCaptureDeviceInput
+        do {
+            input = try AVCaptureDeviceInput(device: camera)
+        } catch {
+            logger.error("Failed to create camera input: \(error.localizedDescription)")
             session.commitConfiguration()
             return
         }
 
         if session.canAddInput(input) {
             session.addInput(input)
+        } else {
+            logger.warning("Cannot add camera input to session")
+            session.commitConfiguration()
+            return
         }
 
         if session.canAddOutput(photoOutput) {
             session.addOutput(photoOutput)
+        } else {
+            logger.warning("Cannot add photo output to session")
+            session.commitConfiguration()
+            return
         }
 
         session.commitConfiguration()
         session.startRunning()
 
+        logger.info("Camera session configured and started")
         Task { @MainActor [weak self] in
             self?.isSessionRunning = true
         }

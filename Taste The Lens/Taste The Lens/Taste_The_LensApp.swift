@@ -11,12 +11,19 @@ struct Taste_The_LensApp: App {
         WindowGroup {
             ContentView()
                 .task {
+                    // Start network monitoring and load offline queue early
+                    _ = NetworkMonitor.shared
+                    await OfflineCaptureQueue.shared.bootstrap()
                     RemoteConfigManager.shared.startPeriodicSync()
                     await AuthManager.shared.restoreSession()
                     // On authenticated launch, claim any unowned local recipes and sync
                     if AuthManager.shared.isAuthenticated {
-                        // Re-check subscription status now that auth is ready
-                        await StoreManager.shared.updateSubscriptionStatus()
+                        // Check for legacy subscriptions
+                        await StoreManager.shared.checkLegacySubscription()
+                        // One-time credit reconciliation (MAX of server vs client)
+                        await UsageTracker.shared.reconcileCreditsIfNeeded()
+                        // Claim welcome credits for new users (idempotent)
+                        await UsageTracker.shared.claimWelcomeCreditsIfNeeded()
                         // Sync server-side usage and credits
                         await UsageTracker.shared.syncUsageFromServer()
                         await UsageTracker.shared.syncCreditsFromServer()
@@ -36,6 +43,14 @@ struct Taste_The_LensApp: App {
                 .onChange(of: scenePhase) { _, newPhase in
                     if newPhase == .active {
                         Task { await RemoteConfigManager.shared.fetch() }
+                        // Re-sync subscription status and credits whenever the app
+                        // returns to the foreground (covers background → foreground
+                        // transitions that the one-time .task doesn't handle).
+                        if AuthManager.shared.isAuthenticated {
+                            Task {
+                                await UsageTracker.shared.syncCreditsFromServer()
+                            }
+                        }
                     }
                 }
                 .onOpenURL { url in

@@ -14,16 +14,27 @@ struct TastingMenuDetailView: View {
     @State private var remoteRecipes: [String: Recipe] = [:]
     @State private var isLoading = true
     @State private var isPublishing = false
-    @State private var showShareSheet = false
     @State private var selectedRecipe: Recipe?
     @State private var showPublished = false
+    @State private var showQRCode = false
+    // #6: Track current invite code locally (can change after revoke)
+    @State private var currentInviteCode: String
+    @State private var isRevokingInvite = false
+    @State private var showRevokeConfirmation = false
 
     private let menuService = TastingMenuService.shared
     private let authManager = AuthManager.shared
 
+    init(menu: TastingMenuDTO) {
+        self.menu = menu
+        self._currentInviteCode = State(initialValue: menu.inviteCode)
+    }
+
     private var isCreator: Bool {
         authManager.currentUser?.id.uuidString == menu.creatorId
     }
+
+    private var isPublished: Bool { menu.status == "published" }
 
     private var filledCourses: Int {
         courses.filter { $0.recipeId != nil }.count
@@ -47,7 +58,7 @@ struct TastingMenuDetailView: View {
                         participantsSection
                         coursesSection
 
-                        if isCreator && allCoursesFilled && menu.status != "published" {
+                        if isCreator && allCoursesFilled && !isPublished {
                             publishButton
                         }
                     }
@@ -63,12 +74,7 @@ struct TastingMenuDetailView: View {
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    shareInvite()
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
-                        .foregroundStyle(Theme.gold)
-                }
+                toolbarActions
             }
         }
         .sheet(item: $selectedRecipe) { recipe in
@@ -82,8 +88,22 @@ struct TastingMenuDetailView: View {
                     }
             }
         }
+        .sheet(isPresented: $showQRCode) {
+            if let url = DeepLinkHandler.url(forMenuInvite: currentInviteCode) {
+                QRCodeSheet(url: url)
+            }
+        }
         .navigationDestination(isPresented: $showPublished) {
-            PublishedMenuView(menu: menu, courses: courses)
+            // #10: Pass pre-fetched remoteRecipes to avoid double-downloading
+            PublishedMenuView(menu: menu, courses: courses, preloadedRecipes: remoteRecipes)
+        }
+        .alert("Revoke Invite Link?", isPresented: $showRevokeConfirmation) {
+            Button("Revoke & Regenerate", role: .destructive) {
+                Task { await revokeInvite() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The current invite link will stop working. A new one will be generated with a 7-day expiry.")
         }
         .task {
             await loadData()
@@ -98,6 +118,53 @@ struct TastingMenuDetailView: View {
         }
         .onDisappear {
             menuService.unsubscribeFromMenu(id: menu.id)
+        }
+    }
+
+    // MARK: - Toolbar
+
+    @ViewBuilder
+    private var toolbarActions: some View {
+        HStack(spacing: 4) {
+            if isPublished {
+                // #21: Published menus show "Share Menu" instead of share invite
+                Button {
+                    shareMenuSummary()
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .foregroundStyle(Theme.gold)
+                }
+            } else {
+                // #17: QR code button
+                Button {
+                    showQRCode = true
+                } label: {
+                    Image(systemName: "qrcode")
+                        .foregroundStyle(Theme.gold)
+                }
+
+                // Share invite link
+                Button {
+                    shareInvite()
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .foregroundStyle(Theme.gold)
+                }
+
+                // #6: Creator options menu (revoke invite)
+                if isCreator {
+                    Menu {
+                        Button(role: .destructive) {
+                            showRevokeConfirmation = true
+                        } label: {
+                            Label("Revoke Invite Link", systemImage: "link.badge.minus")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .foregroundStyle(Theme.gold)
+                    }
+                }
+            }
         }
     }
 
@@ -116,6 +183,18 @@ struct TastingMenuDetailView: View {
             .font(.system(size: 13))
             .foregroundStyle(Theme.darkTextTertiary)
 
+            // Show event date if set
+            if let eventDateStr = menu.eventDate,
+               let eventDate = ISO8601DateFormatter().date(from: eventDateStr) {
+                HStack(spacing: 4) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 12))
+                    Text(eventDate.formatted(date: .abbreviated, time: .omitted))
+                        .font(.system(size: 13))
+                }
+                .foregroundStyle(Theme.gold.opacity(0.8))
+            }
+
             // Progress bar
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
@@ -126,6 +205,7 @@ struct TastingMenuDetailView: View {
                     RoundedRectangle(cornerRadius: 3)
                         .fill(Theme.gold)
                         .frame(width: courses.isEmpty ? 0 : geo.size.width * CGFloat(filledCourses) / CGFloat(courses.count), height: 6)
+                        .animation(.easeInOut(duration: 0.4), value: filledCourses)
                 }
             }
             .frame(height: 6)
@@ -158,7 +238,7 @@ struct TastingMenuDetailView: View {
             }
             Spacer()
 
-            if menu.status != "published" {
+            if !isPublished {
                 Text("Share invite to add chefs")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.darkTextHint)
@@ -190,7 +270,6 @@ struct TastingMenuDetailView: View {
             loadRecipe(id: recipeId)
         } label: {
             HStack(spacing: 14) {
-                // Recipe thumbnail
                 recipeThumb(recipeId: recipeId)
                     .frame(width: 60, height: 60)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -204,10 +283,17 @@ struct TastingMenuDetailView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.darkTextPrimary)
 
+                    // #19: Show participant with their color dot
                     if let participantId = course.participantId {
-                        Text(participantLabel(participantId))
-                            .font(.system(size: 12))
-                            .foregroundStyle(Theme.darkTextTertiary)
+                        HStack(spacing: 5) {
+                            let idx = participants.firstIndex(where: { $0.userId == participantId }) ?? 0
+                            Circle()
+                                .fill(participantColor(idx))
+                                .frame(width: 8, height: 8)
+                            Text(participantLabel(participantId))
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.darkTextTertiary)
+                        }
                     }
                 }
 
@@ -226,9 +312,29 @@ struct TastingMenuDetailView: View {
         VStack(spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(course.courseType)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Theme.gold.opacity(0.7))
+                    // #23: Allow creator to edit course type via Menu picker
+                    if isCreator && !isPublished {
+                        Menu {
+                            ForEach(CourseType.allCases) { type in
+                                Button(type.displayName) {
+                                    Task { await updateCourseType(course, to: type) }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(course.courseType)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(Theme.gold.opacity(0.7))
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(Theme.gold.opacity(0.5))
+                            }
+                        }
+                    } else {
+                        Text(course.courseType)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Theme.gold.opacity(0.7))
+                    }
 
                     Text("Course \(course.courseOrder + 1)")
                         .font(.system(size: 15, weight: .semibold))
@@ -241,7 +347,7 @@ struct TastingMenuDetailView: View {
                     .foregroundStyle(Theme.darkTextHint)
             }
 
-            if menu.status != "published" {
+            if !isPublished {
                 Button {
                     addCourse(course)
                 } label: {
@@ -297,25 +403,18 @@ struct TastingMenuDetailView: View {
 
     @MainActor
     private func loadData() async {
-        logger.info("loadData — fetching courses and participants for menu \(menu.id)")
         do {
             async let coursesResult = menuService.fetchCourses(menuId: menu.id)
             async let participantsResult = menuService.fetchParticipants(menuId: menu.id)
             courses = try await coursesResult
             participants = try await participantsResult
-            logger.info("loadData — got \(courses.count) courses, \(participants.count) participants")
-            for course in courses {
-                logger.info("  course[\(course.courseOrder)] type=\(course.courseType) recipeId=\(course.recipeId ?? "nil") participantId=\(course.participantId ?? "nil")")
-            }
         } catch {
             logger.error("Failed to load menu data: \(error)")
         }
 
-        // Fetch remote recipes for courses not in local SwiftData
         do {
             let fetched = try await menuService.fetchMenuRecipes(menuId: menu.id)
             remoteRecipes = fetched
-            logger.info("loadData — fetched \(fetched.count) remote recipes")
         } catch {
             logger.error("Failed to fetch remote recipes: \(error)")
         }
@@ -324,11 +423,7 @@ struct TastingMenuDetailView: View {
     }
 
     private func addCourse(_ course: MenuCourseDTO) {
-        guard authManager.isAuthenticated else {
-            logger.warning("addCourse — user not authenticated, ignoring")
-            return
-        }
-        logger.info("addCourse — posting notification for menuId: \(menu.id), courseOrder: \(course.courseOrder), courseType: \(course.courseType)")
+        guard authManager.isAuthenticated else { return }
         NotificationCenter.default.post(
             name: .addMenuCourse,
             object: nil,
@@ -342,6 +437,8 @@ struct TastingMenuDetailView: View {
             try await menuService.publishMenu(id: menu.id)
             HapticManager.success()
             showPublished = true
+        } catch let error as TastingMenuError {
+            logger.error("Failed to publish: \(error.localizedDescription)")
         } catch {
             logger.error("Failed to publish menu: \(error)")
         }
@@ -349,30 +446,67 @@ struct TastingMenuDetailView: View {
     }
 
     private func shareInvite() {
-        if let url = DeepLinkHandler.url(forMenuInvite: menu.inviteCode) {
+        if let url = DeepLinkHandler.url(forMenuInvite: currentInviteCode) {
             let activityVC = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-               var topVC = windowScene.windows.first?.rootViewController {
-                while let presented = topVC.presentedViewController {
-                    topVC = presented
-                }
-                topVC.present(activityVC, animated: true)
+            presentActivityVC(activityVC)
+        }
+    }
+
+    // #21: Share a text summary for published menus
+    private func shareMenuSummary() {
+        let courseList = courses.enumerated().map { i, course in
+            let recipeId = course.recipeId ?? ""
+            let localRecipe = try? modelContext.fetch(FetchDescriptor<Recipe>(predicate: #Predicate { $0.remoteId == recipeId })).first
+            let recipe = localRecipe ?? remoteRecipes[recipeId]
+            return "\(i + 1). \(course.courseType): \(recipe?.dishName ?? "TBD")"
+        }.joined(separator: "\n")
+
+        let summary = "\(menu.theme)\nA \(courses.count)-Course Tasting Menu\n\n\(courseList)\n\nCreated with Taste The Lens"
+        let activityVC = UIActivityViewController(activityItems: [summary], applicationActivities: nil)
+        presentActivityVC(activityVC)
+    }
+
+    // #6: Revoke and regenerate invite code
+    private func revokeInvite() async {
+        isRevokingInvite = true
+        do {
+            let newCode = try await menuService.revokeAndRegenerateInvite(menuId: menu.id)
+            currentInviteCode = newCode
+            HapticManager.success()
+        } catch {
+            logger.error("Failed to revoke invite: \(error)")
+        }
+        isRevokingInvite = false
+    }
+
+    // #23: Update course type
+    private func updateCourseType(_ course: MenuCourseDTO, to type: CourseType) async {
+        do {
+            try await menuService.updateCourseType(menuId: menu.id, courseOrder: course.courseOrder, courseType: type)
+            // Refresh course list to reflect the change
+            if let index = courses.firstIndex(where: { $0.id == course.id }) {
+                let updated = MenuCourseDTO(
+                    id: course.id,
+                    menuId: course.menuId,
+                    participantId: course.participantId,
+                    recipeId: course.recipeId,
+                    courseType: type.rawValue,
+                    courseOrder: course.courseOrder,
+                    addedAt: course.addedAt
+                )
+                courses[index] = updated
             }
+        } catch {
+            logger.error("Failed to update course type: \(error)")
         }
     }
 
     private func loadRecipe(id: String) {
-        // Look up by remoteId in local SwiftData first
         let descriptor = FetchDescriptor<Recipe>(predicate: #Predicate { $0.remoteId == id })
         if let recipe = try? modelContext.fetch(descriptor).first {
-            logger.info("loadRecipe — found local recipe '\(recipe.dishName)' for remoteId \(id)")
             selectedRecipe = recipe
         } else if let recipe = remoteRecipes[id] {
-            // Fall back to remote recipe fetched from Supabase
-            logger.info("loadRecipe — using remote recipe '\(recipe.dishName)' for remoteId \(id)")
             selectedRecipe = recipe
-        } else {
-            logger.error("loadRecipe — no recipe found for remoteId \(id)")
         }
     }
 
@@ -412,6 +546,16 @@ struct TastingMenuDetailView: View {
             return "Chef \(index + 1)"
         }
         return "Chef"
+    }
+
+    private func presentActivityVC(_ activityVC: UIActivityViewController) {
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           var topVC = windowScene.windows.first?.rootViewController {
+            while let presented = topVC.presentedViewController {
+                topVC = presented
+            }
+            topVC.present(activityVC, animated: true)
+        }
     }
 }
 

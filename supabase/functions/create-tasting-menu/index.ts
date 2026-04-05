@@ -14,17 +14,19 @@ Deno.serve(async (req) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) {
+  // Prefer x-user-token (bypasses gateway JWT validation for expired tokens).
+  // Fall back to Authorization for SDK-based callers.
+  const userToken = req.headers.get("x-user-token")
+    || req.headers.get("Authorization")?.replace("Bearer ", "") || null;
+  if (!userToken) {
     return Response.json({ error: "Missing authorization" }, { status: 401 });
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-  const token = authHeader.replace("Bearer ", "");
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser(token);
+  } = await supabase.auth.getUser(userToken);
 
   if (authError || !user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });

@@ -3,6 +3,21 @@ import os
 
 private let logger = makeLogger(category: "CreateMenu")
 
+// #13: Menu templates
+private struct MenuTemplate {
+    let name: String
+    let icon: String
+    let themeHint: String
+    let courses: [CourseType]
+}
+
+private let menuTemplates: [MenuTemplate] = [
+    MenuTemplate(name: "Classic French", icon: "🥐", themeHint: "Classic French", courses: [.amuse, .soup, .main, .dessert]),
+    MenuTemplate(name: "Omakase", icon: "🍣", themeHint: "Omakase", courses: [.amuse, .appetizer, .main, .dessert]),
+    MenuTemplate(name: "Farm-to-Table", icon: "🌿", themeHint: "Farm-to-Table", courses: [.appetizer, .salad, .main, .dessert]),
+    MenuTemplate(name: "Grand Tasting", icon: "✨", themeHint: "Grand Tasting", courses: [.amuse, .appetizer, .soup, .salad, .main, .dessert]),
+]
+
 struct CreateMenuView: View {
     var onCreated: () -> Void = {}
 
@@ -11,7 +26,10 @@ struct CreateMenuView: View {
     @State private var courseCount = 3
     @State private var courseTypes: [CourseType] = [.appetizer, .main, .dessert]
     @State private var isCreating = false
-    @State private var createdInviteCode: String?
+    @State private var createdMenu: TastingMenuDTO?
+    // #14: Optional event date
+    @State private var hasEventDate = false
+    @State private var eventDate: Date = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
 
     private let menuService = TastingMenuService.shared
 
@@ -22,8 +40,8 @@ struct CreateMenuView: View {
 
                 ScrollView {
                     VStack(spacing: 24) {
-                        if let code = createdInviteCode {
-                            successView(code: code)
+                        if let menu = createdMenu {
+                            successView(menu: menu)
                         } else {
                             formView
                         }
@@ -50,6 +68,9 @@ struct CreateMenuView: View {
 
     private var formView: some View {
         VStack(spacing: 24) {
+            // #13: Templates section
+            templatesSection
+
             // Theme
             VStack(alignment: .leading, spacing: 8) {
                 Text("Theme")
@@ -118,6 +139,9 @@ struct CreateMenuView: View {
                 }
             }
 
+            // #14: Optional event date
+            eventDateSection
+
             // Create button
             Button {
                 Task { await createMenu() }
@@ -137,9 +161,91 @@ struct CreateMenuView: View {
         }
     }
 
+    // MARK: - Templates (#13)
+
+    private var templatesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Start from a template")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.darkTextTertiary)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(menuTemplates, id: \.name) { template in
+                        Button {
+                            applyTemplate(template)
+                        } label: {
+                            VStack(spacing: 6) {
+                                Text(template.icon)
+                                    .font(.system(size: 24))
+                                Text(template.name)
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(Theme.darkTextSecondary)
+                                Text("\(template.courses.count) courses")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(Theme.darkTextHint)
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Theme.darkSurface)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Theme.darkStroke, lineWidth: 0.5)
+                                    )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 1)
+            }
+        }
+    }
+
+    // MARK: - Event Date (#14)
+
+    private var eventDateSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Toggle(isOn: $hasEventDate) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Set Event Date")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Theme.darkTextPrimary)
+                    Text("Optional — helps sort upcoming dinners")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.darkTextHint)
+                }
+            }
+            .tint(Theme.gold)
+
+            if hasEventDate {
+                DatePicker(
+                    "Dinner Date",
+                    selection: $eventDate,
+                    in: Date()...,
+                    displayedComponents: .date
+                )
+                .datePickerStyle(.compact)
+                .tint(Theme.gold)
+                .foregroundStyle(Theme.darkTextPrimary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Theme.darkSurface)
+                )
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .glassCard()
+        .animation(.easeInOut(duration: 0.2), value: hasEventDate)
+    }
+
     // MARK: - Success
 
-    private func successView(code: String) -> some View {
+    private func successView(menu: TastingMenuDTO) -> some View {
         VStack(spacing: 24) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 56))
@@ -154,13 +260,13 @@ struct CreateMenuView: View {
                 .foregroundStyle(Theme.darkTextTertiary)
                 .multilineTextAlignment(.center)
 
-            // Invite link
+            // Invite code display
             VStack(spacing: 8) {
                 Text("Invite Code")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.darkTextTertiary)
 
-                Text(code)
+                Text(menu.inviteCode)
                     .font(.system(size: 20, weight: .bold, design: .monospaced))
                     .foregroundStyle(Theme.gold)
                     .padding(16)
@@ -168,11 +274,19 @@ struct CreateMenuView: View {
                         RoundedRectangle(cornerRadius: 12)
                             .fill(Theme.darkSurface)
                     )
+
+                // Expiry note if set
+                if let expiresAt = menu.inviteExpiresAt,
+                   let expDate = ISO8601DateFormatter().date(from: expiresAt) {
+                    Text("Expires \(expDate.formatted(date: .abbreviated, time: .omitted))")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.darkTextHint)
+                }
             }
 
             // Share button
             Button {
-                if let url = DeepLinkHandler.url(forMenuInvite: code) {
+                if let url = DeepLinkHandler.url(forMenuInvite: menu.inviteCode) {
                     let activityVC = UIActivityViewController(activityItems: [url], applicationActivities: nil)
                     if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
                        var topVC = windowScene.windows.first?.rootViewController {
@@ -215,6 +329,16 @@ struct CreateMenuView: View {
 
     // MARK: - Helpers
 
+    private func applyTemplate(_ template: MenuTemplate) {
+        courseCount = template.courses.count
+        courseTypes = template.courses
+        // Set theme hint only if field is currently empty
+        if theme.isEmpty {
+            theme = template.themeHint
+        }
+        HapticManager.light()
+    }
+
     private func adjustCourseTypes(to count: Int) {
         let defaults: [CourseType] = [.amuse, .appetizer, .soup, .salad, .main, .dessert]
         while courseTypes.count < count {
@@ -232,10 +356,11 @@ struct CreateMenuView: View {
             let menu = try await menuService.createMenu(
                 theme: theme.trimmingCharacters(in: .whitespacesAndNewlines),
                 courseCount: courseCount,
-                courseTypes: Array(courseTypes.prefix(courseCount))
+                courseTypes: Array(courseTypes.prefix(courseCount)),
+                eventDate: hasEventDate ? eventDate : nil
             )
             HapticManager.success()
-            createdInviteCode = menu.inviteCode
+            createdMenu = menu
         } catch {
             logger.error("Failed to create menu: \(error)")
         }

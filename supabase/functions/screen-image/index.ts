@@ -49,7 +49,7 @@ async function screenImage(base64Image: string): Promise<ScreeningResult> {
             },
           },
           {
-            text: 'Is this image appropriate for a food/recipe app? Return JSON: {"safe": true/false, "reason": "brief explanation"}',
+            text: 'Does this image contain prohibited content? Check ONLY for: (1) real identifiable people, (2) children as the primary subject, or (3) live animals as the primary subject. Everything else is allowed and safe — clothing, personal hygiene products, household objects, art, landscapes, architecture, and any non-food items are all fine. Return JSON: {"safe": true/false, "reason": "brief explanation"}',
           },
         ],
       },
@@ -79,22 +79,22 @@ async function screenImage(base64Image: string): Promise<ScreeningResult> {
     if (!response.ok) {
       const errorText = await response.text();
       console.error("Gemini screening API error:", errorText);
-      // Fail-open: allow image through if API errors
-      return { safe: true, reason: "Screening unavailable" };
+      // Fail-closed: propagate error rather than silently allowing unsafe content
+      throw new Error(`Screening API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) {
-      return { safe: true, reason: "Screening unavailable" };
+      throw new Error("No text in screening response");
     }
 
     const result: ScreeningResult = JSON.parse(text);
     return result;
   } catch (error) {
     console.error("Screening error:", error);
-    // Fail-open on any error
-    return { safe: true, reason: "Screening unavailable" };
+    // Fail-closed: re-throw so the caller returns 503 instead of passing unsafe content
+    throw error;
   } finally {
     clearTimeout(timeout);
   }
@@ -105,35 +105,35 @@ Deno.serve(async (req) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  // Verify authentication
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) {
-    return Response.json({ error: "Missing authorization" }, { status: 401 });
-  }
-
+  // Authenticate user (optional for guests).
+  // Prefer x-user-token (bypasses gateway JWT validation for expired tokens).
+  // Fall back to Authorization for SDK-based callers.
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-  const token = authHeader.replace("Bearer ", "");
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser(token);
+  let userId: string | null = null;
 
-  if (authError || !user) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  const userToken = req.headers.get("x-user-token")
+    || req.headers.get("Authorization")?.replace("Bearer ", "") || null;
+  if (userToken) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser(userToken);
+    if (!authError && user) {
+      userId = user.id;
+    }
   }
 
-  // Per-user rate limiting: 15 requests per minute
-  const { data: allowed } = await supabase.rpc("check_rate_limit", {
-    p_user_id: user.id,
-    p_function_name: "screen-image",
-    p_window_minutes: 1,
-    p_max_requests: 15,
-  });
-  if (allowed === false) {
-    return Response.json(
-      { error: "rate_limited", message: "Too many requests. Please wait a moment." },
-      { status: 429 }
-    );
+  // Per-user rate limiting (authenticated users only)
+  if (userId) {
+    const { data: allowed } = await supabase.rpc("check_rate_limit", {
+      p_user_id: userId,
+      p_function_name: "screen-image",
+      p_window_minutes: 1,
+      p_max_requests: 15,
+    });
+    if (allowed === false) {
+      return Response.json(
+        { error: "rate_limited", message: "Too many requests. Please wait a moment." },
+        { status: 429 }
+      );
+    }
   }
 
   try {
@@ -179,6 +179,6 @@ Deno.serve(async (req) => {
       );
     }
     console.error("screen-image error:", error);
-    return Response.json({ error: String(error) }, { status: 500 });
+    return Response.json({ error: "Content screening unavailable. Please try again." }, { status: 503 });
   }
 });

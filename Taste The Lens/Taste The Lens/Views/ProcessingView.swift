@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ProcessingView: View {
     let capturedImage: UIImage
@@ -113,15 +114,14 @@ struct ProgressStepsView: View {
 
     private var currentStep: Int {
         switch state {
-        case .screeningImage: return 0
-        case .analyzingImage: return 1
-        case .generatingImage: return 2
-        case .complete: return 3
+        case .screeningImage, .analyzingImage: return 0
+        case .generatingImage: return 1
+        case .complete: return 2
         default: return -1
         }
     }
 
-    private let steps = ["Screening", "Analyzing", "Generating"]
+    private let steps = ["Analyzing", "Generating"]
 
     var body: some View {
         HStack(spacing: 0) {
@@ -144,6 +144,17 @@ struct ProgressStepsView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Processing step \(min(currentStep + 1, steps.count)) of \(steps.count): \(currentStep >= 0 && currentStep < steps.count ? steps[currentStep] : "waiting")")
+        .onChange(of: currentStep) { _, newStep in
+            let announcement: String
+            if newStep >= 0 && newStep < steps.count {
+                announcement = "Step \(newStep + 1) of \(steps.count): \(steps[newStep])"
+            } else if case .complete = state {
+                announcement = "Recipe ready"
+            } else {
+                return
+            }
+            UIAccessibility.post(notification: .announcement, argument: announcement)
+        }
     }
 
     @ViewBuilder
@@ -197,9 +208,9 @@ struct TimeoutWarningView: View {
         TimelineView(.periodic(from: .now, by: 1)) { timeline in
             let elapsed = Int(timeline.date.timeIntervalSince(startTime))
             Group {
-                if elapsed >= 30 {
+                if elapsed >= 75 {
                     VStack(spacing: 8) {
-                        Text(elapsed >= 60 ? "Still working. You can cancel and try again." : "Taking longer than usual...")
+                        Text(elapsed >= 120 ? "Still working. You can cancel and try again." : "Taking longer than usual...")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(Theme.darkTextSecondary)
                         Button {

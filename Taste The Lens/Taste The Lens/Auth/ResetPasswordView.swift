@@ -143,10 +143,14 @@ struct ResetPasswordView: View {
                     try await authManager.exchangeCodeForSession(code)
                     sessionReady = true
                 } catch {
+                    // Clear any partial session state left by a failed exchange
+                    await authManager.clearInvalidSession()
                     errorMessage = "This reset link is invalid or expired. Please request a new one from the app or tastethelens.com/reset-password"
                     logger.error("Failed to exchange reset code: \(error)")
                 }
             } else {
+                // Clear any partial session state from the failed URL handler
+                await authManager.clearInvalidSession()
                 errorMessage = "This reset link is invalid or expired. Please request a new one from the app or tastethelens.com/reset-password"
                 logger.error("No code found in callback URL: \(callbackURL)")
             }
