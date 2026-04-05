@@ -15,16 +15,14 @@ struct SettingsView: View {
     @State private var exportFileURL: URL?
     @State private var showExportShare = false
     @State private var isExporting = false
-    @State private var showReplayOnboarding = false
-    @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = true
 
     private let authManager = AuthManager.shared
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 28) {
-                    // Account Section
+                VStack(spacing: 32) {
+                    // Account
                     settingsSection("Account") {
                         VStack(spacing: 0) {
                             accountRow
@@ -37,60 +35,42 @@ struct SettingsView: View {
                         }
                     }
 
-                    // Chef Selection
-                    ChefSelectionView()
-                        .padding(.horizontal, 16)
+                    // Cooking Style
+                    cookingStyleSection
 
-                    // Dietary Preferences
-                    DietaryPreferenceSection(showSaveConfirmation: true)
-                        .padding(.horizontal, 16)
-
-                    // Credits Section
-                    settingsSection("Credits") {
-                        VStack(spacing: 0) {
-                            // Credit balance
+                    // Preferences
+                    settingsSection("Preferences") {
+                        NavigationLink {
+                            PreferencesView()
+                        } label: {
                             HStack(spacing: 12) {
-                                Image(systemName: "circle.grid.3x3.fill")
+                                Image(systemName: "slider.horizontal.3")
                                     .font(.system(size: 15))
-                                    .foregroundStyle(Theme.primary)
+                                    .foregroundStyle(Theme.textPrimary)
                                     .frame(width: 24)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("\(UsageTracker.shared.remainingGenerations) credits")
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundStyle(Theme.primary)
-
-                                    Text(UsageTracker.shared.creditBalanceDescription)
+                                    Text("Dietary & Cooking Preferences")
+                                        .font(.system(size: 15))
+                                        .foregroundStyle(Theme.textPrimary)
+                                    Text("Experience level, dietary restrictions")
                                         .font(.system(size: 12))
                                         .foregroundStyle(Theme.textTertiary)
                                 }
                                 Spacer()
-                                Button { showPaywall = true } label: {
-                                    Text("Buy Credits")
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(Theme.primary)
-                                        .padding(.horizontal, 14)
-                                        .padding(.vertical, 7)
-                                        .background(
-                                            Capsule()
-                                                .stroke(Theme.primary, lineWidth: 1)
-                                        )
-                                }
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(Theme.textQuaternary)
                             }
-                            .padding(14)
-
-                            // Legacy subscription notice
-                            if StoreManager.shared.hasActiveLegacySubscription {
-                                settingsDivider
-                                settingsButton("Manage Legacy Subscription", icon: "creditcard", color: Theme.textPrimary) {
-                                    if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
-                                        UIApplication.shared.open(url)
-                                    }
-                                }
-                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 13)
                         }
+                        .buttonStyle(.plain)
                     }
 
-                    // Notifications Section (authenticated only)
+                    // Credits (featured)
+                    creditsFeaturedSection
+
+                    // Notifications
                     if authManager.isAuthenticated {
                         settingsSection("Notifications") {
                             NavigationLink {
@@ -116,19 +96,13 @@ struct SettingsView: View {
                         }
                     }
 
-                    // App Section
+                    // App
                     settingsSection("App") {
                         VStack(spacing: 0) {
                             settingsButton("Export My Data", icon: "square.and.arrow.up", color: Theme.textPrimary) {
                                 exportData()
                             }
-                            settingsDivider
-                            settingsButton("Replay Tutorial", icon: "play.circle", color: Theme.textPrimary) {
-                                showReplayOnboarding = true
-                            }
-                            settingsDivider
                             settingsLink("Privacy Policy", icon: "hand.raised", url: "https://tastethelens.com/privacy")
-                            settingsDivider
                             settingsLink("Terms of Service", icon: "doc.text", url: "https://tastethelens.com/terms")
                         }
                     }
@@ -137,7 +111,7 @@ struct SettingsView: View {
                     Text("Taste The Lens v\(appVersion)")
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.textQuaternary)
-                        .padding(.top, 8)
+                        .padding(.top, 4)
 
                     Spacer().frame(height: 40)
                 }
@@ -152,6 +126,7 @@ struct SettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.primary)
                 }
             }
@@ -176,9 +151,6 @@ struct SettingsView: View {
                 if let url = exportFileURL {
                     ShareSheet(items: [url])
                 }
-            }
-            .fullScreenCover(isPresented: $showReplayOnboarding) {
-                OnboardingView(isPresented: $showReplayOnboarding)
             }
         }
     }
@@ -252,6 +224,139 @@ struct SettingsView: View {
                 }
             }
             .padding(14)
+        }
+    }
+
+    // MARK: - Cooking Style Section
+
+    private var cookingStyleSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Cooking Style")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.textSecondary)
+                .textCase(.uppercase)
+                .tracking(1.2)
+                .padding(.horizontal, 16)
+
+            ChefSelectionView(showHeader: false)
+                .padding(.horizontal, 16)
+        }
+    }
+
+    // MARK: - Credits Featured Section
+
+    private var creditsFeaturedSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Credits")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.textSecondary)
+                .textCase(.uppercase)
+                .tracking(1.2)
+                .padding(.horizontal, 16)
+
+            VStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 14) {
+                    // Top row: icon + text
+                    HStack(spacing: 14) {
+                        // Icon tile
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Theme.gold.opacity(0.20))
+                            .frame(width: 44, height: 44)
+                            .overlay {
+                                Image(systemName: "circle.grid.3x3.fill")
+                                    .font(.system(size: 19))
+                                    .foregroundStyle(Theme.primary)
+                            }
+
+                        // Text block
+                        VStack(alignment: .leading, spacing: 3) {
+                            (Text("\(UsageTracker.shared.remainingGenerations) credits")
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundColor(Theme.primary)
+                            + Text(" remaining")
+                                .font(.system(size: 15))
+                                .foregroundColor(Theme.textPrimary))
+
+                            Text("Keep creating delicious recipes")
+                                .font(.system(size: 12))
+                                .foregroundStyle(Theme.textTertiary)
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+
+                    // Bottom row: recipes-left + CTA button
+                    HStack {
+                        HStack(spacing: 3) {
+                            Text("✦")
+                                .font(.system(size: 9))
+                                .foregroundStyle(Theme.gold)
+                            Text("= \(UsageTracker.shared.remainingGenerations) recipes left")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Theme.textTertiary)
+                        }
+
+                        Spacer()
+
+                        // CTA button
+                        Button { showPaywall = true } label: {
+                            HStack(spacing: 5) {
+                                Text("Buy More Credits")
+                                    .font(.system(size: 13, weight: .semibold))
+                                Image(systemName: "arrow.right")
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Capsule().fill(Theme.primary))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(16)
+
+                // Legacy subscription (conditional)
+                if StoreManager.shared.hasActiveLegacySubscription {
+                    Divider()
+                        .background(Theme.gold.opacity(0.2))
+                    Button {
+                        if let url = URL(string: "https://apps.apple.com/account/subscriptions") {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "creditcard")
+                                .font(.system(size: 13))
+                            Text("Manage Legacy Subscription")
+                                .font(.system(size: 13))
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 11))
+                        }
+                        .foregroundStyle(Theme.textTertiary)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(LinearGradient(
+                        colors: [
+                            Theme.warmCardBg,
+                            Color(red: 0.988, green: 0.949, blue: 0.871), // warm golden cream
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Theme.gold.opacity(0.30), lineWidth: 1)
+            )
+            .padding(.horizontal, 16)
         }
     }
 

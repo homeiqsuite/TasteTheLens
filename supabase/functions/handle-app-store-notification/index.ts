@@ -48,7 +48,6 @@ const PRODUCT_TIER_MAP: Record<string, string> = {
   "com.tastethelens.pro.monthly": "chefsTable", // legacy
   "com.tastethelens.pro.annual": "chefsTable",  // legacy
   "com.tastethelens.atelier.monthly": "atelier",
-  "com.tastethelens.autorefill.monthly": "free", // auto-refill has no tier
 };
 
 // Maps App Store product IDs → credits granted on renewal.
@@ -59,7 +58,6 @@ const PRODUCT_CREDIT_MAP: Record<string, number> = {
   "com.tastethelens.pro.monthly": 75,          // legacy
   "com.tastethelens.pro.annual": 900,          // legacy
   "com.tastethelens.atelier.monthly": 500,
-  "com.tastethelens.autorefill.monthly": 30,
 };
 
 // ─── JWT Decoding ────────────────────────────────────────────────────────────

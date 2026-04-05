@@ -22,11 +22,6 @@ final class StoreManager {
     static let tastePackId      = "com.tastethelens.credits.taste"       // 10 credits, $1.99
     static let cookPackId       = "com.tastethelens.credits.cook"        // 30 credits, $4.99
     static let feastPackId      = "com.tastethelens.credits.feast"       // 75 credits, $9.99
-    static let chefsStashPackId = "com.tastethelens.credits.chefstash"   // 175 credits, $19.99
-    static let cellarPackId     = "com.tastethelens.credits.cellar"      // 600 credits, $49.99
-
-    // Auto-refill subscription (convenience, no feature gates)
-    static let autoRefillMonthlyId = "com.tastethelens.autorefill.monthly"  // $3.99/mo → 30 credits
 
     // Legacy credit packs (kept for transaction handling of old purchases)
     static let legacyStarterPackId = "com.tastethelens.credits.starter"
@@ -46,8 +41,6 @@ final class StoreManager {
         tastePackId: 10,
         cookPackId: 30,
         feastPackId: 75,
-        chefsStashPackId: 175,
-        cellarPackId: 600,
         // Legacy packs (for replayed transactions)
         legacyStarterPackId: 10,
         legacyClassicPackId: 50,
@@ -56,14 +49,13 @@ final class StoreManager {
 
     /// Product IDs for the new credit packs (used for display in PaywallView)
     static let newCreditPackIds: Set<String> = [
-        tastePackId, cookPackId, feastPackId, chefsStashPackId, cellarPackId
+        tastePackId, cookPackId, feastPackId
     ]
 
-    /// All subscription IDs (legacy + auto-refill)
+    /// All subscription IDs (legacy only)
     private static let subscriptionIds: Set<String> = [
         legacyMonthlyId, legacyAnnualId,
         legacyChefsTableMonthly, legacyChefsTableAnnual, legacyAtelierMonthly,
-        autoRefillMonthlyId
     ]
 
     private static let allProductIds: Set<String> = {
@@ -93,10 +85,6 @@ final class StoreManager {
             .sorted { $0.price < $1.price }
     }
 
-    /// Auto-refill subscription product (if loaded)
-    var autoRefillProduct: Product? {
-        products.first { $0.id == Self.autoRefillMonthlyId }
-    }
 
     // MARK: - Load Products
 
@@ -132,11 +120,6 @@ final class StoreManager {
                 // Consumable credit pack
                 UsageTracker.shared.addPurchasedCredits(creditCount)
                 logger.info("Credit pack purchased: \(creditCount) credits from \(product.id)")
-            } else if product.id == Self.autoRefillMonthlyId {
-                // Auto-refill subscription — credits are granted by webhook on renewal.
-                // Mark as paid user for feature unlock.
-                EntitlementManager.shared.hasEverPurchased = true
-                logger.info("Auto-refill subscription purchased")
             } else if Self.subscriptionIds.contains(product.id) {
                 // Legacy subscription (shouldn't happen on new app, but handle gracefully)
                 EntitlementManager.shared.hasEverPurchased = true

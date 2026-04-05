@@ -29,8 +29,26 @@ final class AuthManager {
             // This throws if no stored session exists at all
             let session = try await supabase.auth.session
             do {
-                // This throws if the refresh token has expired
+                // This throws if the refresh token has expired or user was deleted
                 let refreshed = try await supabase.auth.refreshSession()
+
+                // Validate the user still exists in Supabase by hitting the users table.
+                // refreshSession() can succeed with a cached/valid refresh token even after
+                // the user has been deleted from auth.users in the dashboard.
+                let userId = refreshed.user.id.uuidString.lowercased()
+                let rows: [UserRow] = try await supabase.from("users")
+                    .select("id")
+                    .eq("id", value: userId)
+                    .execute()
+                    .value
+
+                guard !rows.isEmpty else {
+                    logger.warning("User \(refreshed.user.id) has a valid session but no profile — clearing session")
+                    try? await supabase.auth.signOut()
+                    currentUser = nil
+                    return
+                }
+
                 currentUser = refreshed.user
                 logger.info("Session restored and validated for user: \(refreshed.user.id)")
                 await PushNotificationService.shared.registerCurrentTokenIfNeeded()
@@ -51,8 +69,10 @@ final class AuthManager {
                     }
                 }
             } catch {
-                // Session exists but refresh failed — token is expired
-                logger.warning("Session refresh failed (expired token): \(error)")
+                // Session exists but refresh failed — user deleted or token expired.
+                // Clear the Keychain session so it doesn't persist across reinstalls.
+                logger.warning("Session refresh failed — clearing stored session: \(error)")
+                try? await supabase.auth.signOut()
                 sessionExpired = true
                 currentUser = nil
             }
@@ -120,6 +140,7 @@ final class AuthManager {
         logger.info("Signed up with email — user: \(response.user.id)")
         await syncDisplayName()
         await PushNotificationService.shared.requestPermission()
+        await PushNotificationService.shared.registerCurrentTokenIfNeeded()
     }
 
     func signInWithEmail(email: String, password: String) async throws {
@@ -207,19 +228,11 @@ final class AuthManager {
     // MARK: - Delete Account
 
     func deleteAccount() async throws {
-        guard let userId = currentUser?.id else { return }
+        guard currentUser != nil else { return }
 
-        // Delete user's recipes from Supabase
-        try await supabase.from("recipes")
-            .delete()
-            .eq("user_id", value: userId.uuidString)
-            .execute()
-
-        // Delete user profile row
-        try await supabase.from("users")
-            .delete()
-            .eq("id", value: userId.uuidString)
-            .execute()
+        // Call edge function which deletes recipes, profile, AND the auth.users row
+        // (requires service_role — cannot be done client-side)
+        try await supabase.functions.invoke("delete-account")
 
         // Clean up all client-side state before signing out
         UsageTracker.shared.resetForSignOut()
@@ -286,6 +299,10 @@ enum AuthError: LocalizedError {
             return "Could not retrieve Apple Sign-In credentials."
         }
     }
+}
+
+private struct UserRow: Decodable {
+    let id: String
 }
 
 private extension String {

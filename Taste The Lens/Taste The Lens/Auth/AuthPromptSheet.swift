@@ -7,6 +7,23 @@ struct AuthPromptSheet: View {
     private let gold = Theme.gold
     private let authManager = AuthManager.shared
 
+    let icon: String
+    let title: String
+    let subtitle: String
+    let buttonLabel: String
+
+    init(
+        icon: String = "icloud.and.arrow.up",
+        title: String = "Save to the Cloud?",
+        subtitle: String = "Sign in to sync your recipes across devices and never lose a dish.",
+        buttonLabel: String = "Sign In to Save"
+    ) {
+        self.icon = icon
+        self.title = title
+        self.subtitle = subtitle
+        self.buttonLabel = buttonLabel
+    }
+
     var body: some View {
         VStack(spacing: 20) {
             Spacer().frame(height: 12)
@@ -18,15 +35,15 @@ struct AuthPromptSheet: View {
 
             Spacer().frame(height: 8)
 
-            Image(systemName: "icloud.and.arrow.up")
+            Image(systemName: icon)
                 .font(.system(size: 36))
                 .foregroundStyle(gold)
 
-            Text("Save to the Cloud?")
+            Text(title)
                 .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(Theme.darkTextPrimary)
 
-            Text("Sign in to sync your recipes across devices and never lose a dish.")
+            Text(subtitle)
                 .font(.system(size: 14))
                 .foregroundStyle(Theme.darkTextTertiary)
                 .multilineTextAlignment(.center)
@@ -37,7 +54,7 @@ struct AuthPromptSheet: View {
             Button {
                 showSignIn = true
             } label: {
-                Text("Sign In to Save")
+                Text(buttonLabel)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.black)
                     .frame(maxWidth: .infinity)

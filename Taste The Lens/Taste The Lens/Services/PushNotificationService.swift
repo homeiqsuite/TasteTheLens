@@ -2,6 +2,7 @@ import Foundation
 import UserNotifications
 import UIKit
 import Supabase
+import FirebaseMessaging
 import os
 
 private let logger = makeLogger(category: "PushNotifications")
@@ -75,7 +76,8 @@ final class PushNotificationService {
     /// saved to currentFCMToken/UserDefaults but never upserted to Supabase.
     /// Call this after session restore or sign-in to complete registration.
     func registerCurrentTokenIfNeeded() async {
-        guard let token = currentFCMToken else {
+        let token = currentFCMToken ?? Messaging.messaging().fcmToken
+        guard let token else {
             logger.info("No cached FCM token to register")
             return
         }

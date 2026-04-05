@@ -50,36 +50,6 @@
       "type" : "Consumable"
     },
     {
-      "displayPrice" : "19.99",
-      "familyShareable" : false,
-      "internalID" : "C013",
-      "localizations" : [
-        {
-          "description" : "175 recipe credits. Credits never expire. Best value per credit.",
-          "displayName" : "Chef's Stash",
-          "locale" : "en_US"
-        }
-      ],
-      "productID" : "com.tastethelens.credits.chefstash",
-      "referenceName" : "Chef's Stash — 175 Credits",
-      "type" : "Consumable"
-    },
-    {
-      "displayPrice" : "49.99",
-      "familyShareable" : false,
-      "internalID" : "C014",
-      "localizations" : [
-        {
-          "description" : "600 recipe credits. Credits never expire. For teams and power creators.",
-          "displayName" : "Cellar",
-          "locale" : "en_US"
-        }
-      ],
-      "productID" : "com.tastethelens.credits.cellar",
-      "referenceName" : "Cellar — 600 Credits",
-      "type" : "Consumable"
-    },
-    {
       "displayPrice" : "1.99",
       "familyShareable" : false,
       "internalID" : "C001",
@@ -188,31 +158,6 @@
       ],
       "name" : "Taste The Lens Subscriptions",
       "subscriptions" : [
-        {
-          "adHocOffers" : [
-
-          ],
-          "codeOffers" : [
-
-          ],
-          "displayPrice" : "3.99",
-          "familyShareable" : false,
-          "groupNumber" : 1,
-          "internalID" : "S010",
-          "introductoryOffer" : null,
-          "localizations" : [
-            {
-              "description" : "30 credits auto-loaded every month. Never run out. Cancel anytime.",
-              "displayName" : "Auto-Refill",
-              "locale" : "en_US"
-            }
-          ],
-          "productID" : "com.tastethelens.autorefill.monthly",
-          "recurringSubscriptionPeriod" : "P1M",
-          "referenceName" : "Auto-Refill Monthly",
-          "subscriptionGroupID" : "SG001",
-          "type" : "RecurringSubscription"
-        },
         {
           "adHocOffers" : [
 

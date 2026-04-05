@@ -93,6 +93,55 @@ enum ChefPersonality: String, CaseIterable, Identifiable {
         }
     }
 
+    // MARK: - Best For
+
+    struct BestForItem: Identifiable {
+        let id = UUID()
+        let icon: String
+        let text: String
+    }
+
+    var bestFor: [BestForItem] {
+        switch self {
+        case .beginner:
+            return [
+                BestForItem(icon: "sparkles", text: "Simple recipes"),
+                BestForItem(icon: "cart", text: "Everyday ingredients"),
+                BestForItem(icon: "fork.knife", text: "Minimal equipment"),
+            ]
+        case .defaultChef:
+            return [
+                BestForItem(icon: "sparkles", text: "Advanced techniques"),
+                BestForItem(icon: "globe", text: "Creative & diverse cuisines"),
+                BestForItem(icon: "star", text: "Flavor-packed dishes"),
+            ]
+        case .dooby:
+            return [
+                BestForItem(icon: "moon.stars", text: "Late-night cravings"),
+                BestForItem(icon: "flame", text: "Loaded comfort food"),
+                BestForItem(icon: "face.smiling", text: "Fun indulgent mashups"),
+            ]
+        case .grizzly:
+            return [
+                BestForItem(icon: "mountain.2", text: "Outdoor & game cooking"),
+                BestForItem(icon: "leaf", text: "Field-to-table philosophy"),
+                BestForItem(icon: "flame", text: "Smoking & open fire"),
+            ]
+        case .familyChef:
+            return [
+                BestForItem(icon: "figure.2.and.child.holdinghands", text: "Cooking with kids"),
+                BestForItem(icon: "heart", text: "Family-friendly recipes"),
+                BestForItem(icon: "hand.thumbsup", text: "Safe tasks for little chefs"),
+            ]
+        case .custom:
+            return [
+                BestForItem(icon: "slider.horizontal.3", text: "Fully customizable"),
+                BestForItem(icon: "globe", text: "Choose your cuisines"),
+                BestForItem(icon: "person", text: "Pick your personality"),
+            ]
+        }
+    }
+
     // MARK: - System Prompt
 
     var systemPrompt: String {

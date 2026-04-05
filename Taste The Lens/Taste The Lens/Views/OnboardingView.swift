@@ -34,7 +34,7 @@ struct OnboardingView: View {
 
     // Page 2 — Chef animation states
     @State private var chefHeaderVisible = false
-    @State private var chefCardVisible: [Bool] = [false, false, false, false]
+    @State private var chefCardVisible: [Bool] = [false, false, false, false, false]
     @State private var chefCTAVisible = false
     @State private var avatarFloat: CGFloat = 0
 
@@ -167,7 +167,7 @@ struct OnboardingView: View {
         step2IconScale = 1.0
         step3IconScale = 1.0
         chefHeaderVisible = false
-        chefCardVisible = [false, false, false, false]
+        chefCardVisible = [false, false, false, false, false]
         chefCTAVisible = false
         prefsHeaderVisible = false
         prefsSkillVisible = false
@@ -259,13 +259,13 @@ struct OnboardingView: View {
     private func triggerChefAnimations() {
         guard !reduceMotion else {
             chefHeaderVisible = true
-            chefCardVisible = [true, true, true, true]
+            chefCardVisible = [true, true, true, true, true]
             chefCTAVisible = true
             return
         }
 
         withAnimation(.easeOut(duration: 0.5)) { chefHeaderVisible = true }
-        for i in 0..<4 {
+        for i in 0..<5 {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3 + Double(i) * 0.12) {
                 withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
                     chefCardVisible[i] = true

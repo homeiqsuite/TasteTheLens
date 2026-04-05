@@ -403,25 +403,7 @@ struct ContentView: View {
     }
 
     private var cameraChefSheet: some View {
-        NavigationStack {
-            ZStack {
-                Theme.darkBg.ignoresSafeArea()
-
-                ChefSelectionView(context: .forThisRecipe)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 24)
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Theme.darkBg, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { showChefPicker = false }
-                        .foregroundStyle(Theme.gold)
-                }
-            }
-            .presentationDetents([.medium])
-        }
+        ChefModeView(context: .forThisRecipe)
     }
 
     private func budgetOption(_ amount: Double?, label: String) -> some View {
@@ -583,6 +565,12 @@ private struct PrivacyNoticeSheet: View {
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 24)
 
+                        Text("Recipes are AI-generated for creative inspiration only. Always use your own judgment when preparing and tasting food. Try any recipe at your own risk.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.darkTextTertiary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 24)
+
                         // Expandable details
                         VStack(alignment: .leading, spacing: 12) {
                             Button {
@@ -606,6 +594,7 @@ private struct PrivacyNoticeSheet: View {
                                     privacyBullet("Photos are not stored permanently on any server")
                                     privacyBullet("No photo data is shared with third parties for advertising")
                                     privacyBullet("Accepting this notice is required to process your photo")
+                                    privacyBullet("Recipes are AI-generated for inspiration only — try them at your own risk")
                                 }
                                 .transition(.opacity.combined(with: .move(edge: .top)))
                             }

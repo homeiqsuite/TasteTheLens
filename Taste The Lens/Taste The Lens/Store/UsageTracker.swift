@@ -124,9 +124,9 @@ final class UsageTracker {
                 defer { isSyncingCredits = false }
                 do {
                     guard let userId = AuthManager.shared.currentUser?.id.uuidString else { return }
-                    let params: [String: String] = [
-                        "user_id_param": userId,
-                        "credit_count": String(count)
+                    let params: [String: AnyJSON] = [
+                        "user_id_param": .string(userId),
+                        "credit_count": .integer(count)
                     ]
                     try await SupabaseManager.shared.client
                         .rpc("add_purchased_credits", params: params)
