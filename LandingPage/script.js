@@ -240,25 +240,6 @@ function initSmoothScroll() {
     });
 }
 
-// --- Community Impact Counter ---
-async function initImpactCounter() {
-    try {
-        const response = await fetch(`${EDGE_FUNCTION_BASE}/community-stats`);
-        if (!response.ok) return;
-        const data = await response.json();
-
-        if (!data) return;
-
-        const mealsEl = document.getElementById('meals-counter');
-        const recipesEl = document.getElementById('recipes-counter');
-
-        if (mealsEl) mealsEl.textContent = data.total_meals_donated.toLocaleString();
-        if (recipesEl) recipesEl.textContent = data.total_generations.toLocaleString();
-    } catch (err) {
-        // Silently fail — counter just shows placeholder
-    }
-}
-
 // --- FAQ Accordion ---
 function initFAQ() {
     document.querySelectorAll('.faq-question').forEach(button => {
@@ -289,6 +270,5 @@ document.addEventListener('DOMContentLoaded', () => {
     initWaitlistForm();
     initNavScroll();
     initSmoothScroll();
-    initImpactCounter();
     initFAQ();
 });

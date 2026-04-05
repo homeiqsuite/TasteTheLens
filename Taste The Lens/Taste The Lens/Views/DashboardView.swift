@@ -58,8 +58,7 @@ struct DashboardView: View {
 
     private var creditBadgeText: String {
         let credits = UsageTracker.shared.totalAvailableCredits
-        let approxRecipes = max(credits / 5, 0)
-        return "\(credits) credits · ~\(approxRecipes) recipes left"
+        return "\(credits) credits · ~\(credits) recipes left"
     }
 
     var body: some View {

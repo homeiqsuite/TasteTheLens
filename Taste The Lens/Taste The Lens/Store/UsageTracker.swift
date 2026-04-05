@@ -111,33 +111,57 @@ final class UsageTracker {
 
     // MARK: - Credit Operations
 
-    /// Add purchased credits (from credit pack purchase)
-    func addPurchasedCredits(_ count: Int) {
-        // Optimistic local update for immediate UI feedback
-        purchasedCredits += count
+    /// Add purchased credits by submitting the StoreKit-signed transaction JWS to the
+    /// server. The credit amount is determined server-side — the client never supplies it.
+    func addPurchasedCredits(transactionJWS: String) async {
         EntitlementManager.shared.hasEverPurchased = true
-        logger.info("Added \(count) purchased credits — total: \(self.purchasedCredits)")
 
-        if AuthManager.shared.isAuthenticated {
-            isSyncingCredits = true
-            Task {
-                defer { isSyncingCredits = false }
-                do {
-                    guard let userId = AuthManager.shared.currentUser?.id.uuidString else { return }
-                    let params: [String: AnyJSON] = [
-                        "user_id_param": .string(userId),
-                        "credit_count": .integer(count)
-                    ]
-                    try await SupabaseManager.shared.client
-                        .rpc("add_purchased_credits", params: params)
-                        .execute()
-                    logger.info("Remote purchased credits updated")
-                    // Sync back from server to ensure local cache matches
-                    await syncCreditsFromServer()
-                } catch {
-                    logger.warning("Remote credit update failed: \(error)")
-                }
-            }
+        guard AuthManager.shared.isAuthenticated else {
+            logger.warning("Cannot grant credits: user not authenticated")
+            return
+        }
+
+        isSyncingCredits = true
+        defer { isSyncingCredits = false }
+
+        do {
+            try await invokeGrantCredits(transactionJWS: transactionJWS)
+            logger.info("Purchase credits granted via server")
+        } catch {
+            logger.warning("grant-purchase-credits failed: \(error) — syncing from server to reconcile")
+        }
+
+        // Always sync so local state matches server truth
+        await syncCreditsFromServer()
+    }
+
+    /// Calls the grant-purchase-credits edge function using the same anon-key +
+    /// x-user-token pattern as ImageAnalysisPipeline.invokeEdgeFunction.
+    private func invokeGrantCredits(transactionJWS: String) async throws {
+        let baseURL = AppConfig.supabaseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard let url = URL(string: "\(baseURL)/functions/v1/grant-purchase-credits") else {
+            throw URLError(.badURL)
+        }
+
+        struct RequestBody: Encodable { let transaction_jws: String }
+        let bodyData = try JSONEncoder().encode(RequestBody(transaction_jws: transactionJWS))
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(AppConfig.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(AppConfig.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        if let session = try? await SupabaseManager.shared.client.auth.session {
+            request.setValue(session.accessToken, forHTTPHeaderField: "x-user-token")
+        }
+        request.httpBody = bodyData
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            let body = String(data: data, encoding: .utf8) ?? "no body"
+            logger.error("grant-purchase-credits error: \(body)")
+            throw URLError(.badServerResponse)
         }
     }
 

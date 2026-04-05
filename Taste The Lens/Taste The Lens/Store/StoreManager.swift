@@ -71,6 +71,7 @@ final class StoreManager {
         updateListenerTask = listenForTransactions()
         Task { await loadProducts() }
         Task { await checkLegacySubscription() }
+        Task { await finishUnfinishedTransactions() }
     }
 
     deinit {
@@ -114,12 +115,13 @@ final class StoreManager {
 
         switch result {
         case .success(let verification):
+            let transactionJWS = verification.jwsRepresentation
             let transaction = try checkVerified(verification)
 
-            if let creditCount = Self.creditPackAmounts[product.id] {
-                // Consumable credit pack
-                UsageTracker.shared.addPurchasedCredits(creditCount)
-                logger.info("Credit pack purchased: \(creditCount) credits from \(product.id)")
+            if Self.creditPackAmounts[product.id] != nil {
+                // Consumable credit pack — credit count is determined server-side
+                await UsageTracker.shared.addPurchasedCredits(transactionJWS: transactionJWS)
+                logger.info("Credit pack purchased: \(product.id)")
             } else if Self.subscriptionIds.contains(product.id) {
                 // Legacy subscription (shouldn't happen on new app, but handle gracefully)
                 EntitlementManager.shared.hasEverPurchased = true
@@ -171,6 +173,23 @@ final class StoreManager {
         hasActiveLegacySubscription = foundLegacy
         hasCheckedStatus = true
         logger.info("Legacy subscription check: \(foundLegacy ? "active" : "none")")
+    }
+
+    // MARK: - Unfinished Transactions
+
+    /// Finish any unfinished consumable transactions on startup.
+    /// Prevents StoreKit from auto-completing a subsequent purchase() call
+    /// with a stale transaction instead of showing the payment sheet.
+    private func finishUnfinishedTransactions() async {
+        for await result in Transaction.unfinished {
+            if case .verified(let transaction) = result {
+                if Self.creditPackAmounts[transaction.productID] != nil {
+                    await UsageTracker.shared.syncCreditsFromServer()
+                    logger.info("Finished stale consumable transaction: \(transaction.productID)")
+                }
+                await transaction.finish()
+            }
+        }
     }
 
     // MARK: - Transaction Listener
