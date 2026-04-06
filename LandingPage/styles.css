@@ -1152,126 +1152,6 @@ img {
 }
 
 /* ============================================================
-   PRICING
-   ============================================================ */
-.pricing-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 20px;
-    max-width: 960px;
-    margin: 0 auto;
-}
-
-.pricing-card {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-    padding: 32px 24px;
-    position: relative;
-}
-
-.pricing-featured {
-    border-color: var(--gold);
-    transform: scale(1.03);
-}
-
-.pricing-badge {
-    position: absolute;
-    top: -12px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--gold);
-    color: var(--bg);
-    font-family: var(--font-sans);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    padding: 4px 16px;
-    border-radius: 20px;
-}
-
-.pricing-tier {
-    font-family: var(--font-serif);
-    font-size: 22px;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin-bottom: 8px;
-}
-
-.pricing-price {
-    font-family: var(--font-serif);
-    font-size: 40px;
-    font-weight: 900;
-    color: var(--gold);
-    line-height: 1;
-}
-
-.pricing-period {
-    font-size: 14px;
-    color: var(--text-muted);
-    margin-bottom: 20px;
-}
-
-.pricing-features {
-    list-style: none;
-    text-align: left;
-    width: 100%;
-    margin-bottom: 24px;
-    flex-grow: 1;
-}
-
-.pricing-features li {
-    font-size: 14px;
-    color: var(--text-secondary);
-    padding: 6px 0;
-    padding-left: 22px;
-    position: relative;
-}
-
-.pricing-features li::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 14px;
-    height: 14px;
-    background: var(--gold);
-    opacity: 0.3;
-    border-radius: 50%;
-}
-
-.pricing-cta {
-    display: inline-block;
-    font-family: var(--font-sans);
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text-primary);
-    border: 1px solid var(--card-border);
-    padding: 10px 28px;
-    border-radius: 30px;
-    transition: all 0.3s ease;
-}
-
-.pricing-cta:hover {
-    border-color: var(--gold);
-    color: var(--gold);
-}
-
-.pricing-cta--featured {
-    background: var(--gold);
-    color: var(--bg);
-    border-color: var(--gold);
-}
-
-.pricing-cta--featured:hover {
-    background: var(--gold-dim);
-    color: var(--bg);
-}
-
-/* ============================================================
    FAQ
    ============================================================ */
 .faq-list {
@@ -1358,9 +1238,6 @@ img {
         flex-wrap: nowrap;
     }
 
-    .pricing-grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
 }
 
 /* Desktop (1024px+) */

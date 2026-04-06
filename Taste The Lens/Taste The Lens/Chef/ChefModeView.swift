@@ -188,11 +188,10 @@ struct ChefModeView: View {
                 HapticManager.light()
                 showPaywall = true
             } else if chef == .custom {
-                if !CustomChefConfig.isConfigured {
-                    HapticManager.light()
+                HapticManager.light()
+                if !CustomChefConfig.isConfigured || isSelected {
                     showCustomChefEditor = true
                 } else {
-                    HapticManager.light()
                     withAnimation(.easeInOut(duration: 0.2)) {
                         selectedChef = chef.rawValue
                     }
@@ -222,6 +221,10 @@ struct ChefModeView: View {
                         Image(systemName: "lock.fill")
                             .font(.system(size: 14))
                             .foregroundStyle(Theme.darkTextHint)
+                    } else if isSelected && chef == .custom && CustomChefConfig.isConfigured {
+                        Image(systemName: "pencil.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(chefTheme.accent)
                     } else if isSelected {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 22))

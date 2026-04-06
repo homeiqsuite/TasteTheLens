@@ -73,17 +73,19 @@
 
             <h3>2.1 Information You Provide</h3>
             <ul>
-                <li><strong>Account information:</strong> Email address when you join our waitlist or create an account.</li>
-                <li><strong>Photos:</strong> Images you capture or upload for recipe generation. Photos are transmitted to our AI processing services and are not permanently stored on our servers.</li>
-                <li><strong>Payment information:</strong> All purchases are processed securely through Apple's In-App Purchase system. We do not collect, process, or store credit card numbers, bank account details, or other financial information.</li>
+                <li><strong>Account information:</strong> Email address and full name when you join our waitlist or create an account (via Apple Sign-In or email/password).</li>
+                <li><strong>Photos:</strong> Images you capture for recipe generation. Photos are transmitted to our backend services for processing. If you are signed in, your inspiration photos and generated dish images are stored in your account on our servers.</li>
+                <li><strong>Preferences:</strong> Dietary restrictions, cooking skill level, and chef personality selection — used to personalize recipe generation and synced to your account when signed in.</li>
+                <li><strong>Payment information:</strong> All purchases are processed securely through Apple's In-App Purchase system. We receive a cryptographically signed transaction receipt from Apple solely to validate and grant your purchased credits. We do not collect, process, or store credit card numbers, bank account details, or other financial information.</li>
                 <li><strong>Communications:</strong> Any correspondence you send to us (support requests, feedback).</li>
             </ul>
 
             <h3>2.2 Information Collected Automatically</h3>
             <ul>
-                <li><strong>Usage data:</strong> Features used, number of recipes generated, app interactions, session duration, and crash reports.</li>
+                <li><strong>Usage data:</strong> Features used, number of recipes generated, app interactions, and recipe generation events (including provider used and cost metrics). This data is linked to your account when you are signed in.</li>
                 <li><strong>Device information:</strong> Device model, operating system version, app version, language settings, and time zone.</li>
-                <li><strong>Identifiers:</strong> Anonymous device identifiers for analytics purposes. We do not use Apple's IDFA or perform cross-app tracking.</li>
+                <li><strong>Push notification identifiers:</strong> Your device's APNs token and Firebase Cloud Messaging (FCM) token, used solely to deliver push notifications. Linked to your account when signed in.</li>
+                <li><strong>Identifiers:</strong> We do not use Apple's IDFA or perform cross-app tracking.</li>
             </ul>
 
             <h3>2.3 Information We Do NOT Collect</h3>
@@ -121,8 +123,8 @@
                         <td>Legitimate interest — improving and securing the Service</td>
                     </tr>
                     <tr>
-                        <td>Crash reports</td>
-                        <td>Legitimate interest — maintaining Service stability</td>
+                        <td>Preferences (dietary, skill level, chef)</td>
+                        <td>Consent — you actively set these in the app</td>
                     </tr>
                 </tbody>
             </table>
@@ -133,7 +135,7 @@
             <ul>
                 <li><strong>Recipe generation:</strong> Process your photos through AI services to generate recipes and food photography.</li>
                 <li><strong>Service delivery:</strong> Manage your account, process purchases, and deliver credits.</li>
-                <li><strong>Service improvement:</strong> Analyze aggregated, anonymized usage data to improve features and performance.</li>
+                <li><strong>Service improvement:</strong> Analyze usage data (recipe generation events, provider performance, cost metrics) to improve features and performance. When you are signed in, this data is associated with your account.</li>
                 <li><strong>Communications:</strong> Send service-related notices (account confirmations, security alerts, policy changes). We do not send marketing emails without your explicit consent.</li>
                 <li><strong>Safety &amp; security:</strong> Detect and prevent fraud, abuse, and security incidents.</li>
             </ul>
@@ -144,16 +146,17 @@
 
             <h3>5.1 How Photos Are Processed</h3>
             <ul>
-                <li>Your photo is sent over an encrypted connection (TLS 1.2+) to Google's Gemini API, which analyzes visual elements (color, texture, composition, mood, subject matter) and generates a recipe in structured format.</li>
-                <li>A text description of the generated dish is sent to Fal.ai's image generation service (Flux Pro) to create an AI food photograph.</li>
-                <li>Both services process your data in real time and return results to your device.</li>
+                <li>Your photo is sent over an encrypted connection (TLS 1.2+) to our backend (Supabase), which securely proxies it to Google's Gemini API. Gemini analyzes visual elements (color, texture, composition, mood, subject matter) and generates a recipe in structured format. Your photo is never sent directly from the app to Google.</li>
+                <li>A text description of the generated dish is sent from our backend to an image generation service (defaulting to Google Imagen 4; Fal.ai Flux Pro is available as an alternative) to create a food photograph. No photo is sent to the image generation step — only a text prompt.</li>
+                <li>All AI services process data in real time and return results through our backend to your device.</li>
             </ul>
 
             <h3>5.2 Photo Retention</h3>
             <ul>
-                <li>Photos are <strong>not permanently stored</strong> on our servers or on third-party AI servers beyond the generation session.</li>
-                <li>Google and Fal.ai may retain data temporarily for abuse monitoring per their own policies (see Section 6).</li>
-                <li>Generated recipes and food images are stored <strong>locally on your device</strong> using Apple's SwiftData framework — not on our servers.</li>
+                <li>If you are using the app as a <strong>guest (not signed in)</strong>, photos are processed in real time and not stored on our servers beyond the generation session.</li>
+                <li>If you are <strong>signed in</strong>, your inspiration photos and generated dish images are stored in your account on our servers (Supabase Storage) so your recipe collection is available across devices.</li>
+                <li>Third-party AI providers (Google, Fal.ai) may retain data temporarily for abuse monitoring per their own policies (see Section 6).</li>
+                <li>Generated recipes and food images are also cached <strong>locally on your device</strong> using Apple's SwiftData framework for offline access.</li>
             </ul>
 
             <h3>5.3 AI Training</h3>
@@ -178,24 +181,34 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td>Google Gemini API</td>
-                        <td>Image analysis &amp; recipe generation</td>
-                        <td>Photos (transmitted, not stored)</td>
-                    </tr>
-                    <tr>
-                        <td>Fal.ai (Flux Pro)</td>
-                        <td>AI food image generation</td>
-                        <td>Text prompts (no photos)</td>
-                    </tr>
-                    <tr>
                         <td>Supabase</td>
-                        <td>Backend services, waitlist, usage tracking</td>
-                        <td>Email, anonymized usage data</td>
+                        <td>Backend, authentication, data storage, and edge functions</td>
+                        <td>Email, full name, recipes, photos (if signed in), dietary preferences, device tokens, analytics events, purchase receipts — linked to your account</td>
+                    </tr>
+                    <tr>
+                        <td>Google Gemini API</td>
+                        <td>Image analysis &amp; recipe generation (via Supabase, server-to-server)</td>
+                        <td>Photos (proxied via our backend, not sent directly from device)</td>
+                    </tr>
+                    <tr>
+                        <td>Google Imagen 4</td>
+                        <td>Food image generation — default provider (via Supabase, server-to-server)</td>
+                        <td>Text prompts only (no photos)</td>
+                    </tr>
+                    <tr>
+                        <td>Fal.ai (Flux Pro / Schnell)</td>
+                        <td>Alternative food image generation (via Supabase, server-to-server)</td>
+                        <td>Text prompts only (no photos)</td>
+                    </tr>
+                    <tr>
+                        <td>Firebase (Google)</td>
+                        <td>Push notifications (FCM)</td>
+                        <td>Device APNs token; FCM token linked to your account when signed in</td>
                     </tr>
                     <tr>
                         <td>Apple In-App Purchase</td>
                         <td>Payment processing</td>
-                        <td>Managed entirely by Apple</td>
+                        <td>Managed entirely by Apple; we receive a signed receipt only</td>
                     </tr>
                     <tr>
                         <td>Google Fonts</td>
@@ -235,12 +248,16 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td>Photos submitted for processing</td>
+                        <td>Photos submitted for processing (guest users)</td>
                         <td>Not stored — processed in real time and discarded</td>
                     </tr>
                     <tr>
+                        <td>Photos submitted for processing (signed-in users)</td>
+                        <td>Stored in your account on our servers; deleted when you delete the recipe or your account</td>
+                    </tr>
+                    <tr>
                         <td>Generated recipes &amp; food images</td>
-                        <td>Stored locally on your device until you delete them</td>
+                        <td>Cached locally on your device until you delete them; also stored in your account on our servers when signed in</td>
                     </tr>
                     <tr>
                         <td>Account data (email)</td>
@@ -270,7 +287,7 @@
             <p>We implement appropriate technical and organizational measures to protect your information:</p>
             <ul>
                 <li><strong>Encryption in transit:</strong> All data transmitted between your device and our services uses TLS 1.2 or higher.</li>
-                <li><strong>Local-first architecture:</strong> Recipes and images are stored on your device, not on our servers.</li>
+                <li><strong>On-device caching:</strong> Recipes and images are cached locally on your device for fast, offline access. Signed-in users also have their data synced to our secure backend so it's available across devices.</li>
                 <li><strong>Secure API key management:</strong> API credentials are stored securely and never exposed in client-side code.</li>
                 <li><strong>Access controls:</strong> Access to backend systems is restricted to authorized personnel on a need-to-know basis.</li>
             </ul>

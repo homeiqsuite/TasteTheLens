@@ -75,6 +75,23 @@ struct CompletionStep: View {
                     }
 
 
+                    // Share Recipe (deep link)
+                    Button {
+                        shareRecipeLink()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "link")
+                                .font(.system(size: 14))
+                            Text("Share Recipe")
+                                .font(.system(size: 15, weight: .semibold))
+                        }
+                        .foregroundStyle(Theme.textPrimary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(Theme.buttonBg)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    }
+
                     // Shopping List
                     Button {
                         HapticManager.medium()
@@ -256,6 +273,12 @@ struct CompletionStep: View {
                 "inspirationImageData": recipe.inspirationImageData
             ]
         )
+    }
+
+    private func shareRecipeLink() {
+        guard let url = DeepLinkHandler.url(for: recipe) else { return }
+        HapticManager.medium()
+        presentShareSheet(items: [recipe.dishName, url])
     }
 
     private func shareShoppingList() {

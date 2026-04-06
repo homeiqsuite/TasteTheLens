@@ -75,12 +75,10 @@ struct ChefSelectionView: View {
                 HapticManager.light()
                 showPaywall = true
             } else if chef == .custom {
-                // Custom chef: always open editor (to create or edit)
-                if !CustomChefConfig.isConfigured {
-                    HapticManager.light()
+                HapticManager.light()
+                if !CustomChefConfig.isConfigured || isSelected {
                     showCustomChefEditor = true
                 } else {
-                    HapticManager.light()
                     withAnimation(.easeInOut(duration: 0.2)) {
                         selectedChef = chef.rawValue
                     }
