@@ -1,7 +1,7 @@
 import Foundation
 
 enum DeepLink {
-    case recipe(UUID)
+    case recipe(String)
     case challenge(String)
     case tastingMenu(String)
     case resetCallback(String)
@@ -15,15 +15,15 @@ struct DeepLinkHandler {
         let pathComponents = url.pathComponents.filter { $0 != "/" }
 
         if url.host == "recipe" {
-            // tastethelens://recipe/{uuid}
-            if let idString = pathComponents.first, let id = UUID(uuidString: idString) {
-                return .recipe(id)
+            // tastethelens://recipe/{remoteId}
+            if let idString = pathComponents.first, !idString.isEmpty {
+                return .recipe(idString)
             }
-            // Also handle tastethelens://recipe?id={uuid}
+            // Also handle tastethelens://recipe?id={remoteId}
             if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
                let idString = components.queryItems?.first(where: { $0.name == "id" })?.value,
-               let id = UUID(uuidString: idString) {
-                return .recipe(id)
+               !idString.isEmpty {
+                return .recipe(idString)
             }
         }
 
@@ -68,8 +68,9 @@ struct DeepLinkHandler {
         URL(string: "tastethelens://menu/\(code)")
     }
 
-    /// Generate a shareable URL for a recipe
+    /// Generate a shareable URL for a recipe (requires remoteId — recipe must be synced first)
     static func url(for recipe: Recipe) -> URL? {
-        URL(string: "tastethelens://recipe/\(recipe.id.uuidString)")
+        guard let remoteId = recipe.remoteId else { return nil }
+        return URL(string: "tastethelens://recipe/\(remoteId)")
     }
 }

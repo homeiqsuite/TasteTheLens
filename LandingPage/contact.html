@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Contact Us — Taste The Lens</title>
+    <meta name="description" content="Get in touch with the Taste The Lens team. We're here to help with support, feedback, and general inquiries.">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Source+Sans+3:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+
+    <!-- Favicon -->
+    <link rel="icon" href="logo.png">
+
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .contact-page { padding: 140px 0 100px; position: relative; z-index: var(--z-content); }
+
+        .contact-page h1 {
+            font-family: var(--font-serif);
+            font-size: clamp(2rem, 4vw, 3rem);
+            color: var(--gold);
+            margin-bottom: 16px;
+        }
+
+        .contact-page .contact-subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            line-height: 1.7;
+            max-width: 560px;
+            margin-bottom: 64px;
+        }
+
+        .legal-back {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            margin-bottom: 32px;
+            transition: color 0.2s;
+            text-decoration: none;
+        }
+        .legal-back:hover { color: var(--gold); }
+
+        /* Contact cards grid */
+        .contact-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 24px;
+            margin-bottom: 64px;
+        }
+
+        .contact-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 32px 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            transition: border-color 0.2s, transform 0.2s;
+        }
+        .contact-card:hover {
+            border-color: rgba(232, 168, 50, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .contact-card-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: rgba(232, 168, 50, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--gold);
+            flex-shrink: 0;
+        }
+
+        .contact-card-title {
+            font-family: var(--font-serif);
+            font-size: 1.2rem;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .contact-card-desc {
+            color: var(--text-muted);
+            font-size: 0.92rem;
+            line-height: 1.6;
+            margin: 0;
+            flex: 1;
+        }
+
+        .contact-card-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--gold);
+            font-size: 0.95rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: color 0.2s;
+            margin-top: 4px;
+        }
+        .contact-card-link:hover { color: var(--purple-bright); }
+
+        /* Response time note */
+        .contact-note {
+            background: rgba(232, 168, 50, 0.06);
+            border: 1px solid rgba(232, 168, 50, 0.2);
+            border-radius: 12px;
+            padding: 20px 24px;
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+        .contact-note svg { color: var(--gold); flex-shrink: 0; margin-top: 2px; }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="nav" id="nav">
+        <div class="nav-inner">
+            <a href="/" class="nav-brand-group">
+                <img src="logo.png" alt="Taste The Lens" class="nav-logo">
+                <span class="nav-brand">Taste The Lens</span>
+            </a>
+            <a href="/#waitlist" class="nav-cta">Join Waitlist</a>
+        </div>
+    </nav>
+
+    <main class="contact-page">
+        <div class="container" style="max-width: 860px;">
+            <a href="/" class="legal-back">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13 8H3M7 4L3 8l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Back to Home
+            </a>
+
+            <h1>Contact Us</h1>
+            <p class="contact-subtitle">Have a question, found a bug, or just want to say hello? We'd love to hear from you. Reach out and we'll get back to you as soon as we can.</p>
+
+            <div class="contact-grid">
+                <!-- General Support -->
+                <div class="contact-card">
+                    <div class="contact-card-icon">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <h2 class="contact-card-title">General Support</h2>
+                    <p class="contact-card-desc">Questions about the app, your account, subscriptions, or anything else? We're happy to help.</p>
+                    <a href="mailto:tastethelens@outlook.com" class="contact-card-link">
+                        tastethelens@outlook.com
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </a>
+                </div>
+
+                <!-- Bug Reports -->
+                <div class="contact-card">
+                    <div class="contact-card-icon">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" fill="currentColor" opacity=".15"/><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <h2 class="contact-card-title">Bug Reports</h2>
+                    <p class="contact-card-desc">Something not working as expected? Let us know what happened and we'll investigate right away.</p>
+                    <a href="mailto:tastethelens@outlook.com?subject=Bug%20Report" class="contact-card-link">
+                        Report a bug
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </a>
+                </div>
+
+                <!-- Privacy & Data -->
+                <div class="contact-card">
+                    <div class="contact-card-icon">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <h2 class="contact-card-title">Privacy & Data</h2>
+                    <p class="contact-card-desc">Requests to access, update, or delete your personal data, or any privacy-related questions.</p>
+                    <a href="mailto:tastethelens@outlook.com?subject=Privacy%20Request" class="contact-card-link">
+                        Submit a request
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </a>
+                </div>
+            </div>
+
+            <div class="contact-note">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/><path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                <span>We typically respond within <strong style="color: var(--text-primary);">1–2 business days</strong>. For the fastest help, include your device model and iOS version when reporting an issue.</span>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container footer-inner">
+            <p class="footer-brand">Taste The Lens</p>
+            <p class="footer-copy">&copy; 2026 Taste The Lens. All rights reserved.</p>
+            <div class="footer-links">
+                <a href="privacy.html" class="footer-link">Privacy</a>
+                <a href="terms.html" class="footer-link">Terms</a>
+                <a href="contact.html" class="footer-link">Contact</a>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

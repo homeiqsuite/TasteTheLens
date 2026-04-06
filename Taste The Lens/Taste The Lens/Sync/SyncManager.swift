@@ -168,6 +168,63 @@ final class SyncManager {
         logger.info("Full sync complete")
     }
 
+    // MARK: - Fetch Single Recipe by Remote ID
+
+    /// Fetch a recipe from Supabase by its remote ID (for deep-link resolution).
+    /// Returns a hydrated Recipe (with images) that is NOT inserted into any model context.
+    func fetchRecipe(remoteId: String) async throws -> Recipe {
+        logger.info("DeepLink: fetching recipe remoteId=\(remoteId)")
+
+        let dto: SupabaseRecipeDTO
+        do {
+            dto = try await supabase
+                .from("recipes")
+                .select()
+                .eq("id", value: remoteId)
+                .eq("is_deleted", value: false)
+                .single()
+                .execute()
+                .value
+            logger.info("DeepLink: recipe row found — \"\(dto.dishName)\"")
+        } catch {
+            logger.error("DeepLink: recipes table fetch failed — \(error)")
+            throw error
+        }
+
+        guard let inspirationPath = dto.inspirationImagePath else {
+            logger.error("DeepLink: no inspiration_image_path on recipe \(remoteId)")
+            throw URLError(.resourceUnavailable)
+        }
+
+        logger.info("DeepLink: downloading inspiration image at \(inspirationPath)")
+        let inspirationData: Data
+        do {
+            inspirationData = try await supabase.storage
+                .from("inspiration-images")
+                .download(path: inspirationPath)
+            logger.info("DeepLink: inspiration image downloaded (\(inspirationData.count) bytes)")
+        } catch {
+            logger.error("DeepLink: inspiration image download failed — \(error)")
+            throw error
+        }
+
+        var dishImageData: Data? = nil
+        if let dishPath = dto.dishImagePath {
+            logger.info("DeepLink: downloading dish image at \(dishPath)")
+            do {
+                dishImageData = try await supabase.storage
+                    .from("dish-images")
+                    .download(path: dishPath)
+                logger.info("DeepLink: dish image downloaded (\(dishImageData?.count ?? 0) bytes)")
+            } catch {
+                logger.warning("DeepLink: dish image download failed (non-fatal) — \(error)")
+            }
+        }
+
+        logger.info("DeepLink: recipe hydrated successfully — \"\(dto.dishName)\"")
+        return dto.toRecipe(inspirationData: inspirationData, dishImageData: dishImageData)
+    }
+
     // MARK: - Delete Recipe (Soft-Delete on Server)
 
     /// Soft-delete a recipe on Supabase (sets `is_deleted = true`), then hard-delete locally.

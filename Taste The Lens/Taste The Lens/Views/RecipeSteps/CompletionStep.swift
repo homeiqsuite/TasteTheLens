@@ -1,21 +1,36 @@
 import SwiftUI
 
+private enum CompletionSheet: Identifiable {
+    case authPrompt
+    case paywall
+    case createChallenge
+    case budgetInput
+    case culturePicker
+
+    var id: String {
+        switch self {
+        case .authPrompt: return "authPrompt"
+        case .paywall: return "paywall"
+        case .createChallenge: return "createChallenge"
+        case .budgetInput: return "budgetInput"
+        case .culturePicker: return "culturePicker"
+        }
+    }
+}
+
 struct CompletionStep: View {
     let recipe: Recipe
     let servingCount: Int
     @State private var exportImage: UIImage?
     @State private var storiesExportImage: UIImage?
-    @State private var showAuthPrompt = false
-    @State private var showPaywall = false
-    @State private var showCreateChallenge = false
     @State private var isCreatingChallenge = false
     @State private var challengeError: String?
-    @State private var showBudgetInput = false
     @State private var budgetAmount: Double = 15
-    @State private var showCulturePicker = false
     @State private var showReimaginTooltip = false
     @State private var isGeneratingShoppingList = false
     @State private var isRenderingShareImage = false
+    @State private var isSharingRecipeLink = false
+    @State private var activeSheet: CompletionSheet?
     @AppStorage("hasSeenReimaginTooltip") private var hasSeenReimaginTooltip = false
 
     var body: some View {
@@ -80,9 +95,15 @@ struct CompletionStep: View {
                         shareRecipeLink()
                     } label: {
                         HStack(spacing: 8) {
-                            Image(systemName: "link")
-                                .font(.system(size: 14))
-                            Text("Share Recipe")
+                            if isSharingRecipeLink {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .tint(Theme.textPrimary)
+                            } else {
+                                Image(systemName: "link")
+                                    .font(.system(size: 14))
+                            }
+                            Text(isSharingRecipeLink ? "Preparing..." : "Share Recipe")
                                 .font(.system(size: 15, weight: .semibold))
                         }
                         .foregroundStyle(Theme.textPrimary)
@@ -91,6 +112,7 @@ struct CompletionStep: View {
                         .background(Theme.buttonBg)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                     }
+                    .disabled(isSharingRecipeLink)
 
                     // Shopping List
                     Button {
@@ -171,13 +193,13 @@ struct CompletionStep: View {
                         }
                         Divider()
                         Button {
-                            showBudgetInput = true
+                            activeSheet = .budgetInput
                         } label: {
                             Label("On a Budget", systemImage: "dollarsign.circle")
                         }
                         Divider()
                         Button {
-                            showCulturePicker = true
+                            activeSheet = .culturePicker
                         } label: {
                             Label("Culture", systemImage: "globe")
                         }
@@ -231,22 +253,21 @@ struct CompletionStep: View {
                 }
             }
         }
-        .sheet(isPresented: $showAuthPrompt) {
-            AuthPromptSheet()
-        }
-        .sheet(isPresented: $showPaywall) {
-            PaywallView(context: .featureGated(.fullChallenges))
-        }
-        .sheet(isPresented: $showCreateChallenge) {
-            challengeConfirmationSheet
-        }
-        .sheet(isPresented: $showBudgetInput) {
-            budgetInputSheet
-        }
-        .sheet(isPresented: $showCulturePicker) {
-            CulturePickerView { selected in
-                showCulturePicker = false
-                reimagineRecipe(cultureName: selected)
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .authPrompt:
+                AuthPromptSheet()
+            case .paywall:
+                PaywallView(context: .featureGated(.fullChallenges))
+            case .createChallenge:
+                challengeConfirmationSheet
+            case .budgetInput:
+                budgetInputSheet
+            case .culturePicker:
+                CulturePickerView { selected in
+                    activeSheet = nil
+                    reimagineRecipe(cultureName: selected)
+                }
             }
         }
     }
@@ -276,9 +297,29 @@ struct CompletionStep: View {
     }
 
     private func shareRecipeLink() {
-        guard let url = DeepLinkHandler.url(for: recipe) else { return }
-        HapticManager.medium()
-        presentShareSheet(items: [recipe.dishName, url])
+        if let url = DeepLinkHandler.url(for: recipe) {
+            HapticManager.medium()
+            presentShareSheet(items: [recipe.dishName, url])
+            return
+        }
+
+        // Recipe not yet synced — need remoteId to create a shareable link
+        guard AuthManager.shared.isAuthenticated else {
+            activeSheet = .authPrompt
+            return
+        }
+
+        isSharingRecipeLink = true
+        Task {
+            await SyncManager.shared.syncRecipe(recipe)
+            await MainActor.run {
+                isSharingRecipeLink = false
+                if let url = DeepLinkHandler.url(for: recipe) {
+                    HapticManager.medium()
+                    presentShareSheet(items: [recipe.dishName, url])
+                }
+            }
+        }
     }
 
     private func shareShoppingList() {
@@ -320,14 +361,14 @@ struct CompletionStep: View {
 
     private func throwTheGauntlet() {
         guard !EntitlementManager.shared.requiresUpgrade(for: .fullChallenges) else {
-            showPaywall = true
+            activeSheet = .paywall
             return
         }
         guard AuthManager.shared.isAuthenticated else {
-            showAuthPrompt = true
+            activeSheet = .authPrompt
             return
         }
-        showCreateChallenge = true
+        activeSheet = .createChallenge
     }
 
     private enum ShareFormat { case square, stories }
@@ -427,7 +468,7 @@ struct CompletionStep: View {
                             do {
                                 _ = try await ChallengeService.shared.createChallenge(recipe: recipe)
                                 HapticManager.success()
-                                showCreateChallenge = false
+                                activeSheet = nil
                             } catch {
                                 challengeError = error.localizedDescription
                                 HapticManager.error()
@@ -460,7 +501,7 @@ struct CompletionStep: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { showCreateChallenge = false }
+                    Button("Cancel") { activeSheet = nil }
                         .foregroundStyle(Theme.gold)
                 }
             }
@@ -510,7 +551,7 @@ struct CompletionStep: View {
                     }
 
                     Button {
-                        showBudgetInput = false
+                        activeSheet = nil
                         reimagineRecipe(budgetLimit: budgetAmount)
                     } label: {
                         Text("Reimagine Under \(String(format: "$%.0f", budgetAmount))")
@@ -532,7 +573,7 @@ struct CompletionStep: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel") { showBudgetInput = false }
+                    Button("Cancel") { activeSheet = nil }
                         .foregroundStyle(Theme.gold)
                 }
             }
