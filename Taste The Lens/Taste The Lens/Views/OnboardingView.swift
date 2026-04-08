@@ -1,11 +1,9 @@
 import SwiftUI
-import AVFoundation
 
 enum OnboardingPage: Int, CaseIterable {
     case welcome = 0
     case chef = 1
     case preferences = 2
-    case camera = 3
 }
 
 struct OnboardingView: View {
@@ -37,16 +35,6 @@ struct OnboardingView: View {
     @State private var chefCardVisible: [Bool] = [false, false, false, false, false]
     @State private var chefCTAVisible = false
     @State private var avatarFloat: CGFloat = 0
-
-    // Page 3 — Camera animation states
-    @State private var cameraIconVisible = false
-    @State private var cameraTextVisible = false
-    @State private var cameraText2Visible = false
-    @State private var cameraCTAVisible = false
-    @State private var ring1Scale: CGFloat = 1.0
-    @State private var ring1Opacity: Double = 0.3
-    @State private var ring2Scale: CGFloat = 1.0
-    @State private var ring2Opacity: Double = 0.3
 
     // Page 3 — Preferences animation states
     @State private var prefsHeaderVisible = false
@@ -81,9 +69,6 @@ struct OnboardingView: View {
                             .transition(pageTransition)
                     case .preferences:
                         preferencesPage
-                            .transition(pageTransition)
-                    case .camera:
-                        cameraPage
                             .transition(pageTransition)
                     }
                 }
@@ -173,10 +158,6 @@ struct OnboardingView: View {
         prefsSkillVisible = false
         prefsDietaryVisible = false
         prefsCTAVisible = false
-        cameraIconVisible = false
-        cameraTextVisible = false
-        cameraText2Visible = false
-        cameraCTAVisible = false
     }
 
     private func triggerWelcomeAnimations() {
@@ -279,43 +260,6 @@ struct OnboardingView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
             withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
                 avatarFloat = -2
-            }
-        }
-    }
-
-    private func triggerCameraAnimations() {
-        guard !reduceMotion else {
-            cameraIconVisible = true; cameraTextVisible = true
-            cameraText2Visible = true; cameraCTAVisible = true
-            return
-        }
-
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.75)) { cameraIconVisible = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            withAnimation(.easeOut(duration: 0.5)) { cameraTextVisible = true }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            withAnimation(.easeOut(duration: 0.5)) { cameraText2Visible = true }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-            withAnimation(.easeOut(duration: 0.5)) { cameraCTAVisible = true }
-        }
-        // Sonar rings
-        startSonarRings()
-    }
-
-    private func startSonarRings() {
-        guard !reduceMotion else { return }
-        // Ring 1
-        ring1Scale = 1.0; ring1Opacity = 0.3
-        withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
-            ring1Scale = 1.8; ring1Opacity = 0.0
-        }
-        // Ring 2 offset by 1.5s
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            ring2Scale = 1.0; ring2Opacity = 0.3
-            withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
-                ring2Scale = 1.8; ring2Opacity = 0.0
             }
         }
     }
@@ -902,106 +846,4 @@ struct OnboardingView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Camera Page
-
-    @State private var cameraIconScale: CGFloat = 0.95
-
-    private var cameraPage: some View {
-        VStack(spacing: 32) {
-            Spacer()
-
-            // Camera icon with sonar rings
-            ZStack {
-                // Sonar ring 1
-                if !reduceMotion {
-                    Circle()
-                        .stroke(Theme.visual.opacity(ring1Opacity), lineWidth: 1)
-                        .frame(width: 100, height: 100)
-                        .scaleEffect(ring1Scale)
-
-                    Circle()
-                        .stroke(Theme.visual.opacity(ring2Opacity), lineWidth: 1)
-                        .frame(width: 100, height: 100)
-                        .scaleEffect(ring2Scale)
-                }
-
-                Image(systemName: "camera.viewfinder")
-                    .font(.system(size: 80, weight: .thin))
-                    .foregroundStyle(Theme.visual)
-                    .scaleEffect(cameraIconVisible ? cameraIconScale : 0.6)
-                    .opacity(cameraIconVisible ? 1 : 0)
-                    .onAppear {
-                        guard !reduceMotion else { return }
-                        // Start breathing pulse after entrance
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                            withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
-                                cameraIconScale = 1.05
-                            }
-                        }
-                    }
-            }
-
-            VStack(spacing: 10) {
-                Text("Enable Your Camera")
-                    .font(.system(size: 30, weight: .bold, design: .serif))
-                    .foregroundStyle(Theme.darkTextPrimary)
-                    .opacity(cameraTextVisible ? 1 : 0)
-                    .offset(y: cameraTextVisible ? 0 : 14)
-
-                Text("Taste The Lens needs your camera to capture the world around you.")
-                    .font(.system(size: 15))
-                    .foregroundStyle(Theme.darkTextSecondary)
-                    .multilineTextAlignment(.center)
-                    .opacity(cameraTextVisible ? 1 : 0)
-                    .offset(y: cameraTextVisible ? 0 : 14)
-
-                Text("Photos are analyzed by AI and never stored on our servers.")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.darkTextTertiary)
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 4)
-                    .opacity(cameraText2Visible ? 1 : 0)
-                    .offset(y: cameraText2Visible ? 0 : 14)
-            }
-            .padding(.horizontal, 24)
-
-            Spacer()
-
-            VStack(spacing: 16) {
-                ctaButton("Enable Camera") {
-                    Task {
-                        await AVCaptureDevice.requestAccess(for: .video)
-                        dismiss()
-                    }
-                }
-
-                Button {
-                    dismiss()
-                } label: {
-                    Text("I'll do this later")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(Theme.darkTextTertiary)
-                }
-            }
-            .opacity(cameraCTAVisible ? 1 : 0)
-            .offset(y: cameraCTAVisible ? 0 : 12)
-        }
-        .onAppear { triggerCameraAnimations() }
-    }
-
-    // MARK: - Shared CTA Button
-
-    private func ctaButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 17, weight: .bold))
-                .foregroundStyle(Theme.darkBg)
-                .frame(maxWidth: .infinity)
-                .frame(height: 52)
-                .background(Theme.gold)
-                .clipShape(Capsule())
-        }
-        .padding(.horizontal, 24)
-        .padding(.bottom, 40)
-    }
 }

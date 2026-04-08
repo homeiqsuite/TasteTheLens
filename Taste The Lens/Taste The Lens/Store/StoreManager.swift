@@ -20,13 +20,14 @@ final class StoreManager {
 
     // New credit packs (pure credits model)
     static let tastePackId      = "com.tastethelens.credits.taste"       // 10 credits, $1.99
-    static let cookPackId       = "com.tastethelens.credits.cook"        // 30 credits, $4.99
+    static let cookPackId       = "com.tastethelens.credits.savor"       // 30 credits, $4.99
     static let feastPackId      = "com.tastethelens.credits.feast"       // 75 credits, $9.99
 
     // Legacy credit packs (kept for transaction handling of old purchases)
     static let legacyStarterPackId = "com.tastethelens.credits.starter"
     static let legacyClassicPackId = "com.tastethelens.credits.classic"
     static let legacyPantryPackId  = "com.tastethelens.credits.pantry"
+    static let legacyCookPackId    = "com.tastethelens.credits.cook"     // replaced by savor (was non-consumable)
 
     // Legacy subscriptions (kept for StoreKit entitlement detection)
     static let legacyMonthlyId         = "com.tastethelens.pro.monthly"
@@ -45,6 +46,7 @@ final class StoreManager {
         legacyStarterPackId: 10,
         legacyClassicPackId: 50,
         legacyPantryPackId: 90,
+        legacyCookPackId: 30,
     ]
 
     /// Product IDs for the new credit packs (used for display in PaywallView)
@@ -61,7 +63,7 @@ final class StoreManager {
     private static let allProductIds: Set<String> = {
         var ids = newCreditPackIds
         ids.formUnion(subscriptionIds)
-        ids.formUnion([legacyStarterPackId, legacyClassicPackId, legacyPantryPackId])
+        ids.formUnion([legacyStarterPackId, legacyClassicPackId, legacyPantryPackId, legacyCookPackId])
         return ids
     }()
 
@@ -144,14 +146,6 @@ final class StoreManager {
         }
     }
 
-    // MARK: - Restore
-
-    func restorePurchases() async {
-        try? await AppStore.sync()
-        await checkLegacySubscription()
-        // Re-sync credits from server in case webhooks granted credits
-        await UsageTracker.shared.syncCreditsFromServer()
-    }
 
     // MARK: - Legacy Subscription Detection
 

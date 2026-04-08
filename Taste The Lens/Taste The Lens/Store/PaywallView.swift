@@ -491,25 +491,6 @@ struct PaywallView: View {
                 }
                 .disabled(selectedProduct == nil || isPurchasing)
 
-                // Footer links
-                HStack(spacing: 24) {
-                    Button {
-                        Task {
-                            await store.restorePurchases()
-                            if EntitlementManager.shared.hasEverPurchased { dismiss() }
-                        }
-                    } label: {
-                        Text("Restore Purchases")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.darkTextTertiary)
-                    }
-
-                    Button { dismiss() } label: {
-                        Text("Not now")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Theme.darkTextHint)
-                    }
-                }
                 .padding(.bottom, 12)
             }
             .padding(.horizontal, 20)
