@@ -126,6 +126,10 @@ struct OnboardingView: View {
             withAnimation(reduceMotion ? .easeInOut(duration: 0.3) : .spring(response: 0.5, dampingFraction: 0.85)) {
                 currentPage = next
             }
+        } else {
+            // Last page — complete onboarding
+            hasSeenOnboarding = true
+            dismiss()
         }
     }
 

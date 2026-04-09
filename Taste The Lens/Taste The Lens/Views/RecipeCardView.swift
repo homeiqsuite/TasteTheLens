@@ -141,12 +141,6 @@ struct RecipeCardView: View {
                 .transition(.opacity)
             }
 
-            // Recipe walkthrough
-            if let step = walkthroughStep {
-                walkthroughOverlay(step: step)
-                    .transition(.opacity)
-            }
-
             // Milestone toast
             if showMilestoneToast {
                 VStack {
@@ -195,9 +189,6 @@ struct RecipeCardView: View {
                         guard !Task.isCancelled else { return }
                         withAnimation(.easeOut(duration: 0.3)) { showMilestoneToast = false }
                         // sequence continues in .onChange(of: showMilestoneToast)
-                    } else if !hasSeenRecipeWalkthrough {
-                        withAnimation { walkthroughStep = 0 }
-                        // sequence continues in .onChange(of: walkthroughStep)
                     } else if !hasSeenAuthPrompt && !AuthManager.shared.isAuthenticated {
                         showAuthPrompt = true
                         hasSeenAuthPrompt = true
@@ -215,9 +206,7 @@ struct RecipeCardView: View {
             overlayTask = Task {
                 try? await Task.sleep(for: .milliseconds(300))
                 guard !Task.isCancelled else { return }
-                if !hasSeenRecipeWalkthrough {
-                    withAnimation { walkthroughStep = 0 }
-                } else if !hasSeenAuthPrompt && !AuthManager.shared.isAuthenticated {
+                if !hasSeenAuthPrompt && !AuthManager.shared.isAuthenticated {
                     showAuthPrompt = true
                     hasSeenAuthPrompt = true
                 }
@@ -229,9 +218,7 @@ struct RecipeCardView: View {
             overlayTask = Task {
                 try? await Task.sleep(for: .milliseconds(300))
                 guard !Task.isCancelled else { return }
-                if !hasSeenRecipeWalkthrough {
-                    withAnimation { walkthroughStep = 0 }
-                } else if !hasSeenAuthPrompt && !AuthManager.shared.isAuthenticated {
+                if !hasSeenAuthPrompt && !AuthManager.shared.isAuthenticated {
                     showAuthPrompt = true
                     hasSeenAuthPrompt = true
                 }
