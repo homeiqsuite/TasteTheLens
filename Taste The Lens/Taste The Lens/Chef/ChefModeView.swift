@@ -4,6 +4,7 @@ struct ChefModeView: View {
     var context: ChefSelectionContext = .defaultChef
 
     @AppStorage("selectedChef") private var selectedChef = "default"
+    @State private var centeredChefID: ChefPersonality.ID?
     @State private var showPaywall = false
     @State private var showCustomChefEditor = false
     @Environment(\.dismiss) private var dismiss
@@ -12,31 +13,34 @@ struct ChefModeView: View {
         ChefPersonality(rawValue: selectedChef) ?? .defaultChef
     }
 
-    private var comparisonChef: ChefPersonality {
-        currentChef == .beginner ? .defaultChef : .beginner
+    private var centeredChef: ChefPersonality {
+        if let id = centeredChefID {
+            return ChefPersonality(rawValue: id) ?? .defaultChef
+        }
+        return currentChef
     }
 
     var body: some View {
         NavigationStack {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        headerSection
+            ScrollView {
+                VStack(spacing: 24) {
+                    headerSection
 
-                        if context == .defaultChef {
-                            currentModeCard(proxy: proxy)
-                        }
-
-                        chefSelectionGrid
-
-                        reassuranceBanner
-
-                        quickComparisonSection
+                    if context == .defaultChef {
+                        currentModeCard
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
-                    .padding(.bottom, 40)
+
+                    chefCarousel
+
+                    pageIndicatorDots
+
+                    chefDetailSection
+
+                    reassuranceBanner
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .padding(.bottom, 40)
             }
             .background(Theme.darkBg.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
@@ -60,6 +64,9 @@ struct ChefModeView: View {
             if EntitlementManager.shared.requiresUpgrade(for: .chefPersonalities) && selectedChef != "default" {
                 selectedChef = "default"
             }
+            if centeredChefID == nil {
+                centeredChefID = selectedChef
+            }
         }
     }
 
@@ -71,15 +78,16 @@ struct ChefModeView: View {
                 .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(Theme.darkTextPrimary)
 
-            Text(context == .forThisRecipe ? "Applies to this generation only" : "Choose how you want to cook today")
+            Text(context == .forThisRecipe ? "Applies to this generation only" : "Swipe to choose how you want to cook")
                 .font(.system(size: 15))
                 .foregroundStyle(Theme.darkTextSecondary)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Current Mode Status Card
 
-    private func currentModeCard(proxy: ScrollViewProxy) -> some View {
+    private var currentModeCard: some View {
         let chef = currentChef
         let chefTheme = chef.theme
 
@@ -125,26 +133,6 @@ struct ChefModeView: View {
             }
 
             Spacer(minLength: 0)
-
-            Button {
-                withAnimation {
-                    proxy.scrollTo(chef.id, anchor: .center)
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: 12))
-                    Text("Learn More")
-                        .font(.system(size: 13, weight: .medium))
-                }
-                .foregroundStyle(Theme.darkTextSecondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(
-                    Capsule()
-                        .stroke(Theme.darkCardBorder, lineWidth: 1)
-                )
-            }
         }
         .padding(16)
         .background(
@@ -157,147 +145,140 @@ struct ChefModeView: View {
         )
     }
 
-    // MARK: - Chef Selection Grid
+    // MARK: - Carousel
 
-    private var chefSelectionGrid: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("CHOOSE YOUR CHEF")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.darkTextSecondary)
-                .tracking(1.2)
+    private var chefCarousel: some View {
+        GeometryReader { geo in
+            let cardWidth = geo.size.width - 60
+            let horizontalInset = (geo.size.width - cardWidth) / 2
 
-            LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: 14),
-                GridItem(.flexible(), spacing: 14),
-            ], spacing: 14) {
-                ForEach(ChefPersonality.allCases) { chef in
-                    chefGridCard(chef)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    ForEach(ChefPersonality.allCases) { chef in
+                        let isSelected = selectedChef == chef.rawValue
+                        let isLocked = chef != .defaultChef &&
+                            EntitlementManager.shared.requiresUpgrade(for: .chefPersonalities)
+
+                        ChefCarouselCard(
+                            chef: chef,
+                            isSelected: isSelected,
+                            isLocked: isLocked,
+                            onSelect: { handleChefTap(chef) }
+                        )
+                        .frame(width: cardWidth)
+                        .scrollTransition(.interactive, axis: .horizontal) { content, phase in
+                            content
+                                .scaleEffect(phase.isIdentity ? 1.0 : 0.88)
+                                .opacity(phase.isIdentity ? 1.0 : 0.6)
+                        }
                         .id(chef.id)
+                    }
                 }
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.viewAligned)
+            .scrollPosition(id: $centeredChefID)
+            .contentMargins(.horizontal, horizontalInset, for: .scrollContent)
+        }
+        .frame(height: 400)
+    }
+
+    // MARK: - Page Indicator Dots
+
+    private var pageIndicatorDots: some View {
+        HStack(spacing: 8) {
+            ForEach(ChefPersonality.allCases) { chef in
+                Circle()
+                    .fill(centeredChefID == chef.id ? chef.theme.accent : Theme.darkCardBorder)
+                    .frame(
+                        width: centeredChefID == chef.id ? 10 : 7,
+                        height: centeredChefID == chef.id ? 10 : 7
+                    )
+                    .animation(.easeInOut(duration: 0.2), value: centeredChefID)
             }
         }
     }
 
-    private func chefGridCard(_ chef: ChefPersonality) -> some View {
-        let isSelected = selectedChef == chef.rawValue
-        let isLocked = chef != .defaultChef && EntitlementManager.shared.requiresUpgrade(for: .chefPersonalities)
+    // MARK: - Detail Section
+
+    private var chefDetailSection: some View {
+        let chef = centeredChef
         let chefTheme = chef.theme
+        let isLocked = chef != .defaultChef &&
+            EntitlementManager.shared.requiresUpgrade(for: .chefPersonalities)
+        let isSelected = selectedChef == chef.rawValue
 
-        return Button {
-            if isLocked {
-                HapticManager.light()
-                showPaywall = true
-            } else if chef == .custom {
-                HapticManager.light()
-                if !CustomChefConfig.isConfigured || isSelected {
-                    showCustomChefEditor = true
-                } else {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        selectedChef = chef.rawValue
-                    }
-                }
-            } else {
-                HapticManager.light()
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    selectedChef = chef.rawValue
-                }
-            }
-        } label: {
+        return VStack(spacing: 16) {
+            // Description card
             VStack(alignment: .leading, spacing: 10) {
-                // Top row: icon + selection indicator
-                HStack {
-                    Circle()
-                        .fill(chefTheme.accent.opacity(isSelected ? 0.20 : 0.10))
-                        .frame(width: 40, height: 40)
-                        .overlay(
-                            Image(systemName: chef.icon)
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(chefTheme.accent)
-                        )
-
-                    Spacer()
-
-                    if isLocked {
-                        Image(systemName: "lock.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Theme.darkTextHint)
-                    } else if isSelected && chef == .custom && CustomChefConfig.isConfigured {
-                        Image(systemName: "pencil.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundStyle(chefTheme.accent)
-                    } else if isSelected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundStyle(chefTheme.accent)
-                    } else {
-                        Circle()
-                            .stroke(Theme.darkTextHint, lineWidth: 1.5)
-                            .frame(width: 22, height: 22)
-                    }
-                }
-
-                // Chef name + subtitle
-                VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 10) {
+                    Image(systemName: chef.icon)
+                        .font(.system(size: 16))
+                        .foregroundStyle(chefTheme.accent)
                     Text(chef.displayName)
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(isSelected ? Color.white : Theme.darkTextPrimary)
-
-                    Text(chef.subtitle)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(chefTheme.accent)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(Theme.darkTextPrimary)
                 }
 
-                // Description
                 Text(chef.description)
-                    .font(.system(size: 12))
-                    .foregroundStyle(isSelected ? Theme.darkTextSecondary : Theme.darkTextTertiary)
-                    .lineLimit(3)
-                    .multilineTextAlignment(.leading)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.darkTextSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                // Divider
-                Rectangle()
-                    .fill(Theme.darkCardBorder)
-                    .frame(height: 0.5)
-
-                // Best for section
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Best for:")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(chefTheme.accent)
-
-                    ForEach(chef.bestFor) { item in
-                        HStack(spacing: 8) {
-                            Image(systemName: item.icon)
-                                .font(.system(size: 11))
-                                .foregroundStyle(chefTheme.accent)
-                                .frame(width: 16)
-
-                            Text(item.text)
-                                .font(.system(size: 12))
-                                .foregroundStyle(isSelected ? Theme.darkTextSecondary : Theme.darkTextTertiary)
-                        }
-                    }
-                }
+                Text(chef.tagline)
+                    .font(.system(size: 13, weight: .medium, design: .serif))
+                    .italic()
+                    .foregroundStyle(chefTheme.accent.opacity(0.8))
             }
-            .padding(14)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(isSelected ? chefTheme.accent.opacity(0.08) : Theme.darkCardSurface)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(
-                        isSelected ? chefTheme.accent.opacity(0.6) : Theme.darkCardBorder,
-                        lineWidth: isSelected ? 1.5 : 0.5
+                    .fill(Theme.darkCardSurface)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(chefTheme.accent.opacity(0.2), lineWidth: 0.5)
                     )
             )
-            .shadow(
-                color: isSelected ? chefTheme.accent.opacity(0.2) : .clear,
-                radius: 12, y: 4
-            )
-            .opacity(isLocked ? 0.55 : 1.0)
+
+            // CTA button
+            Button {
+                handleChefTap(chef)
+            } label: {
+                HStack(spacing: 8) {
+                    if isLocked {
+                        Image(systemName: "lock.fill")
+                        Text("Unlock with Pro")
+                    } else if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                        Text("Currently Active")
+                    } else if chef == .custom && !CustomChefConfig.isConfigured {
+                        Image(systemName: "plus.circle.fill")
+                        Text("Create Custom Chef")
+                    } else {
+                        Image(systemName: "arrow.right.circle.fill")
+                        Text("Select \(chef.displayName)")
+                    }
+                }
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(isSelected ? chefTheme.accent : Theme.darkBg)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(isSelected
+                            ? chefTheme.accent.opacity(0.12)
+                            : chefTheme.accent)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(isSelected ? chefTheme.accent.opacity(0.3) : .clear,
+                                lineWidth: 1)
+                )
+            }
+            .disabled(isSelected && chef != .custom)
         }
-        .buttonStyle(.plain)
+        .animation(.easeInOut(duration: 0.3), value: centeredChefID)
     }
 
     // MARK: - Reassurance Banner
@@ -334,57 +315,30 @@ struct ChefModeView: View {
         )
     }
 
-    // MARK: - Quick Comparison
+    // MARK: - Selection Logic
 
-    private var quickComparisonSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("QUICK COMPARISON")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.darkTextSecondary)
-                .tracking(1.2)
+    private func handleChefTap(_ chef: ChefPersonality) {
+        let isLocked = chef != .defaultChef &&
+            EntitlementManager.shared.requiresUpgrade(for: .chefPersonalities)
 
-            HStack(spacing: 12) {
-                comparisonCard(currentChef)
-                comparisonCard(comparisonChef)
+        if isLocked {
+            HapticManager.light()
+            showPaywall = true
+        } else if chef == .custom {
+            HapticManager.light()
+            if !CustomChefConfig.isConfigured || selectedChef == chef.rawValue {
+                showCustomChefEditor = true
+            } else {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedChef = chef.rawValue
+                }
+            }
+        } else {
+            HapticManager.light()
+            withAnimation(.easeInOut(duration: 0.2)) {
+                selectedChef = chef.rawValue
             }
         }
-    }
-
-    private func comparisonCard(_ chef: ChefPersonality) -> some View {
-        let chefTheme = chef.theme
-
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(chefTheme.accent.opacity(0.15))
-                    .frame(width: 28, height: 28)
-                    .overlay(
-                        Image(systemName: chef.icon)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(chefTheme.accent)
-                    )
-
-                Text(chef.displayName)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(chefTheme.accent)
-            }
-
-            ForEach(chef.bestFor) { item in
-                Text("• \(item.text)")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.darkTextSecondary)
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Theme.darkCardSurface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(chefTheme.accent.opacity(0.3), lineWidth: 0.5)
-                )
-        )
     }
 }
 

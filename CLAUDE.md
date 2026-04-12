@@ -14,14 +14,13 @@ iOS app that translates visual imagery into haute cuisine recipes using AI. User
 Taste The Lens/Taste The Lens/
 ├── Taste_The_LensApp.swift        # App entry, SwiftData container
 ├── ContentView.swift              # Main navigation (camera → processing → recipe)
-├── Config/                        # API key loading (AppConfig.swift, Secrets.xcconfig)
+├── Config/                        # Supabase config (AppConfig.swift, RemoteConfigManager.swift)
 ├── Camera/                        # AVFoundation camera (CameraManager, CameraPreviewView)
 ├── Models/Recipe.swift            # SwiftData @Model + supporting Codable structs
-├── Services/                      # API clients + pipeline orchestration
-│   ├── ImageAnalysisPipeline.swift  # Observable pipeline: analyze → generate
-│   ├── GeminiAPIClient.swift        # Primary: Gemini 2.5 Flash
-│   ├── ClaudeAPIClient.swift        # Alternative: Claude Sonnet
-│   └── FalAPIClient.swift           # Image gen: Flux Pro v1.1 (legacy, not default)
+├── Services/                      # Pipeline + provider abstraction
+│   ├── ImageAnalysisPipeline.swift  # Observable pipeline: analyze → generate (via Supabase)
+│   ├── ImageAnalysisProvider.swift  # Retry logic + timeout handling
+│   └── ImageGenerationProvider.swift # Model selection + cost estimation
 ├── ViewModels/
 │   ├── MainViewModel.swift           # App state management
 │   └── FusionModeState.swift         # Multi-shot fusion state
@@ -54,11 +53,26 @@ Long-press the shutter button to enter Fusion Mode. Capture 2-3 photos, then tap
 
 ### API Pipeline (ImageAnalysisPipeline)
 
-1. Analyze image with Gemini (or Claude) → returns recipe JSON
-2. Generate dish image with **Imagen 4** (default, via Gemini API) → returns food photo
+All API calls route through **Supabase Edge Functions** — the app never calls AI providers directly.
+
+1. Call `analyze-image` edge function → returns recipe JSON (Gemini is hardcoded as the analysis provider)
+2. Call `generate-image` edge function → returns base64 food photo
 3. Transition to RecipeCardView
 
-**Image Generation:** Default provider is Google Imagen 4 (`imagen-4.0-generate-001`), configurable via debug menu. Fal.ai Flux Pro/Schnell available as alternatives. All providers implement `ImageGenerationProviding` protocol via `ImageGenerationFactory`.
+**Supabase Edge Functions:**
+- `analyze-image` — image → recipe JSON. Accepts up to 3 base64 images (fusion mode), chef personality, dietary prefs, budget, course type, culture, skill level, etc.
+- `generate-image` — prompt → food photo. Provider is selected at runtime based on user/remote config.
+
+**Image Generation Providers** (selectable via `ImageGenerationProvider.swift` + `RemoteConfigManager`):
+
+| Model ID | Provider | Est. Cost |
+|---|---|---|
+| `imagen-4` | Google Imagen 4 | ~$0.030 |
+| `imagen-4-fast` | Google Imagen 4 Fast | ~$0.020 |
+| `flux-pro` | Fal.ai Flux Pro v1.1 | ~$0.050 |
+| `flux-schnell` | Fal.ai Flux Schnell | ~$0.003 |
+
+Default model is controlled by `RemoteConfigManager` key `default_image_gen_model` (defaults to `imagen4`).
 
 ## UI Conventions
 
@@ -140,10 +154,11 @@ Add `#Preview` blocks to views for rapid iteration. For views needing Recipe dat
 
 ## Credentials
 
-API keys are loaded from `Secrets.xcconfig` (git-ignored) → `Info.plist` → `AppConfig.swift`. Keys needed:
-- `GEMINI_API_KEY`
-- `FAL_API_KEY`
-- `ANTHROPIC_API_KEY` (optional, for Claude alternative)
+Config is loaded from `Secrets.xcconfig` (git-ignored) → `Info.plist` → `AppConfig.swift`. Keys needed:
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+
+The iOS app does not hold any AI provider API keys directly — all provider keys live in the Supabase backend.
 
 ## Logging
 
