@@ -16,19 +16,19 @@ struct ChefCarouselCard: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(Theme.darkCardSurface)
+                    .fill(Theme.cardSurface)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 20)
                     .stroke(
-                        isSelected ? chefTheme.accent.opacity(0.7) : chefTheme.accent.opacity(0.2),
-                        lineWidth: isSelected ? 2 : 0.5
+                        isSelected ? chefTheme.accent.opacity(0.7) : Theme.cardBorder,
+                        lineWidth: isSelected ? 2 : 1
                     )
             )
             .clipShape(RoundedRectangle(cornerRadius: 20))
             .shadow(
-                color: isSelected ? chefTheme.accent.opacity(0.3) : .clear,
-                radius: 16, y: 4
+                color: isSelected ? chefTheme.accent.opacity(0.3) : Color.black.opacity(0.08),
+                radius: isSelected ? 16 : 8, y: isSelected ? 4 : 2
             )
             .opacity(isLocked ? 0.55 : 1.0)
         }
@@ -93,7 +93,7 @@ struct ChefCarouselCard: View {
             VStack(alignment: .center, spacing: 4) {
                 Text(chef.displayName)
                     .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(Theme.darkTextPrimary)
+                    .foregroundStyle(Theme.textPrimary)
 
                 Text(chef.subtitle)
                     .font(.system(size: 14, weight: .semibold))
@@ -103,7 +103,7 @@ struct ChefCarouselCard: View {
 
             // Divider
             Rectangle()
-                .fill(Theme.darkCardBorder)
+                .fill(Theme.cardBorder)
                 .frame(height: 0.5)
 
             // Best for
@@ -117,7 +117,7 @@ struct ChefCarouselCard: View {
 
                         Text(item.text)
                             .font(.system(size: 13))
-                            .foregroundStyle(Theme.darkTextSecondary)
+                            .foregroundStyle(Theme.textSecondary)
                     }
                 }
             }
@@ -130,7 +130,7 @@ struct ChefCarouselCard: View {
 
 #Preview {
     ZStack {
-        Theme.darkBg.ignoresSafeArea()
+        Color.white.ignoresSafeArea()
 
         ChefCarouselCard(
             chef: .defaultChef,

@@ -94,7 +94,8 @@ struct RecipeCardView: View {
                         expandedSubstitutions: $expandedSubstitutions,
                         expandedSections: $expandedSections,
                         servingCount: $servingCount,
-                        showAIReasoning: $showAIReasoning
+                        showAIReasoning: $showAIReasoning,
+                        currentStep: $currentStep
                     )
                     .tag(0)
 

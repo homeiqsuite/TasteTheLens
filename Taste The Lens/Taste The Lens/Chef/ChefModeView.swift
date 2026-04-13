@@ -42,10 +42,10 @@ struct ChefModeView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 40)
             }
-            .background(Theme.darkBg.ignoresSafeArea())
+            .background(Color.white.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Theme.darkBg, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarBackground(Color.white, for: .navigationBar)
+            .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
@@ -76,11 +76,11 @@ struct ChefModeView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(context == .forThisRecipe ? "Chef for This Recipe" : "Chef Mode")
                 .font(.system(size: 28, weight: .bold))
-                .foregroundStyle(Theme.darkTextPrimary)
+                .foregroundStyle(Theme.textPrimary)
 
             Text(context == .forThisRecipe ? "Applies to this generation only" : "Swipe to choose how you want to cook")
                 .font(.system(size: 15))
-                .foregroundStyle(Theme.darkTextSecondary)
+                .foregroundStyle(Theme.textSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -104,12 +104,12 @@ struct ChefModeView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Current Mode")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Theme.darkTextTertiary)
+                    .foregroundStyle(Theme.textTertiary)
 
                 HStack(spacing: 8) {
                     Text(chef.displayName)
                         .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(Theme.darkTextPrimary)
+                        .foregroundStyle(Theme.textPrimary)
 
                     HStack(spacing: 4) {
                         Circle()
@@ -129,7 +129,7 @@ struct ChefModeView: View {
 
                 Text(chef.subtitle)
                     .font(.system(size: 13))
-                    .foregroundStyle(Theme.darkTextSecondary)
+                    .foregroundStyle(Theme.textSecondary)
             }
 
             Spacer(minLength: 0)
@@ -137,10 +137,10 @@ struct ChefModeView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Theme.darkCardSurface)
+                .fill(Theme.cardSurface)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Theme.darkCardBorder, lineWidth: 0.5)
+                        .stroke(Theme.cardBorder, lineWidth: 0.5)
                 )
         )
     }
@@ -189,7 +189,7 @@ struct ChefModeView: View {
         HStack(spacing: 8) {
             ForEach(ChefPersonality.allCases) { chef in
                 Circle()
-                    .fill(centeredChefID == chef.id ? chef.theme.accent : Theme.darkCardBorder)
+                    .fill(centeredChefID == chef.id ? chef.theme.accent : Theme.cardBorder)
                     .frame(
                         width: centeredChefID == chef.id ? 10 : 7,
                         height: centeredChefID == chef.id ? 10 : 7
@@ -217,12 +217,12 @@ struct ChefModeView: View {
                         .foregroundStyle(chefTheme.accent)
                     Text(chef.displayName)
                         .font(.system(size: 20, weight: .bold))
-                        .foregroundStyle(Theme.darkTextPrimary)
+                        .foregroundStyle(Theme.textPrimary)
                 }
 
                 Text(chef.description)
                     .font(.system(size: 14))
-                    .foregroundStyle(Theme.darkTextSecondary)
+                    .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text(chef.tagline)
@@ -234,7 +234,7 @@ struct ChefModeView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Theme.darkCardSurface)
+                    .fill(Theme.cardSurface)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
                             .stroke(chefTheme.accent.opacity(0.2), lineWidth: 0.5)
@@ -261,7 +261,7 @@ struct ChefModeView: View {
                     }
                 }
                 .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(isSelected ? chefTheme.accent : Theme.darkBg)
+                .foregroundStyle(isSelected ? chefTheme.accent : .white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
                 .background(
@@ -297,20 +297,20 @@ struct ChefModeView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("You can switch anytime")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Theme.darkTextPrimary)
+                    .foregroundStyle(Theme.textPrimary)
 
                 Text("Your Chef Mode can be changed at any time to match your cooking mood or ingredients.")
                     .font(.system(size: 13))
-                    .foregroundStyle(Theme.darkTextTertiary)
+                    .foregroundStyle(Theme.textTertiary)
             }
         }
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Theme.darkCardSurface)
+                .fill(Theme.cardSurface)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Theme.darkCardBorder, lineWidth: 0.5)
+                        .stroke(Theme.cardBorder, lineWidth: 0.5)
                 )
         )
     }
@@ -344,5 +344,5 @@ struct ChefModeView: View {
 
 #Preview {
     ChefModeView()
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(.light)
 }

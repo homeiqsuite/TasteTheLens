@@ -1,5 +1,41 @@
 import SwiftUI
 
+// MARK: - Scroll Offset Tracking
+
+private struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+// MARK: - Section Appear Modifier
+
+private struct SectionAppearModifier: ViewModifier {
+    let sectionKey: String
+    @Binding var appeared: Set<String>
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(appeared.contains(sectionKey) ? 1 : 0)
+            .offset(y: appeared.contains(sectionKey) ? 0 : 16)
+            .onAppear {
+                guard !appeared.contains(sectionKey) else { return }
+                withAnimation(.easeOut(duration: 0.4)) {
+                    appeared.insert(sectionKey)
+                }
+            }
+    }
+}
+
+private extension View {
+    func sectionAppearAnimation(key: String, appeared: Binding<Set<String>>) -> some View {
+        modifier(SectionAppearModifier(sectionKey: key, appeared: appeared))
+    }
+}
+
+// MARK: - PrepOverviewStep
+
 struct PrepOverviewStep: View {
     let recipe: Recipe
     @Binding var checkedIngredients: Set<String>
@@ -7,29 +43,95 @@ struct PrepOverviewStep: View {
     @Binding var expandedSections: Set<String>
     @Binding var servingCount: Int
     @Binding var showAIReasoning: Bool
-    @State private var showAIReasoningTooltip = false
+    @Binding var currentStep: Int
+    @State private var contentMode: PrepContentMode = .quickStart
+    @State private var showFullDescription: Bool = false
+    @State private var showAIBreakdown: Bool = false
+    @State private var scrollOffset: CGFloat = 0
+    @State private var expandedComponents: Set<String> = []
+    @State private var sectionAppeared: Set<String> = []
     @State private var highlightedTranslation: Int? = nil
     @State private var isGeneratingShoppingList = false
     @State private var showSubstitutionSheet = false
     @State private var substitutionSheetIngredient: String = ""
     @State private var substitutionSheetSubs: [String] = []
+    @State private var showAIReasoningTooltip = false
     @AppStorage("hasSeenAIReasoningTooltip") private var hasSeenAIReasoningTooltip = false
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            VStack(spacing: 0) {
-                descriptionSection
-                chefCommentarySection
-                translationMatrixSection
-                dietaryBadges
-                quickStatsStrip
-                nutritionSection
-                ingredientsSection
-                moreDetailsSection
-                Spacer().frame(height: 20)
+        ZStack(alignment: .top) {
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(spacing: 0) {
+                    // Scroll offset tracker
+                    GeometryReader { geo in
+                        Color.clear
+                            .preference(
+                                key: ScrollOffsetPreferenceKey.self,
+                                value: geo.frame(in: .named("prepScroll")).minY
+                            )
+                    }
+                    .frame(height: 0)
+
+                    // === Stats strip — always first, right below step indicators ===
+                    quickStatsStrip
+
+                    // === Mode picker + dynamic content area ===
+                    prepModePickerSection
+
+                    // Mode-specific content (directly below pills so users see it change)
+                    if contentMode == .storyMode {
+                        storySection
+                            .sectionAppearAnimation(key: "story", appeared: $sectionAppeared)
+                    } else if contentMode == .aiBreakdown {
+                        aiBreakdownSection
+                            .sectionAppearAnimation(key: "ai", appeared: $sectionAppeared)
+                    }
+
+                    inlineCTA
+
+                    chapterSpacer
+
+                    // === Ingredients ===
+                    ingredientComponentCards
+                        .sectionAppearAnimation(key: "ingredients", appeared: $sectionAppeared)
+
+                    chapterSpacer
+
+                    // === CHAPTER 5: Full details ===
+                    nutritionSection
+                        .sectionAppearAnimation(key: "nutrition", appeared: $sectionAppeared)
+                    moreDetailsSection
+                        .sectionAppearAnimation(key: "details", appeared: $sectionAppeared)
+
+                    Spacer().frame(height: 20)
+                }
+            }
+            .coordinateSpace(name: "prepScroll")
+            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }
+            .scrollBounceBehavior(.basedOnSize, axes: .vertical)
+
+            // Sticky context header
+            if scrollOffset < -120 {
+                stickyContextHeader
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .animation(.easeInOut(duration: 0.2), value: scrollOffset < -120)
             }
         }
-        .scrollBounceBehavior(.basedOnSize, axes: .vertical)
+        .onChange(of: contentMode) { _, newMode in
+            withAnimation(.easeInOut(duration: 0.3)) {
+                switch newMode {
+                case .quickStart:
+                    showFullDescription = false
+                    showAIBreakdown = false
+                case .storyMode:
+                    showFullDescription = true
+                    showAIBreakdown = false
+                case .aiBreakdown:
+                    showFullDescription = false
+                    showAIBreakdown = true
+                }
+            }
+        }
         .onAppear {
             if !hasSeenAIReasoningTooltip {
                 Task {
@@ -45,19 +147,209 @@ struct PrepOverviewStep: View {
         }
     }
 
-    // MARK: - Description
+    // MARK: - Chapter Spacer
 
-    private var descriptionSection: some View {
-        Text(recipe.recipeDescription)
-            .font(.system(size: 15))
-            .foregroundStyle(Theme.textSecondary)
-            .lineSpacing(5)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-            .padding(.bottom, 8)
+    private var chapterSpacer: some View {
+        Rectangle()
+            .fill(Theme.background)
+            .frame(height: 40)
     }
 
+    // MARK: - Sticky Context Header
+
+    private var stickyContextHeader: some View {
+        HStack(spacing: 6) {
+            Text(recipe.dishName)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+                .lineLimit(1)
+
+            if let cook = recipe.cookTime, !cook.isEmpty {
+                Text("·")
+                    .foregroundStyle(Theme.textQuaternary)
+                Text(cook)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+
+            if let difficulty = recipe.difficulty, !difficulty.isEmpty {
+                Text("·")
+                    .foregroundStyle(Theme.textQuaternary)
+                Text(difficulty)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(
+            Theme.cardSurface
+                .shadow(color: .black.opacity(0.06), radius: 4, y: 2)
+        )
+    }
+
+    // MARK: - Chapter 1: Ultra-Lightweight Top
+
+    private var prepModePickerSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("How do you want to start?")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Theme.textPrimary)
+
+            PrepModePicker(
+                selectedMode: $contentMode,
+                hasTranslationMatrix: !recipe.translationMatrix.isEmpty
+            )
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+    }
+
+    private var inlineCTA: some View {
+        Button {
+            HapticManager.medium()
+            withAnimation(.easeInOut(duration: 0.25)) {
+                currentStep = 1
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Text("Let's Cook")
+                    .font(.system(size: 17, weight: .bold))
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 14, weight: .bold))
+            }
+            .foregroundStyle(Theme.darkTextPrimary)
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .background(Theme.ctaGradient, in: RoundedRectangle(cornerRadius: 14))
+            .shadow(color: Theme.gold.opacity(0.3), radius: 8, y: 4)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+    }
+
+    // MARK: - Chapter 2: Ingredient Component Cards
+
+    private var ingredientComponentCards: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                sectionHeader("Ingredients")
+                Spacer()
+                Text("\(checkedIngredients.count)/\(totalIngredientCount)")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .padding(.horizontal, 20)
+
+            ForEach(Array(recipe.components.enumerated()), id: \.offset) { index, component in
+                IngredientComponentCard(
+                    component: component,
+                    accentColor: accentColor(for: index),
+                    baseServings: recipe.baseServings,
+                    checkedIngredients: $checkedIngredients,
+                    servingCount: $servingCount,
+                    isExpanded: expandedComponents.contains(component.name),
+                    onToggle: {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            if expandedComponents.contains(component.name) {
+                                expandedComponents.remove(component.name)
+                            } else {
+                                expandedComponents.insert(component.name)
+                            }
+                        }
+                    },
+                    onSubstitution: { ingredient, subs in
+                        substitutionSheetIngredient = ingredient
+                        substitutionSheetSubs = subs
+                        showSubstitutionSheet = true
+                    }
+                )
+                .padding(.horizontal, 16)
+            }
+
+            // Shopping List button
+            Button {
+                HapticManager.medium()
+                isGeneratingShoppingList = true
+                DispatchQueue.main.async {
+                    shareShoppingList()
+                    isGeneratingShoppingList = false
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    if isGeneratingShoppingList {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(Theme.primary)
+                    } else {
+                        Image(systemName: "list.clipboard")
+                            .font(.system(size: 14))
+                    }
+                    Text("Shopping List")
+                        .font(.system(size: 14, weight: .semibold))
+                }
+                .foregroundStyle(Theme.primary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 44)
+                .background(Theme.primary.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Theme.primary.opacity(0.2), lineWidth: 0.5)
+                )
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 4)
+        }
+        .padding(.vertical, 16)
+        .background(Theme.cardSurface.opacity(0.5))
+    }
+
+    private func accentColor(for index: Int) -> Color {
+        let palette = recipe.colorPalette.compactMap { Color(hex: $0) }
+        if !palette.isEmpty {
+            return palette[index % palette.count]
+        }
+        let fallback: [Color] = [Theme.primary, Theme.visual, Theme.culinary]
+        return fallback[index % fallback.count]
+    }
+
+    // MARK: - Chapter 3: Story & Vibe
+
+    @ViewBuilder
+    private var storySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader("The Vibe")
+
+            Text(recipe.recipeDescription)
+                .font(.system(size: 15))
+                .foregroundStyle(Theme.textSecondary)
+                .lineSpacing(5)
+                .lineLimit(showFullDescription ? nil : 2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if recipe.recipeDescription.count > 100 {
+                Button {
+                    HapticManager.light()
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        showFullDescription.toggle()
+                    }
+                } label: {
+                    Text(showFullDescription ? "Show less" : "Expand vibe")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.primary)
+                }
+            }
+
+            if showFullDescription {
+                chefCommentarySection
+                dietaryBadges
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
+    }
 
     // MARK: - Chef Commentary
 
@@ -76,8 +368,7 @@ struct PrepOverviewStep: View {
                     .foregroundStyle(Theme.textSecondary)
                     .lineSpacing(4)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 8)
+            .transition(.opacity.combined(with: .move(edge: .top)))
         }
     }
 
@@ -88,65 +379,6 @@ struct PrepOverviewStep: View {
         case "grizzly": return "tree"
         case "familyChef": return "figure.2.and.child.holdinghands"
         default: return "quote.opening"
-        }
-    }
-
-    // MARK: - Translation Matrix (Promoted)
-
-    @ViewBuilder
-    private var translationMatrixSection: some View {
-        if !recipe.translationMatrix.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.left.arrow.right")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Theme.primary)
-                    Text("How your photo became a recipe")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Theme.textSecondary)
-                }
-
-                ForEach(Array(recipe.translationMatrix.enumerated()), id: \.offset) { index, item in
-                    Button {
-                        HapticManager.light()
-                        withAnimation(.easeInOut(duration: 0.3)) {
-                            highlightedTranslation = highlightedTranslation == index ? nil : index
-                        }
-                    } label: {
-                        HStack(alignment: .top, spacing: 10) {
-                            Text(item.visual)
-                                .font(.system(size: 14))
-                                .foregroundStyle(Theme.visual)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-
-                            Image(systemName: "arrow.right")
-                                .font(.system(size: 11))
-                                .foregroundStyle(Theme.textQuaternary)
-
-                            Text(item.culinary)
-                                .font(.system(size: 14))
-                                .foregroundStyle(Theme.culinary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(highlightedTranslation == index ? Theme.gold.opacity(0.08) : Color.clear)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(highlightedTranslation == index ? Theme.gold.opacity(0.2) : Color.clear, lineWidth: 0.5)
-                        )
-                    }
-
-                    if index < recipe.translationMatrix.count - 1 {
-                        Theme.divider.frame(height: 1)
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
         }
     }
 
@@ -178,9 +410,136 @@ struct PrepOverviewStep: View {
                         .foregroundStyle(Theme.primary)
                     }
                 }
-                .padding(.horizontal, 20)
             }
-            .padding(.bottom, 4)
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        }
+    }
+
+    // MARK: - Chapter 4: AI Breakdown
+
+    @ViewBuilder
+    private var aiBreakdownSection: some View {
+        if !recipe.translationMatrix.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                // Collapsible header
+                Button {
+                    HapticManager.light()
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        showAIBreakdown.toggle()
+                    }
+                } label: {
+                    HStack {
+                        HStack(spacing: 6) {
+                            Image(systemName: "cpu")
+                                .font(.system(size: 14))
+                                .foregroundStyle(Theme.visual)
+                            Text("AI Flavor Mapping")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(Theme.textPrimary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Theme.textQuaternary)
+                            .rotationEffect(.degrees(showAIBreakdown ? 180 : 0))
+                    }
+                }
+
+                if !showAIBreakdown {
+                    Text("Tap any element from your photo to see its tasty transformation.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+
+                if showAIBreakdown {
+                    translationMatrixContent
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .background(Theme.cardSurface.opacity(0.5))
+        }
+    }
+
+    private var translationMatrixContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.left.arrow.right")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Theme.primary)
+                Text("How your photo became a recipe")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+
+            ForEach(Array(recipe.translationMatrix.enumerated()), id: \.offset) { index, item in
+                Button {
+                    HapticManager.light()
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        highlightedTranslation = highlightedTranslation == index ? nil : index
+                    }
+                } label: {
+                    HStack(alignment: .top, spacing: 10) {
+                        Text(item.visual)
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.visual)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.textQuaternary)
+
+                        Text(item.culinary)
+                            .font(.system(size: 14))
+                            .foregroundStyle(Theme.culinary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(highlightedTranslation == index ? Theme.gold.opacity(0.08) : Color.clear)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(highlightedTranslation == index ? Theme.gold.opacity(0.2) : Color.clear, lineWidth: 0.5)
+                    )
+                }
+
+                if index < recipe.translationMatrix.count - 1 {
+                    Theme.divider.frame(height: 1)
+                }
+            }
+
+            // See full story button
+            Button {
+                HapticManager.light()
+                showAIReasoning = true
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 11))
+                    Text("See the full story")
+                        .font(.system(size: 13, weight: .medium))
+                }
+                .foregroundStyle(Theme.visual)
+            }
+            .padding(.top, 4)
+
+            if showAIReasoningTooltip {
+                CoachTooltip(
+                    text: "See how AI connected visuals to flavors",
+                    icon: "sparkles",
+                    pointer: .up
+                ) {
+                    showAIReasoningTooltip = false
+                    hasSeenAIReasoningTooltip = true
+                }
+                .transition(.opacity)
+            }
         }
     }
 
@@ -310,7 +669,6 @@ struct PrepOverviewStep: View {
             VStack(alignment: .leading, spacing: 12) {
                 sectionHeader("Nutrition per Serving")
 
-                // Calories prominent display
                 if let cals = calories {
                     HStack(spacing: 4) {
                         Text("\(scaledNutrient(cals))")
@@ -323,7 +681,6 @@ struct PrepOverviewStep: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
-                // Macro columns
                 if let nutrition {
                     HStack(spacing: 0) {
                         macroColumn(value: scaledNutrient(nutrition.protein), label: "Protein", unit: "g", color: Theme.visual)
@@ -399,144 +756,6 @@ struct PrepOverviewStep: View {
         }
     }
 
-    // MARK: - Ingredients
-
-    private var ingredientsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                sectionHeader("Ingredients")
-                Spacer()
-                Text("\(checkedIngredients.count)/\(totalIngredientCount)")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Theme.textTertiary)
-            }
-
-            ForEach(Array(recipe.components.enumerated()), id: \.offset) { componentIndex, component in
-                if recipe.components.count > 1 {
-                    if componentIndex > 0 {
-                        Theme.divider.frame(height: 1).padding(.vertical, 4)
-                    }
-                    Text(component.name.uppercased())
-                        .font(.system(size: 11, weight: .semibold))
-                        .tracking(0.8)
-                        .foregroundStyle(Theme.primary)
-                        .padding(.top, componentIndex > 0 ? 4 : 0)
-                }
-
-                ForEach(component.ingredients, id: \.self) { ingredient in
-                    ingredientRow(ingredient: ingredient, component: component)
-                }
-            }
-
-            // Shopping List export button
-            Button {
-                HapticManager.medium()
-                isGeneratingShoppingList = true
-                DispatchQueue.main.async {
-                    shareShoppingList()
-                    isGeneratingShoppingList = false
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    if isGeneratingShoppingList {
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(Theme.primary)
-                    } else {
-                        Image(systemName: "list.clipboard")
-                            .font(.system(size: 14))
-                    }
-                    Text("Shopping List")
-                        .font(.system(size: 14, weight: .semibold))
-                }
-                .foregroundStyle(Theme.primary)
-                .frame(maxWidth: .infinity)
-                .frame(height: 44)
-                .background(Theme.primary.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Theme.primary.opacity(0.2), lineWidth: 0.5)
-                )
-            }
-            .padding(.top, 8)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-        .background(Theme.cardSurface)
-        .overlay(
-            VStack { Spacer(); Theme.divider.frame(height: 1) }
-        )
-        .padding(.top, 16)
-    }
-
-    private func isIngredientHighlighted(_ ingredient: String) -> Bool {
-        guard let index = highlightedTranslation,
-              index < recipe.translationMatrix.count else { return false }
-        let culinaryText = recipe.translationMatrix[index].culinary.lowercased()
-        let ingredientName = IngredientParser.parse(ingredient).name.lowercased()
-        // Check if the culinary description mentions the ingredient or vice versa
-        let culinaryWords = culinaryText.split(separator: " ").map(String.init)
-        let ingredientWords = ingredientName.split(separator: " ").map(String.init)
-        return culinaryWords.contains(where: { word in
-            word.count >= 3 && ingredientWords.contains(where: { $0.contains(word) || word.contains($0) })
-        })
-    }
-
-    private func ingredientRow(ingredient: String, component: RecipeComponent) -> some View {
-        let key = "\(component.name):\(ingredient)"
-        let isChecked = checkedIngredients.contains(key)
-        let subs = component.substitutions?.first(where: { $0.original == ingredient })
-        let highlighted = isIngredientHighlighted(ingredient)
-
-        return HStack(spacing: 12) {
-            Button {
-                HapticManager.selection()
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    if isChecked {
-                        checkedIngredients.remove(key)
-                    } else {
-                        checkedIngredients.insert(key)
-                    }
-                }
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
-                        .font(.system(size: 22))
-                        .foregroundStyle(isChecked ? Theme.checkOn : Theme.checkOff)
-
-                    Text(scaledIngredient(ingredient))
-                        .font(.system(size: 15))
-                        .foregroundStyle(isChecked ? Theme.textTertiary : Theme.textPrimary)
-                        .strikethrough(isChecked, color: Theme.textQuaternary)
-                }
-            }
-
-            Spacer()
-
-            if let subs, !subs.substitutes.isEmpty {
-                Button {
-                    HapticManager.light()
-                    substitutionSheetIngredient = ingredient
-                    substitutionSheetSubs = subs.substitutes
-                    showSubstitutionSheet = true
-                } label: {
-                    Image(systemName: "arrow.triangle.swap")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Theme.culinary.opacity(0.6))
-                }
-            }
-        }
-        .frame(minHeight: 44)
-        .padding(.horizontal, highlighted ? 6 : 0)
-        .padding(.vertical, highlighted ? 2 : 0)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(highlighted ? Theme.gold.opacity(0.1) : Color.clear)
-        )
-        .animation(.easeInOut(duration: 0.3), value: highlighted)
-    }
-
     // MARK: - More Details (Deep Dive Panels)
 
     private var moreDetailsSection: some View {
@@ -603,31 +822,6 @@ struct PrepOverviewStep: View {
                             Text(analysis.setting)
                                 .font(.system(size: 13))
                                 .foregroundStyle(Theme.textTertiary)
-                        }
-
-                        Button {
-                            HapticManager.light()
-                            showAIReasoning = true
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "sparkles")
-                                    .font(.system(size: 11))
-                                Text("See the full story")
-                                    .font(.system(size: 13, weight: .medium))
-                            }
-                            .foregroundStyle(Theme.visual)
-                        }
-
-                        if showAIReasoningTooltip {
-                            CoachTooltip(
-                                text: "See how AI connected visuals to flavors",
-                                icon: "sparkles",
-                                pointer: .up
-                            ) {
-                                showAIReasoningTooltip = false
-                                hasSeenAIReasoningTooltip = true
-                            }
-                            .transition(.opacity)
                         }
                     }
                 }
@@ -771,11 +965,6 @@ struct PrepOverviewStep: View {
 
     private var totalIngredientCount: Int {
         recipe.components.reduce(0) { $0 + $1.ingredients.count }
-    }
-
-    private func scaledIngredient(_ ingredient: String) -> String {
-        let parsed = IngredientParser.parse(ingredient)
-        return parsed.scaled(from: recipe.baseServings, to: servingCount)
     }
 
     private func scaledNutrient(_ baseValue: Int) -> Int {
