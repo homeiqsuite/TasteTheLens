@@ -21,6 +21,7 @@ struct ContentView: View {
     @State private var showDebugMenu = false
     #endif
     @State private var vm = MainViewModel()
+    @State private var selectedTab: AppTab = .home
     @Namespace private var heroNamespace
 
     @Environment(\.modelContext) private var modelContext
@@ -48,7 +49,7 @@ struct ContentView: View {
 
             switch vm.currentScreen {
             case .dashboard:
-                DashboardView(vm: vm)
+                RootTabContainer(vm: vm, selectedTab: $selectedTab)
                     .transition(.opacity)
 
             case .camera:
@@ -137,9 +138,6 @@ struct ContentView: View {
                     vm.isOnboardingFlow = true
                 }
             }
-        }
-        .sheet(isPresented: $vm.showSavedRecipes) {
-            SavedRecipesView()
         }
         .sheet(isPresented: $vm.showSettings) {
             SettingsView()
@@ -270,6 +268,7 @@ struct ContentView: View {
                             .frame(width: 44, height: 44)
                             .background(Color.black.opacity(0.3))
                             .clipShape(Circle())
+                            .overlay(Circle().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
                     }
                     .accessibilityLabel("Back to dashboard")
                     .padding(.leading, 16)
@@ -293,6 +292,7 @@ struct ContentView: View {
                         .padding(.vertical, 7)
                         .background(Color.black.opacity(0.3))
                         .clipShape(Capsule())
+                        .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
                     }
                     .accessibilityLabel("\(UsageTracker.shared.remainingGenerations) credits remaining")
                     .accessibilityHint("Tap to view credit options")
@@ -322,6 +322,7 @@ struct ContentView: View {
                             .padding(.vertical, 8)
                             .background(Color.black.opacity(0.3))
                             .clipShape(Capsule())
+                            .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
                         }
 
                         if showBudgetTooltip {
@@ -447,19 +448,11 @@ struct ContentView: View {
 
     private func recipeCardScreen(recipe: Recipe, isOnboardingFlow: Bool) -> some View {
         NavigationStack {
-            RecipeCardView(recipe: recipe, isOnboardingFlow: isOnboardingFlow)
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button {
-                            withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.5, dampingFraction: 0.8)) {
-                                vm.resetToDashboard()
-                            }
-                        } label: {
-                            Image(systemName: "house")
-                                .foregroundStyle(Theme.primary)
-                        }
-                    }
+            RecipeCardView(recipe: recipe, isOnboardingFlow: isOnboardingFlow, onDismiss: {
+                withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.5, dampingFraction: 0.8)) {
+                    vm.resetToDashboard()
                 }
+            })
         }
     }
 

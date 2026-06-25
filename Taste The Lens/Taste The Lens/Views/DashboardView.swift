@@ -1,6 +1,5 @@
 import SwiftUI
 import SwiftData
-import PhotosUI
 import os
 
 private let logger = makeLogger(category: "Dashboard")
@@ -13,22 +12,15 @@ struct DashboardView: View {
     @State private var selectedRecipe: Recipe?
     @State private var showChefPicker = false
     @State private var showPaywall = false
-    @State private var selectedPhotoItem: PhotosPickerItem?
-    @State private var showPhotoPicker = false
-
-    // Hero card animations
-    @State private var gradientBreathing = false
-    @State private var cardAppeared = false
-    @State private var iconAppeared = false
-    @State private var textAppeared = false
-    @State private var ctaAppeared = false
     @AppStorage("selectedChef") private var selectedChef = "default"
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let authManager = AuthManager.shared
     private let challengeService = ChallengeService.shared
     private let menuService = TastingMenuService.shared
     private let impactService = CommunityImpactService.shared
+
+    /// Target number of recipes per week the metric ring fills toward.
+    private let weeklyGoal = 5
 
     private var chefTheme: ChefTheme {
         let chef = ChefPersonality(rawValue: selectedChef) ?? .defaultChef
@@ -56,17 +48,12 @@ struct DashboardView: View {
         return recipes.filter { $0.createdAt >= startOfWeek }.count
     }
 
-    private var creditBadgeText: String {
-        let credits = UsageTracker.shared.totalAvailableCredits
-        return "\(credits) credits · ~\(credits) recipes left"
-    }
-
     var body: some View {
         ScrollView {
-            VStack(spacing: 22) {
+            VStack(spacing: 20) {
                 greetingSection
-                statsBar
-                heroCard
+                heroMetricCard
+                secondaryTiles
                 chefModeCard
                 if let lastRecipe = recipes.first {
                     continueCookingSection(lastRecipe)
@@ -81,33 +68,16 @@ struct DashboardView: View {
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
-            .padding(.bottom, 40)
+            .padding(.bottom, DS.tabBarClearance + DS.Spacing.lg)
         }
         .background(chefTheme.dashboardBg.ignoresSafeArea())
         .animation(.easeInOut(duration: 0.4), value: selectedChef)
         .refreshable {
             await refreshDashboard()
         }
-        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItem, matching: .images)
-        .onChange(of: selectedPhotoItem) { _, newItem in
-            guard let newItem else { return }
-            Task {
-                if let data = try? await newItem.loadTransferable(type: Data.self),
-                   let image = UIImage(data: data) {
-                    vm.handlePhotoCaptured(image)
-                }
-                selectedPhotoItem = nil
-            }
-        }
         .sheet(item: $selectedRecipe) { recipe in
             NavigationStack {
-                RecipeCardView(recipe: recipe)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
-                            Button("Done") { selectedRecipe = nil }
-                                .foregroundStyle(Theme.primary)
-                        }
-                    }
+                RecipeCardView(recipe: recipe, onDismiss: { selectedRecipe = nil })
             }
         }
         .sheet(isPresented: $showChefPicker) {
@@ -144,35 +114,28 @@ struct DashboardView: View {
 
     private var greetingSection: some View {
         HStack(alignment: .center) {
-            Text("\(greetingText), \(displayName)")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(chefTheme.textPrimary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(greetingText)
+                    .font(.dsCaption)
+                    .foregroundStyle(chefTheme.textTertiary)
+                Text(displayName)
+                    .font(.dsTitle)
+                    .foregroundStyle(chefTheme.textPrimary)
+            }
 
             Spacer()
 
-            HStack(spacing: 10) {
-                Button {
-                    vm.showSettings = true
-                } label: {
-                    Image(systemName: "bell.fill")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(chefTheme.accent)
-                        .frame(width: 40, height: 40)
-                        .background(chefTheme.accent.opacity(0.12))
-                        .clipShape(Circle())
-                }
-
-                Button {
-                    vm.showSettings = true
-                } label: {
-                    Image(systemName: "gearshape.fill")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(chefTheme.accent)
-                        .frame(width: 40, height: 40)
-                        .background(chefTheme.accent.opacity(0.12))
-                        .clipShape(Circle())
-                }
+            Button {
+                vm.showSettings = true
+            } label: {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(chefTheme.accent)
+                    .frame(width: 42, height: 42)
+                    .background(chefTheme.accent.opacity(0.12))
+                    .clipShape(Circle())
             }
+            .accessibilityLabel("Settings")
         }
     }
 
@@ -192,207 +155,94 @@ struct DashboardView: View {
         return "Chef"
     }
 
-    // MARK: - Stats Bar
+    // MARK: - Hero Metric Card
 
-    private var statsBar: some View {
-        HStack(spacing: 0) {
-            // Cooking Streak
-            HStack(spacing: 10) {
-                Image(systemName: "flame.fill")
-                    .font(.system(size: 22))
-                    .foregroundStyle(.orange)
+    private var heroMetricCard: some View {
+        HStack(spacing: 18) {
+            MetricRing(
+                value: recipesThisWeek,
+                goal: weeklyGoal,
+                centerSubtitle: "of \(weeklyGoal)",
+                accent: chefTheme.accent,
+                valueColor: chefTheme.textPrimary,
+                subtitleColor: chefTheme.textTertiary,
+                size: .large
+            )
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Cooking Streak")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(chefTheme.textTertiary)
-                    Text("\(cookingStreak) days")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(chefTheme.accent)
-                }
-            }
-            .frame(maxWidth: .infinity)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Recipes this week")
+                    .font(.dsSection)
+                    .foregroundStyle(chefTheme.textPrimary)
 
-            Rectangle()
-                .fill(chefTheme.cardBorder)
-                .frame(width: 1, height: 36)
+                Text(weeklyProgressMessage)
+                    .font(.dsBody)
+                    .foregroundStyle(chefTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
-            // Recipes Created
-            HStack(spacing: 10) {
-                Image(systemName: "fork.knife.circle.fill")
-                    .font(.system(size: 22))
-                    .foregroundStyle(.orange)
+                Spacer(minLength: 8)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Recipes Created")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(chefTheme.textTertiary)
-                    Text("\(recipesThisWeek) this week")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(chefTheme.accent)
-                }
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .themedCard(chefTheme)
-    }
-
-    // MARK: - Hero Card
-
-    private var heroCard: some View {
-        ZStack(alignment: .topLeading) {
-            // Breathing gradient background
-            RoundedRectangle(cornerRadius: 28)
-                .fill(chefTheme.heroGradient)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 28)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.12),
-                                    Color.clear,
-                                    Color.white.opacity(0.06),
-                                ],
-                                startPoint: gradientBreathing ? .topLeading : .bottomTrailing,
-                                endPoint: gradientBreathing ? .bottomTrailing : .topLeading
-                            )
-                        )
-                        .animation(
-                            reduceMotion ? nil : .easeInOut(duration: 6.0).repeatForever(autoreverses: true),
-                            value: gradientBreathing
-                        )
-                )
-
-            // Sparkle/glow overlay
-            RoundedRectangle(cornerRadius: 28)
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color.white.opacity(0.15),
-                            Color.white.opacity(0.03),
-                            Color.clear,
-                        ],
-                        center: .topTrailing,
-                        startRadius: 20,
-                        endRadius: 250
-                    )
-                )
-
-            VStack(alignment: .leading, spacing: 16) {
-                // Credit badge
-                Text(creditBadgeText)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(Color.black.opacity(0.2))
-                    )
-                    .opacity(textAppeared ? 1 : 0)
-
-                // Main content row
-                HStack(alignment: .center, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("What are you cooking today?")
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundStyle(.white)
-                            .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
-
-                        Text("Turn any ingredients or dish into a recipe in seconds.")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.85))
-                            .lineSpacing(2)
-                    }
-                    .opacity(textAppeared ? 1 : 0)
-                    .offset(y: textAppeared ? 0 : 8)
-
-                    Spacer()
-
-                    // Camera icon
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.white.opacity(0.2))
-                        .frame(width: 56, height: 56)
-                        .overlay(
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 24))
-                                .foregroundStyle(.white)
-                        )
-                        .opacity(iconAppeared ? 1 : 0)
-                        .offset(y: iconAppeared ? 0 : -10)
-                }
-
-                // Action buttons
-                HStack(spacing: 10) {
-                    // Upload Image
-                    Button {
-                        showPhotoPicker = true
-                    } label: {
-                        Label("Upload Image", systemImage: "photo.on.rectangle")
+                Button {
+                    HapticManager.medium()
+                    vm.navigateToCamera()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "camera.fill")
                             .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(
-                                Capsule()
-                                    .fill(Color.black.opacity(0.25))
-                            )
+                        Text("Snap a Photo")
+                            .font(.dsBodyEmph)
                     }
-
-                    Spacer()
-
-                    // Snap a Photo
-                    Button {
-                        HapticManager.medium()
-                        vm.navigateToCamera()
-                    } label: {
-                        Label("Snap a Photo", systemImage: "camera.fill")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(chefTheme.accentDeep)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 12)
-                            .background(
-                                Capsule()
-                                    .fill(.white)
-                                    .shadow(color: .black.opacity(0.15), radius: 8, y: 4)
-                            )
-                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(chefTheme.accent))
                 }
-                .opacity(ctaAppeared ? 1 : 0)
-                .offset(y: ctaAppeared ? 0 : 12)
+                .buttonStyle(PremiumCardButtonStyle())
             }
-            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity)
-        .shadow(color: chefTheme.accent.opacity(0.35), radius: 20, y: 10)
-        .scaleEffect(cardAppeared ? 1.0 : 0.95)
-        .opacity(cardAppeared ? 1 : 0)
-        .onAppear {
-            gradientBreathing = !reduceMotion
-            startEntranceAnimation()
+        .minimalCard(chefTheme, padding: EdgeInsets(top: 20, leading: 20, bottom: 20, trailing: 20))
+    }
+
+    private var weeklyProgressMessage: String {
+        if recipesThisWeek == 0 {
+            return "Snap your first dish to start the week."
+        } else if recipesThisWeek >= weeklyGoal {
+            return "Goal reached — \(recipesThisWeek) made this week. Keep cooking!"
+        } else {
+            let remaining = weeklyGoal - recipesThisWeek
+            return "\(remaining) more to reach your weekly goal."
         }
     }
 
-    private func startEntranceAnimation() {
-        if reduceMotion {
-            cardAppeared = true
-            iconAppeared = true
-            textAppeared = true
-            ctaAppeared = true
-            return
+    // MARK: - Secondary Stat Tiles
+
+    private var secondaryTiles: some View {
+        HStack(spacing: 12) {
+            statTile(icon: "flame.fill", value: cookingStreak, label: "Day streak")
+            statTile(icon: "fork.knife", value: recipes.count, label: "Total recipes")
         }
-        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-            cardAppeared = true
+    }
+
+    private func statTile(icon: String, value: Int, label: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(chefTheme.accent)
+                .frame(width: 36, height: 36)
+                .background(chefTheme.accent.opacity(0.12))
+                .clipShape(Circle())
+
+            Text("\(value)")
+                .font(.dsMetric)
+                .foregroundStyle(chefTheme.textPrimary)
+                .contentTransition(.numericText())
+
+            Text(label)
+                .font(.dsCaption)
+                .foregroundStyle(chefTheme.textTertiary)
         }
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.15)) {
-            iconAppeared = true
-        }
-        withAnimation(.easeOut(duration: 0.4).delay(0.3)) {
-            textAppeared = true
-        }
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.75).delay(0.45)) {
-            ctaAppeared = true
-        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .minimalCard(chefTheme)
     }
 
     // MARK: - Chef Mode
@@ -405,7 +255,6 @@ struct DashboardView: View {
             showChefPicker = true
         } label: {
             HStack(spacing: 14) {
-                // Chef icon
                 Circle()
                     .fill(chefTheme.accent.opacity(0.12))
                     .frame(width: 48, height: 48)
@@ -417,18 +266,18 @@ struct DashboardView: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Chef Mode")
-                        .font(.system(size: 17, weight: .bold))
+                        .font(.dsBodyEmph)
                         .foregroundStyle(chefTheme.textPrimary)
                     Text(chef.subtitle)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.dsCaption)
                         .foregroundStyle(chefTheme.textTertiary)
                 }
 
                 Spacer()
 
                 HStack(spacing: 4) {
-                    Text("Change Mode")
-                        .font(.system(size: 13, weight: .semibold))
+                    Text("Change")
+                        .font(.dsCaption)
                         .foregroundStyle(chefTheme.accent)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 10, weight: .semibold))
@@ -438,10 +287,10 @@ struct DashboardView: View {
                 .padding(.vertical, 8)
                 .overlay(
                     Capsule()
-                        .stroke(chefTheme.accent, lineWidth: 1)
+                        .strokeBorder(chefTheme.accent, lineWidth: 1)
                 )
             }
-            .themedCard(chefTheme)
+            .minimalCard(chefTheme)
         }
         .buttonStyle(PremiumCardButtonStyle())
     }
@@ -449,109 +298,61 @@ struct DashboardView: View {
     // MARK: - Continue Cooking
 
     private func continueCookingSection(_ lastRecipe: Recipe) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("Continue Cooking")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(chefTheme.textPrimary)
-                Spacer()
-                Button {
-                    vm.showSavedRecipes = true
-                } label: {
-                    Text("See All")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(chefTheme.accent)
-                }
-            }
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Continue cooking")
+                .font(.dsSection)
+                .foregroundStyle(chefTheme.textPrimary)
 
             Button {
                 selectedRecipe = lastRecipe
             } label: {
                 HStack(spacing: 14) {
-                    // Recipe thumbnail with badge
-                    Color.clear
-                        .frame(width: 140, height: 110)
-                        .overlay {
-                            if let imageData = lastRecipe.generatedDishImageData,
-                               let uiImage = UIImage(data: imageData) {
-                                Image(uiImage: uiImage)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                            } else {
-                                RoundedRectangle(cornerRadius: 14)
-                                    .fill(chefTheme.accent.opacity(0.08))
-                                    .overlay(
-                                        Image(systemName: "fork.knife")
-                                            .font(.system(size: 28))
-                                            .foregroundStyle(chefTheme.accent.opacity(0.3))
-                                    )
-                            }
-                        }
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                        .overlay(alignment: .topLeading) {
-                            // Last Recipe badge
-                            HStack(spacing: 4) {
-                                Image(systemName: "clock")
-                                    .font(.system(size: 9, weight: .semibold))
-                                Text("Last Recipe")
-                                    .font(.system(size: 10, weight: .semibold))
-                            }
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule()
-                                    .fill(Color.black.opacity(0.5))
-                            )
-                            .padding(8)
-                        }
+                    recipeThumbnail(lastRecipe, size: 80, radius: DS.Radius.tile)
 
-                    // Recipe info
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(lastRecipe.dishName)
-                            .font(.system(size: 16, weight: .bold))
+                            .font(.dsBodyEmph)
                             .foregroundStyle(chefTheme.textPrimary)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
 
-                        Text("Generated · \(lastRecipe.createdAt.formatted(.dateTime.month(.abbreviated).day()))")
-                            .font(.system(size: 12, weight: .medium))
+                        Text(lastRecipe.createdAt.formatted(.dateTime.month(.abbreviated).day()))
+                            .font(.dsCaption)
                             .foregroundStyle(chefTheme.textTertiary)
-
-                        Spacer()
-
-                        HStack(spacing: 4) {
-                            Text("Continue")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(chefTheme.accent)
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(chefTheme.accent)
-                        }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Spacer()
+
+                    HStack(spacing: 4) {
+                        Text("Continue")
+                            .font(.dsCaption)
+                            .foregroundStyle(chefTheme.accent)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(chefTheme.accent)
+                    }
                 }
-                .themedCard(chefTheme)
+                .minimalCard(chefTheme, radius: DS.Radius.tile, padding: EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 14))
             }
             .buttonStyle(PremiumCardButtonStyle())
         }
     }
 
-    // MARK: - My Recipes
+    // MARK: - Recent Recipes
 
     private var recentRecipesSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("My Recipes")
-                    .font(.system(size: 18, weight: .bold))
+                Text("Recent recipes")
+                    .font(.dsSection)
                     .foregroundStyle(chefTheme.textPrimary)
                 Spacer()
                 if !recipes.isEmpty {
                     Button {
-                        vm.showSavedRecipes = true
+                        vm.requestedTab = .saved
                     } label: {
                         Text("See All")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.dsBodyEmph)
                             .foregroundStyle(chefTheme.accent)
                     }
                 }
@@ -560,15 +361,43 @@ struct DashboardView: View {
             if recipes.isEmpty {
                 emptyRecipesState
             } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 14) {
-                        ForEach(Array(recipes.prefix(5))) { recipe in
-                            recentRecipeCard(recipe)
-                        }
+                VStack(spacing: 10) {
+                    ForEach(Array(recipes.prefix(4))) { recipe in
+                        recentRecipeRow(recipe)
                     }
                 }
             }
         }
+    }
+
+    private func recentRecipeRow(_ recipe: Recipe) -> some View {
+        Button {
+            selectedRecipe = recipe
+        } label: {
+            HStack(spacing: 12) {
+                recipeThumbnail(recipe, size: 56, radius: DS.Radius.chip)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(recipe.dishName)
+                        .font(.dsBodyEmph)
+                        .foregroundStyle(chefTheme.textPrimary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+
+                    Text(recipe.createdAt.formatted(.dateTime.month(.abbreviated).day()))
+                        .font(.dsCaption)
+                        .foregroundStyle(chefTheme.textTertiary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(chefTheme.textQuaternary)
+            }
+            .minimalCard(chefTheme, radius: DS.Radius.tile, padding: EdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 14))
+        }
+        .buttonStyle(PremiumCardButtonStyle())
     }
 
     private var emptyRecipesState: some View {
@@ -577,116 +406,58 @@ struct DashboardView: View {
             vm.navigateToCamera()
         } label: {
             HStack(spacing: 16) {
-                ZStack {
-                    Circle()
-                        .fill(chefTheme.accent.opacity(0.10))
-                        .frame(width: 72, height: 72)
+                Circle()
+                    .fill(chefTheme.accent.opacity(0.10))
+                    .frame(width: 64, height: 64)
+                    .overlay(
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 24))
+                            .foregroundStyle(chefTheme.accent)
+                    )
 
-                    Image(systemName: "carrot.fill")
-                        .font(.system(size: 16))
-                        .foregroundStyle(chefTheme.accentOrange)
-                        .offset(x: -14, y: -10)
-
-                    Image(systemName: "leaf.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.green.opacity(0.6))
-                        .offset(x: 16, y: -14)
-
-                    Image(systemName: "camera.fill")
-                        .font(.system(size: 24))
-                        .foregroundStyle(chefTheme.accent)
-
-                    Image(systemName: "fork.knife")
-                        .font(.system(size: 14))
-                        .foregroundStyle(chefTheme.accentDeep)
-                        .offset(x: 14, y: 12)
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text("No recipes yet")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.dsBodyEmph)
                         .foregroundStyle(chefTheme.textPrimary)
 
-                    Text("Your first recipe is waiting")
-                        .font(.system(size: 13, weight: .medium))
+                    Text("Snap a photo to create your first dish.")
+                        .font(.dsCaption)
                         .foregroundStyle(chefTheme.textTertiary)
-
-                    Text("Snap Your First Recipe")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(chefTheme.accentDeep)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(
-                            Capsule()
-                                .fill(chefTheme.ctaGradient)
-                                .opacity(0.18)
-                        )
-                        .overlay(
-                            Capsule()
-                                .stroke(chefTheme.accent.opacity(0.3), lineWidth: 1)
-                        )
-                        .padding(.top, 2)
                 }
 
                 Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(chefTheme.textQuaternary)
             }
-            .themedCard(chefTheme)
+            .minimalCard(chefTheme)
         }
         .buttonStyle(PremiumCardButtonStyle())
     }
 
-    private func recentRecipeCard(_ recipe: Recipe) -> some View {
-        Button {
-            selectedRecipe = recipe
-        } label: {
-            VStack(alignment: .leading, spacing: 10) {
-                // Dish image thumbnail with heart overlay
-                Color.clear
-                    .frame(width: 160, height: 120)
-                    .overlay {
-                        if let imageData = recipe.generatedDishImageData,
-                           let uiImage = UIImage(data: imageData) {
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        } else {
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(chefTheme.accent.opacity(0.08))
-                                .overlay(
-                                    Image(systemName: "fork.knife")
-                                        .font(.system(size: 28))
-                                        .foregroundStyle(chefTheme.accent.opacity(0.3))
-                                )
-                        }
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .overlay(alignment: .topTrailing) {
-                        Image(systemName: "heart.fill")
-                            .font(.system(size: 14))
-                            .foregroundStyle(.white)
-                            .frame(width: 30, height: 30)
-                            .background(
-                                Circle()
-                                    .fill(chefTheme.accent.opacity(0.7))
-                            )
-                            .padding(6)
-                    }
+    // MARK: - Recipe Thumbnail
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(recipe.dishName)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(chefTheme.textPrimary)
-                        .lineLimit(2)
-                        .frame(width: 160, alignment: .leading)
-
-                    Text("Generated · \(recipe.createdAt.formatted(.dateTime.month(.abbreviated).day()))")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(chefTheme.textQuaternary)
+    @ViewBuilder
+    private func recipeThumbnail(_ recipe: Recipe, size: CGFloat, radius: CGFloat) -> some View {
+        Color.clear
+            .frame(width: size, height: size)
+            .overlay {
+                if let imageData = recipe.generatedDishImageData,
+                   let uiImage = UIImage(data: imageData) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else {
+                    chefTheme.accent.opacity(0.10)
+                        .overlay(
+                            Image(systemName: "fork.knife")
+                                .font(.system(size: size * 0.32))
+                                .foregroundStyle(chefTheme.accent.opacity(0.4))
+                        )
                 }
             }
-            .frame(width: 160)
-        }
-        .buttonStyle(PremiumCardButtonStyle())
+            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
     }
 
     // MARK: - Challenges
@@ -872,14 +643,14 @@ struct DashboardView: View {
             if authManager.isAuthenticated && !menuService.myMenus.isEmpty {
                 HStack {
                     Text("Tasting Menus")
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.dsSection)
                         .foregroundStyle(chefTheme.textPrimary)
                     Spacer()
                     Button {
                         vm.showTastingMenus = true
                     } label: {
                         Text("See All")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.dsBodyEmph)
                             .foregroundStyle(chefTheme.accent)
                     }
                 }
@@ -912,7 +683,7 @@ struct DashboardView: View {
                         .font(.system(size: 16, weight: .semibold, design: .serif))
                         .foregroundStyle(chefTheme.textPrimary)
                     Text("\(menu.courseCount) courses · \(menu.status.capitalized)")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.dsCaption)
                         .foregroundStyle(chefTheme.textTertiary)
                 }
 
@@ -922,7 +693,7 @@ struct DashboardView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(chefTheme.textQuaternary)
             }
-            .themedCard(chefTheme)
+            .minimalCard(chefTheme)
         }
         .buttonStyle(PremiumCardButtonStyle())
     }
@@ -947,12 +718,12 @@ struct DashboardView: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Create a Tasting Menu")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.dsBodyEmph)
                         .foregroundStyle(chefTheme.textPrimary)
                     Text(authManager.isAuthenticated
                          ? "Design a multi-course experience"
                          : "Sign in to create themed menus with friends")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.dsCaption)
                         .foregroundStyle(chefTheme.textTertiary)
                 }
 
@@ -962,33 +733,9 @@ struct DashboardView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(chefTheme.textQuaternary)
             }
-            .themedCard(chefTheme)
+            .minimalCard(chefTheme)
         }
         .buttonStyle(PremiumCardButtonStyle())
-    }
-}
-
-// MARK: - Themed Card Modifier
-
-private struct ThemedCard: ViewModifier {
-    let theme: ChefTheme
-
-    func body(content: Content) -> some View {
-        content
-            .padding(.horizontal, 16)
-            .padding(.vertical, 16)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(theme.cardBg)
-                    .shadow(color: theme.cardShadow, radius: 12, y: 4)
-                    .shadow(color: .black.opacity(0.03), radius: 4, y: 2)
-            )
-    }
-}
-
-extension View {
-    fileprivate func themedCard(_ theme: ChefTheme) -> some View {
-        modifier(ThemedCard(theme: theme))
     }
 }
 

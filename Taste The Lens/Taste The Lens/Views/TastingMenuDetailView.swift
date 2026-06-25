@@ -79,13 +79,7 @@ struct TastingMenuDetailView: View {
         }
         .sheet(item: $selectedRecipe) { recipe in
             NavigationStack {
-                RecipeCardView(recipe: recipe)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
-                            Button("Done") { selectedRecipe = nil }
-                                .foregroundStyle(Theme.gold)
-                        }
-                    }
+                RecipeCardView(recipe: recipe, onDismiss: { selectedRecipe = nil })
             }
         }
         .sheet(isPresented: $showQRCode) {

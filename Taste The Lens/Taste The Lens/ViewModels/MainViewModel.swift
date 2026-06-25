@@ -67,7 +67,8 @@ final class MainViewModel {
     var capturedImage: UIImage?
     var capturedImages: [UIImage]?
     var pipeline = ImageAnalysisPipeline()
-    var showSavedRecipes = false
+    /// A tab the UI should switch to (consumed and cleared by `RootTabContainer`).
+    var requestedTab: AppTab?
     var showSettings = false
     var showPaywall = false
     var paywallContext: PaywallContext = .outOfGenerations

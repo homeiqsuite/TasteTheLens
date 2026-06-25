@@ -21,6 +21,7 @@ private enum CompletionSheet: Identifiable {
 struct CompletionStep: View {
     let recipe: Recipe
     let servingCount: Int
+    var bottomInset: CGFloat = 100
     @State private var exportImage: UIImage?
     @State private var storiesExportImage: UIImage?
     @State private var isCreatingChallenge = false
@@ -40,11 +41,11 @@ struct CompletionStep: View {
 
                 // Completion header
                 Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 48))
+                    .font(.system(size: 44))
                     .foregroundStyle(Theme.gold)
 
                 Text("Ready to Plate!")
-                    .font(.system(size: 24, weight: .bold, design: .serif))
+                    .font(.system(size: 22, weight: .bold, design: .serif))
                     .foregroundStyle(Theme.textPrimary)
 
                 Text("You've completed all the steps. Share your creation or try something new.")
@@ -55,8 +56,8 @@ struct CompletionStep: View {
 
                 Spacer().frame(height: 12)
 
-                // Action buttons
-                VStack(spacing: 12) {
+                // Primary share actions
+                VStack(spacing: 10) {
                     // Share Image
                     Menu {
                         Button {
@@ -85,10 +86,8 @@ struct CompletionStep: View {
                         .foregroundStyle(Theme.darkTextPrimary)
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
-                        .background(Theme.primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .background(Theme.primary, in: RoundedRectangle(cornerRadius: 16))
                     }
-
 
                     // Share Recipe (deep link)
                     Button {
@@ -109,11 +108,31 @@ struct CompletionStep: View {
                         .foregroundStyle(Theme.textPrimary)
                         .frame(maxWidth: .infinity)
                         .frame(height: 50)
-                        .background(Theme.buttonBg)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .background(Theme.buttonBg, in: RoundedRectangle(cornerRadius: 16))
                     }
                     .disabled(isSharingRecipeLink)
+                }
+                .padding(.horizontal, 20)
 
+                // Reimagine tooltip
+                if showReimaginTooltip {
+                    CoachTooltip(
+                        text: "Generate a fresh take on this dish",
+                        icon: "arrow.trianglehead.2.clockwise",
+                        pointer: .down
+                    ) {
+                        showReimaginTooltip = false
+                        hasSeenReimaginTooltip = true
+                    }
+                    .transition(.opacity)
+                    .padding(.horizontal, 20)
+                }
+
+                // Secondary action grid
+                LazyVGrid(
+                    columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)],
+                    spacing: 10
+                ) {
                     // Shopping List
                     Button {
                         HapticManager.medium()
@@ -123,57 +142,18 @@ struct CompletionStep: View {
                             isGeneratingShoppingList = false
                         }
                     } label: {
-                        HStack(spacing: 8) {
-                            if isGeneratingShoppingList {
-                                ProgressView()
-                                    .controlSize(.small)
-                                    .tint(Theme.textPrimary)
-                            } else {
-                                Image(systemName: "list.clipboard")
-                                    .font(.system(size: 14))
-                            }
-                            Text("Shopping List")
-                                .font(.system(size: 15, weight: .semibold))
-                        }
-                        .foregroundStyle(Theme.textPrimary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(Theme.buttonBg)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        completionTile(
+                            icon: isGeneratingShoppingList ? "hourglass" : "list.clipboard",
+                            label: "Shopping List",
+                            accent: Theme.primary
+                        )
                     }
 
                     // Simplify
                     Button {
                         simplifyRecipe()
                     } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "leaf")
-                                .font(.system(size: 14))
-                            Text("Simplify")
-                                .font(.system(size: 15, weight: .semibold))
-                        }
-                        .foregroundStyle(Theme.visual)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(Theme.visual.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(Theme.visual.opacity(0.2), lineWidth: 0.5)
-                        )
-                    }
-
-                    // Reimagine tooltip
-                    if showReimaginTooltip {
-                        CoachTooltip(
-                            text: "Generate a fresh take on this dish",
-                            icon: "arrow.trianglehead.2.clockwise",
-                            pointer: .down
-                        ) {
-                            showReimaginTooltip = false
-                            hasSeenReimaginTooltip = true
-                        }
-                        .transition(.opacity)
+                        completionTile(icon: "leaf", label: "Simplify", accent: Theme.visual)
                     }
 
                     // Reimagine
@@ -204,44 +184,27 @@ struct CompletionStep: View {
                             Label("Culture", systemImage: "globe")
                         }
                     } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "arrow.trianglehead.2.clockwise")
-                                .font(.system(size: 14))
-                            Text("Reimagine")
-                                .font(.system(size: 15, weight: .semibold))
-                        }
-                        .foregroundStyle(Theme.textPrimary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(Theme.buttonBg)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        completionTile(
+                            icon: "arrow.trianglehead.2.clockwise",
+                            label: "Reimagine",
+                            accent: Theme.gold
+                        )
                     }
 
                     // Throw the Gauntlet
                     Button {
                         throwTheGauntlet()
                     } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: EntitlementManager.shared.requiresUpgrade(for: .fullChallenges) ? "lock.fill" : "flag.checkered")
-                                .font(.system(size: 14))
-                            Text("Throw the Gauntlet")
-                                .font(.system(size: 15, weight: .semibold))
-                        }
-                        .foregroundStyle(Theme.gold)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(Theme.gold.opacity(0.12))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(Theme.gold.opacity(0.3), lineWidth: 1)
+                        completionTile(
+                            icon: EntitlementManager.shared.requiresUpgrade(for: .fullChallenges) ? "lock.fill" : "flag.checkered",
+                            label: "Throw the Gauntlet",
+                            accent: Theme.gold
                         )
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                        .opacity(EntitlementManager.shared.requiresUpgrade(for: .fullChallenges) ? 0.6 : 1)
                     }
                 }
                 .padding(.horizontal, 20)
 
-                Spacer().frame(height: 20)
+                Color.clear.frame(height: bottomInset)
             }
         }
         .scrollBounceBehavior(.basedOnSize, axes: .vertical)
@@ -270,6 +233,28 @@ struct CompletionStep: View {
                 }
             }
         }
+    }
+
+    // MARK: - Completion Tile
+
+    private func completionTile(icon: String, label: String, accent: Color) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(accent)
+            Text(label)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 18)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Theme.cardSurface)
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Theme.cardBorder, lineWidth: 1))
+        )
     }
 
     // MARK: - Actions

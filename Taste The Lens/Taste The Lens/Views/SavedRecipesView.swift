@@ -12,9 +12,10 @@ enum SortOrder: String, CaseIterable {
 }
 
 struct SavedRecipesView: View {
+    @Bindable var vm: MainViewModel
     @Query(sort: \Recipe.createdAt, order: .reverse) private var recipes: [Recipe]
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @AppStorage("selectedChef") private var selectedChef = "default"
     @State private var selectedRecipe: Recipe?
     @State private var showSignIn = false
     @State private var searchText = ""
@@ -27,6 +28,11 @@ struct SavedRecipesView: View {
         GridItem(.flexible(), spacing: 12),
         GridItem(.flexible(), spacing: 12)
     ]
+
+    private var chefTheme: ChefTheme {
+        let chef = ChefPersonality(rawValue: selectedChef) ?? .defaultChef
+        return chef.theme
+    }
 
     private var filteredRecipes: [Recipe] {
         let filtered: [Recipe]
@@ -53,7 +59,7 @@ struct SavedRecipesView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Theme.background.ignoresSafeArea()
+                chefTheme.dashboardBg.ignoresSafeArea()
 
                 if recipes.isEmpty {
                     emptyState
@@ -71,6 +77,7 @@ struct SavedRecipesView: View {
                                 listView
                             }
                         }
+                        .padding(.bottom, DS.tabBarClearance)
                     }
                 }
             }
@@ -91,10 +98,6 @@ struct SavedRecipesView: View {
                 }
             }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Done") { dismiss() }
-                        .foregroundStyle(Theme.primary)
-                }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     Menu {
                         ForEach(SortOrder.allCases, id: \.self) { order in
@@ -112,7 +115,7 @@ struct SavedRecipesView: View {
                     } label: {
                         Image(systemName: "arrow.up.arrow.down")
                             .font(.system(size: 14))
-                            .foregroundStyle(Theme.primary)
+                            .foregroundStyle(chefTheme.accent)
                     }
 
                     Button {
@@ -122,7 +125,7 @@ struct SavedRecipesView: View {
                     } label: {
                         Image(systemName: viewMode == .grid ? "list.bullet" : "square.grid.2x2")
                             .font(.system(size: 14))
-                            .foregroundStyle(Theme.primary)
+                            .foregroundStyle(chefTheme.accent)
                     }
                     .accessibilityLabel(viewMode == .grid ? "Switch to list view" : "Switch to grid view")
                 }
@@ -132,16 +135,9 @@ struct SavedRecipesView: View {
             }
             .sheet(item: $selectedRecipe) { recipe in
                 NavigationStack {
-                    RecipeCardView(recipe: recipe)
-                        .toolbar {
-                            ToolbarItem(placement: .topBarLeading) {
-                                Button("Done") { selectedRecipe = nil }
-                                    .foregroundStyle(Theme.primary)
-                            }
-                        }
+                    RecipeCardView(recipe: recipe, onDismiss: { selectedRecipe = nil })
                 }
             }
-            .preferredColorScheme(.light)
             .alert("Delete Recipe", isPresented: $showDeleteConfirmation) {
                 Button("Cancel", role: .cancel) { recipeToDelete = nil }
                 Button("Delete", role: .destructive) {
@@ -160,7 +156,7 @@ struct SavedRecipesView: View {
     private var gridView: some View {
         LazyVGrid(columns: columns, spacing: 12) {
             ForEach(filteredRecipes) { recipe in
-                SavedRecipeCard(recipe: recipe)
+                SavedRecipeCard(recipe: recipe, theme: chefTheme)
                     .onTapGesture {
                         selectedRecipe = recipe
                     }
@@ -179,7 +175,8 @@ struct SavedRecipesView: View {
                     }
             }
         }
-        .padding(16)
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
     }
 
     // MARK: - List View
@@ -187,7 +184,7 @@ struct SavedRecipesView: View {
     private var listView: some View {
         LazyVStack(spacing: 8) {
             ForEach(filteredRecipes) { recipe in
-                SavedRecipeListRow(recipe: recipe)
+                SavedRecipeListRow(recipe: recipe, theme: chefTheme)
                     .contentShape(Rectangle())
                     .onTapGesture {
                         selectedRecipe = recipe
@@ -206,12 +203,12 @@ struct SavedRecipesView: View {
                         } label: {
                             Label("Share", systemImage: "square.and.arrow.up")
                         }
-                        .tint(Theme.primary)
+                        .tint(chefTheme.accent)
                     }
             }
         }
         .padding(.horizontal, 16)
-        .padding(.top, 8)
+        .padding(.top, 12)
     }
 
     // MARK: - Auth Banner
@@ -221,27 +218,27 @@ struct SavedRecipesView: View {
             HStack(spacing: 10) {
                 Image(systemName: "icloud.and.arrow.up")
                     .font(.system(size: 15))
-                    .foregroundStyle(Theme.primary)
+                    .foregroundStyle(chefTheme.accent)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Sign in to sync your recipes")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(Theme.textPrimary)
+                        .font(.dsBodyEmph)
+                        .foregroundStyle(chefTheme.textPrimary)
                     Text("Access your menu from any device")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.textTertiary)
+                        .font(.dsCaption)
+                        .foregroundStyle(chefTheme.textTertiary)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.textQuaternary)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(chefTheme.textQuaternary)
             }
             .padding(14)
             .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Theme.primary.opacity(0.06))
+                RoundedRectangle(cornerRadius: DS.Radius.tile, style: .continuous)
+                    .fill(chefTheme.accent.opacity(0.08))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Theme.primary.opacity(0.15), lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: DS.Radius.tile, style: .continuous)
+                            .strokeBorder(chefTheme.accent.opacity(0.18), lineWidth: DS.Stroke.hairline)
                     )
             )
             .padding(.horizontal, 16)
@@ -256,27 +253,28 @@ struct SavedRecipesView: View {
         VStack(spacing: 16) {
             Image(systemName: "book.closed")
                 .font(.system(size: 48))
-                .foregroundStyle(Theme.textQuaternary)
+                .foregroundStyle(chefTheme.textQuaternary)
             Text("Your menu is empty")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(Theme.textTertiary)
+                .font(.dsSection)
+                .foregroundStyle(chefTheme.textSecondary)
             Text("Capture a photo to create your first dish.")
-                .font(.system(size: 14))
-                .foregroundStyle(Theme.textQuaternary)
+                .font(.dsBody)
+                .foregroundStyle(chefTheme.textTertiary)
 
             Button {
-                dismiss()
+                HapticManager.medium()
+                vm.navigateToCamera()
             } label: {
-                Label("Take a Photo", systemImage: "camera")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Theme.darkTextPrimary)
+                Label("Take a Photo", systemImage: "camera.fill")
+                    .font(.dsBodyEmph)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 24)
                     .padding(.vertical, 12)
-                    .background(Theme.primary)
-                    .clipShape(Capsule())
+                    .background(Capsule().fill(chefTheme.accent))
             }
             .padding(.top, 8)
         }
+        .padding(.bottom, DS.tabBarClearance)
     }
 
     // MARK: - Actions
@@ -314,48 +312,47 @@ struct SavedRecipesView: View {
 
 struct SavedRecipeCard: View {
     let recipe: Recipe
+    let theme: ChefTheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Thumbnail
-            if let imageData = recipe.generatedDishImageData,
-               let uiImage = UIImage(data: imageData) {
-                Color.clear
-                    .frame(height: 140)
-                    .overlay {
+            Color.clear
+                .frame(height: 130)
+                .overlay {
+                    if let imageData = recipe.generatedDishImageData,
+                       let uiImage = UIImage(data: imageData) {
                         Image(uiImage: uiImage)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
+                    } else {
+                        theme.accent.opacity(0.10)
+                            .overlay(
+                                Image(systemName: "fork.knife")
+                                    .font(.system(size: 26))
+                                    .foregroundStyle(theme.accent.opacity(0.4))
+                            )
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-            } else {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Theme.divider)
-                    .frame(height: 140)
-                    .overlay(
-                        Image(systemName: "photo")
-                            .foregroundStyle(Theme.textQuaternary)
-                    )
-            }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.chip, style: .continuous))
 
             Text(recipe.dishName)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Theme.textPrimary)
+                .font(.dsBodyEmph)
+                .foregroundStyle(theme.textPrimary)
                 .lineLimit(2)
 
             HStack(spacing: 4) {
                 Text(recipe.createdAt, style: .date)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.textTertiary)
+                    .font(.dsCaption)
+                    .foregroundStyle(theme.textTertiary)
 
                 if recipe.syncStatus == "synced" {
                     Image(systemName: "checkmark.icloud")
                         .font(.system(size: 10))
-                        .foregroundStyle(Theme.textQuaternary)
+                        .foregroundStyle(theme.textQuaternary)
                 }
             }
         }
-        .lightCard(cornerRadius: 12)
+        .minimalCard(theme, radius: DS.Radius.tile, padding: EdgeInsets(top: 10, leading: 10, bottom: 12, trailing: 10))
     }
 }
 
@@ -363,47 +360,48 @@ struct SavedRecipeCard: View {
 
 struct SavedRecipeListRow: View {
     let recipe: Recipe
+    let theme: ChefTheme
 
     var body: some View {
         HStack(spacing: 12) {
-            // Thumbnail
-            if let imageData = recipe.generatedDishImageData,
-               let uiImage = UIImage(data: imageData) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 64, height: 64)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-            } else {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Theme.divider)
-                    .frame(width: 64, height: 64)
-                    .overlay(
-                        Image(systemName: "photo")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Theme.textQuaternary)
-                    )
-            }
+            Color.clear
+                .frame(width: 60, height: 60)
+                .overlay {
+                    if let imageData = recipe.generatedDishImageData,
+                       let uiImage = UIImage(data: imageData) {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        theme.accent.opacity(0.10)
+                            .overlay(
+                                Image(systemName: "fork.knife")
+                                    .font(.system(size: 18))
+                                    .foregroundStyle(theme.accent.opacity(0.4))
+                            )
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.chip, style: .continuous))
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(recipe.dishName)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Theme.textPrimary)
+                    .font(.dsBodyEmph)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(2)
 
                 HStack(spacing: 6) {
                     Text(recipe.createdAt, style: .date)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.textTertiary)
+                        .font(.dsCaption)
+                        .foregroundStyle(theme.textTertiary)
 
                     if recipe.syncStatus == "synced" {
                         Image(systemName: "checkmark.icloud")
                             .font(.system(size: 10))
-                            .foregroundStyle(Theme.textQuaternary)
+                            .foregroundStyle(theme.textQuaternary)
                     } else if recipe.syncStatus == "syncing" {
                         Image(systemName: "arrow.triangle.2.circlepath.icloud")
                             .font(.system(size: 10))
-                            .foregroundStyle(Theme.textQuaternary)
+                            .foregroundStyle(theme.textQuaternary)
                     } else if recipe.syncStatus == "failed" {
                         Image(systemName: "exclamationmark.icloud")
                             .font(.system(size: 10))
@@ -415,18 +413,9 @@ struct SavedRecipeListRow: View {
             Spacer()
 
             Image(systemName: "chevron.right")
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.textQuaternary)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(theme.textQuaternary)
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Theme.cardSurface)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Theme.cardBorder, lineWidth: 1)
-                )
-        )
-        .padding(.vertical, 2)
+        .minimalCard(theme, radius: DS.Radius.tile, padding: EdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 14))
     }
 }

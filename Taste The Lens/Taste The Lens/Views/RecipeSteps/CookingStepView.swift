@@ -6,6 +6,7 @@ struct CookingStepView: View {
     let cookingStep: CookingStep
     @Binding var checkedIngredients: Set<String>
     @Binding var servingCount: Int
+    var bottomInset: CGFloat = 100
     @State private var showSubstitutionSheet = false
     @State private var substitutionSheetIngredient: String = ""
     @State private var substitutionSheetSubs: [String] = []
@@ -44,18 +45,16 @@ struct CookingStepView: View {
         ScrollView(.vertical, showsIndicators: true) {
             VStack(alignment: .leading, spacing: 20) {
                 // Step header
-                HStack(spacing: 12) {
-                    Text("\(stepIndex + 1)")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(Theme.darkTextPrimary)
-                        .frame(width: 36, height: 36)
-                        .background(Theme.primary)
-                        .clipShape(Circle())
-
-                    Text("Step \(stepIndex + 1)")
-                        .font(.system(size: 22, weight: .bold, design: .serif))
-                        .foregroundStyle(Theme.textPrimary)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("STEP \(stepIndex + 1)")
+                        .font(.system(size: 12, weight: .bold))
+                        .tracking(1.5)
+                        .foregroundStyle(Theme.primary)
+                    Text("of \(recipe.effectiveCookingSteps.count)")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.textTertiary)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
 
@@ -75,10 +74,7 @@ struct CookingStepView: View {
                             stepIngredientRow(ingredient: item.ingredient, component: item.component)
                         }
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 14)
-                    .background(Theme.cardSurface)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .lightCard(cornerRadius: 14)
                     .padding(.horizontal, 16)
                 }
 
@@ -147,7 +143,7 @@ struct CookingStepView: View {
                     .padding(.horizontal, 16)
                 }
 
-                Spacer().frame(height: 20)
+                Color.clear.frame(height: bottomInset)
             }
         }
         .scrollBounceBehavior(.basedOnSize, axes: .vertical)

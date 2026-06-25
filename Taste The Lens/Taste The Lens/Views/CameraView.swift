@@ -6,21 +6,13 @@ private let logger = makeLogger(category: "CameraView")
 
 struct CameraView: View {
     @State var cameraManager = CameraManager()
-    @State private var isPulsing = false
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var fusionState = FusionModeState()
     @State private var showFusionTooltip = false
     @State private var cameraError: String?
     @State private var showCameraError = false
     @State private var isCapturing = false
-    @State private var currentTipIndex = 0
-    @State private var tipRotationTask: Task<Void, Never>?
     @State private var tooltipTask: Task<Void, Never>?
-    private let cameraTips = [
-        "Point at anything. Art, architecture, a sunset. Tap to taste.",
-        "Good lighting helps AI see more detail",
-        "Try interesting textures and colors",
-    ]
     @AppStorage("selectedChef") private var selectedChef = "default"
     @AppStorage("hasSeenFusionTooltip") private var hasSeenFusionTooltip = false
     @AppStorage("hasSeenChefTooltip") private var hasSeenChefTooltip = false
@@ -32,6 +24,12 @@ struct CameraView: View {
     var onFusionPhotoCaptured: (([UIImage]) -> Void)?
     var onChefTapped: () -> Void
 
+    /// Show the mode pill until the first fusion shot lands — after that the
+    /// fusion tray itself is the mode indicator. Hidden when fusion is disabled.
+    private var shouldShowModePill: Bool {
+        RemoteConfigManager.shared.fusionModeEnabled && fusionState.capturedImages.isEmpty
+    }
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -39,15 +37,21 @@ struct CameraView: View {
             if cameraManager.permissionGranted {
                 CameraPreviewView(session: cameraManager.session)
                     .ignoresSafeArea()
+
+                ViewfinderCornersView()
+                    .frame(width: 280, height: 280)
+                    .opacity(isCapturing ? 0.4 : 1)
+                    .animation(.easeInOut(duration: 0.3), value: isCapturing)
+                    .allowsHitTesting(false)
             } else {
                 permissionDeniedView
             }
 
             // UI overlay
-            VStack {
+            VStack(spacing: 0) {
                 Spacer()
 
-                // Fusion tray (above hint text when active)
+                // Fusion tray (above hint when active)
                 if fusionState.isActive {
                     FusionTrayView(
                         images: fusionState.capturedImages,
@@ -63,26 +67,26 @@ struct CameraView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
-                // Hint text
-                Group {
-                    if fusionState.isActive {
-                        Text("Fusion Mode — capture 2-3 shots")
-                            .foregroundStyle(Theme.gold)
-                    } else {
-                        Text(cameraTips[currentTipIndex])
-                            .foregroundStyle(Theme.darkTextSecondary)
-                            .opacity(isPulsing ? 1 : 0.5)
-                            .animation(.easeInOut(duration: 2).repeatForever(autoreverses: true), value: isPulsing)
-                            .id(currentTipIndex)
-                            .transition(.opacity)
-                    }
+                // Fusion hint
+                if fusionState.isActive {
+                    Text("Fusion Mode — capture 2-3 shots")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Theme.gold)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                        .padding(.bottom, 16)
+                        .transition(.opacity)
                 }
-                .font(.system(size: 15, weight: .medium))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-                .animation(.easeInOut(duration: 0.3), value: fusionState.isActive)
 
-                Spacer().frame(height: 24)
+                // Single / Fusion mode toggle
+                if shouldShowModePill {
+                    ModeTogglePill(isFusion: fusionState.isActive) { _ in
+                        toggleFusionMode()
+                    }
+                    .transition(.opacity)
+                }
+
+                Spacer().frame(height: 20)
 
                 // Bottom controls: shutter + tooltips (overlay so shutter never moves)
                 ZStack(alignment: .bottom) {
@@ -122,7 +126,7 @@ struct CameraView: View {
                         chefButton
                             .frame(width: 50, height: 50)
                     }
-                    .padding(.horizontal, 32)
+                    .padding(.horizontal, 40)
 
                     // Fusion tooltip (overlaid above shutter, doesn't affect layout)
                     VStack(spacing: 0) {
@@ -140,11 +144,10 @@ struct CameraView: View {
                 }
                 .frame(height: 120)
 
-                Spacer().frame(height: 40)
+                Spacer().frame(height: 32)
             }
-            // Note: animation was intentionally removed from this VStack to prevent
-            // it from leaking into ShutterButton. Fusion transitions are handled
-            // by individual child views (FusionTrayView, hint text Group).
+            // No .animation() on this VStack — it would leak into ShutterButton.
+            // Child views (tray, hint, pill) animate via their own transitions.
         }
         .task {
             logger.info("Checking camera permission...")
@@ -156,7 +159,6 @@ struct CameraView: View {
         }
         .onAppear {
             isViewVisible = true
-            isPulsing = true
             cameraManager.startSession()
             // Stagger tooltips: show fusion first, then chef after fusion dismisses
             tooltipTask = Task {
@@ -178,15 +180,11 @@ struct CameraView: View {
                     withAnimation { showChefTooltip = true }
                 }
             }
-            // Rotate camera tips every 6 seconds
-            startTipRotation()
         }
         .onDisappear {
             isViewVisible = false
             tooltipTask?.cancel()
             tooltipTask = nil
-            tipRotationTask?.cancel()
-            tipRotationTask = nil
             cameraManager.stopSession()
             if fusionState.isActive {
                 fusionState.reset()
@@ -260,23 +258,6 @@ struct CameraView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
             Task { await cameraManager.checkPermission() }
-        }
-    }
-
-    // MARK: - Tip Rotation
-
-    private func startTipRotation() {
-        tipRotationTask?.cancel()
-        tipRotationTask = Task {
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(6))
-                guard !Task.isCancelled, !fusionState.isActive else { continue }
-                await MainActor.run {
-                    withAnimation(.easeInOut(duration: 0.5)) {
-                        currentTipIndex = (currentTipIndex + 1) % cameraTips.count
-                    }
-                }
-            }
         }
     }
 
@@ -411,52 +392,45 @@ struct CameraView: View {
     }
 }
 
+// MARK: - Preview Helpers
+
+private func previewCircleButton(_ icon: String) -> some View {
+    Image(systemName: icon)
+        .font(.system(size: 22, weight: .medium))
+        .foregroundStyle(Theme.darkTextSecondary)
+        .frame(width: 50, height: 50)
+        .background(Color.black.opacity(0.3))
+        .clipShape(Circle())
+}
+
 // MARK: - Preview
 
 #Preview("Chef Tooltip") {
-    // Static preview showing chef button slid left with tooltip above it
+    // Static preview: Single mode with chef button slid left and tooltip above it
     ZStack {
         Color.black.ignoresSafeArea()
 
-        VStack {
+        ViewfinderCornersView()
+            .frame(width: 280, height: 280)
+
+        VStack(spacing: 0) {
             Spacer()
 
-            Text("Good lighting helps AI see more detail")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Theme.darkTextSecondary)
-                .padding(.horizontal, 40)
+            ModeTogglePill(isFusion: false) { _ in }
 
-            Spacer().frame(height: 24)
+            Spacer().frame(height: 20)
 
             ZStack(alignment: .bottom) {
                 HStack {
-                    Image(systemName: "photo.on.rectangle")
-                        .font(.system(size: 22, weight: .medium))
-                        .foregroundStyle(Theme.darkTextSecondary)
-                        .frame(width: 50, height: 50)
-                        .background(Color.black.opacity(0.3))
-                        .clipShape(Circle())
+                    previewCircleButton("photo.on.rectangle")
 
                     Spacer()
 
-                    Circle()
-                        .stroke(Color.white, lineWidth: 4)
-                        .frame(width: 70, height: 70)
-                        .overlay(
-                            Circle()
-                                .fill(Color.white)
-                                .frame(width: 58, height: 58)
-                        )
+                    ShutterButton(action: {})
 
                     Spacer()
 
-                    // Chef button + tooltip, slid left, fixed 50pt frame for stable layout
-                    Image(systemName: "frying.pan")
-                        .font(.system(size: 22, weight: .medium))
-                        .foregroundStyle(Theme.darkTextSecondary)
-                        .frame(width: 50, height: 50)
-                        .background(Color.black.opacity(0.3))
-                        .clipShape(Circle())
+                    previewCircleButton("frying.pan")
                         .overlay(alignment: .bottom) {
                             CoachTooltip(
                                 text: "Pick your chef",
@@ -469,60 +443,43 @@ struct CameraView: View {
                         .offset(x: -80)
                         .frame(width: 50, height: 50)
                 }
-                .padding(.horizontal, 32)
+                .padding(.horizontal, 40)
             }
             .frame(height: 120)
 
-            Spacer().frame(height: 40)
+            Spacer().frame(height: 32)
         }
     }
 }
 
 #Preview("Fusion Tooltip") {
+    // Static preview: Single mode with the fusion tooltip above the shutter
     ZStack {
         Color.black.ignoresSafeArea()
 
-        VStack {
+        ViewfinderCornersView()
+            .frame(width: 280, height: 280)
+
+        VStack(spacing: 0) {
             Spacer()
 
-            Text("Point at anything. Art, architecture, a sunset. Tap to taste.")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Theme.darkTextSecondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
+            ModeTogglePill(isFusion: false) { _ in }
 
-            Spacer().frame(height: 24)
+            Spacer().frame(height: 20)
 
             ZStack(alignment: .bottom) {
                 HStack {
-                    Image(systemName: "photo.on.rectangle")
-                        .font(.system(size: 22, weight: .medium))
-                        .foregroundStyle(Theme.darkTextSecondary)
-                        .frame(width: 50, height: 50)
-                        .background(Color.black.opacity(0.3))
-                        .clipShape(Circle())
+                    previewCircleButton("photo.on.rectangle")
 
                     Spacer()
 
-                    Circle()
-                        .stroke(Color.white, lineWidth: 4)
-                        .frame(width: 70, height: 70)
-                        .overlay(
-                            Circle()
-                                .fill(Color.white)
-                                .frame(width: 58, height: 58)
-                        )
+                    ShutterButton(action: {})
 
                     Spacer()
 
-                    Image(systemName: "frying.pan")
-                        .font(.system(size: 22, weight: .medium))
-                        .foregroundStyle(Theme.darkTextSecondary)
-                        .frame(width: 50, height: 50)
-                        .background(Color.black.opacity(0.3))
-                        .clipShape(Circle())
+                    previewCircleButton("frying.pan")
                 }
-                .padding(.horizontal, 32)
+                .padding(.horizontal, 40)
 
                 // Fusion tooltip centered above shutter
                 VStack(spacing: 0) {
@@ -533,7 +490,7 @@ struct CameraView: View {
             }
             .frame(height: 120)
 
-            Spacer().frame(height: 40)
+            Spacer().frame(height: 32)
         }
     }
 }

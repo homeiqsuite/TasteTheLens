@@ -7,29 +7,30 @@ struct ShutterButton: View {
     var shotLabel: String?
 
     @State private var isPulsing = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var accentColor: Color { isFusionMode ? Theme.gold : .white }
 
     var body: some View {
         VStack(spacing: 8) {
             ZStack {
-                // Outer glow
+                // Soft pulsing glow
                 Circle()
-                    .fill(accentColor.opacity(0.15))
-                    .frame(width: 80, height: 80)
-                    .scaleEffect(isPulsing ? 1.1 : 1.0)
+                    .fill(accentColor.opacity(0.10))
+                    .frame(width: 88, height: 88)
+                    .scaleEffect(isPulsing ? 1.06 : 1.0)
 
                 // Outer ring
                 Circle()
-                    .stroke(accentColor, lineWidth: 3)
-                    .frame(width: 70, height: 70)
+                    .stroke(accentColor.opacity(0.95), lineWidth: 2.5)
+                    .frame(width: 76, height: 76)
 
-                // Inner circle
+                // Inner fill
                 Circle()
                     .fill(accentColor)
-                    .frame(width: 58, height: 58)
+                    .frame(width: 64, height: 64)
             }
-            .shadow(color: accentColor.opacity(0.3), radius: 12, x: 0, y: 0)
+            .shadow(color: accentColor.opacity(0.20), radius: 8)
             .onTapGesture {
                 action()
             }
@@ -52,9 +53,22 @@ struct ShutterButton: View {
         .animation(.easeInOut(duration: 0.3), value: isFusionMode)
         .animation(.easeInOut(duration: 0.3), value: shotLabel)
         .onAppear {
-            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
                 isPulsing = true
             }
+        }
+    }
+}
+
+// MARK: - Preview
+
+#Preview {
+    ZStack {
+        Color.black.ignoresSafeArea()
+        HStack(spacing: 40) {
+            ShutterButton(action: {}, isFusionMode: false)
+            ShutterButton(action: {}, isFusionMode: true, shotLabel: "2/3")
         }
     }
 }

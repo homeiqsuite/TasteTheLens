@@ -45,7 +45,9 @@ enum ReimagineCourseType: String, CaseIterable, Identifiable {
 struct RecipeCardView: View {
     let recipe: Recipe
     var isOnboardingFlow: Bool = false
+    var onDismiss: (() -> Void)? = nil
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     @State private var currentStep: Int = 0
     @State private var checkedIngredients: Set<String> = []
     @State private var expandedSubstitutions: Set<String> = []
@@ -64,6 +66,10 @@ struct RecipeCardView: View {
     @State private var walkthroughStep: Int? = nil
     @State private var showCookingMode = false
     @State private var overlayTask: Task<Void, Never>?
+    @State private var imageViewerLaunch: ImageViewerLaunch?
+
+    private static let cardOverlap: CGFloat = 24
+    private static let cardCornerRadius: CGFloat = 28
 
     private var cookingSteps: [CookingStep] {
         recipe.effectiveCookingSteps
@@ -74,83 +80,91 @@ struct RecipeCardView: View {
         2 + cookingSteps.count
     }
 
+    private var navTitle: String {
+        if currentStep == 0 { return "Recipe" }
+        if currentStep == totalSteps - 1 { return "Complete" }
+        return "Step \(currentStep) of \(cookingSteps.count)"
+    }
+
     var body: some View {
-        ZStack(alignment: .bottom) {
-            Theme.background.ignoresSafeArea()
+        GeometryReader { proxy in
+            let safeBottom = proxy.safeAreaInsets.bottom
+            let fullHeight = proxy.size.height + proxy.safeAreaInsets.top + safeBottom
+            let heroHeight = max(330, fullHeight * 0.47)
+            let bottomInset = safeBottom + 110
 
-            VStack(spacing: 0) {
-                // Persistent hero image
-                CompactHeroView(recipe: recipe)
+            ZStack(alignment: .top) {
+                Theme.background.ignoresSafeArea()
 
-                // Step indicator
-                StepIndicatorBar(totalSteps: totalSteps, currentStep: $currentStep)
-
-                // Step content
-                TabView(selection: $currentStep) {
-                    // Step 0: Prep overview
-                    PrepOverviewStep(
-                        recipe: recipe,
-                        checkedIngredients: $checkedIngredients,
-                        expandedSubstitutions: $expandedSubstitutions,
-                        expandedSections: $expandedSections,
-                        servingCount: $servingCount,
-                        showAIReasoning: $showAIReasoning,
-                        currentStep: $currentStep
-                    )
-                    .tag(0)
-
-                    // Steps 1-N: Cooking steps
-                    ForEach(Array(cookingSteps.enumerated()), id: \.offset) { index, step in
-                        CookingStepView(
-                            recipe: recipe,
-                            stepIndex: index,
-                            cookingStep: step,
-                            checkedIngredients: $checkedIngredients,
-                            servingCount: $servingCount
-                        )
-                        .tag(index + 1)
-                    }
-
-                    // Final step: Completion
-                    CompletionStep(recipe: recipe, servingCount: servingCount)
-                        .tag(totalSteps - 1)
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-
-                // Page indicator dots
-                PageIndicatorView(totalSteps: totalSteps, currentStep: currentStep)
-                    .padding(.vertical, 8)
-
-                // Bottom navigation bar
-                StepNavigationBar(
-                    currentStep: $currentStep,
-                    totalSteps: totalSteps,
-                    onCookingMode: (currentStep > 0 && currentStep < totalSteps - 1) ? { showCookingMode = true } : nil
+                // Layer 1 — Persistent hero, bleeds under the status bar
+                HeroBackdropView(
+                    recipe: recipe,
+                    height: heroHeight,
+                    onImageTap: openImageViewer
                 )
-            }
+                .ignoresSafeArea(.container, edges: .top)
 
-            // First-recipe celebration overlay
-            if showCelebration {
-                ConfettiView()
-                    .ignoresSafeArea()
+                // Layer 2 — White content card overlapping the hero
+                VStack(spacing: 0) {
+                    Color.clear.frame(height: heroHeight - Self.cardOverlap)
+                    cardContent(bottomInset: bottomInset)
+                }
+                .ignoresSafeArea(.container, edges: [.top, .bottom])
 
-                // Toast message
-                VStack {
-                    celebrationToast
+                // Layer 3 — Floating circular controls over the hero
+                VStack(spacing: 0) {
+                    FloatingTopControls(
+                        title: navTitle,
+                        onBack: handleBack,
+                        onShare: shareRecipe
+                    ) {
+                        moreMenuContent
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
                     Spacer()
                 }
-                .transition(.opacity)
-            }
 
-            // Milestone toast
-            if showMilestoneToast {
-                VStack {
-                    milestoneToastView
+                // Layer 4 — Page dots + floating action bar
+                VStack(spacing: 0) {
                     Spacer()
+                    VStack(spacing: 10) {
+                        PageIndicatorView(totalSteps: totalSteps, currentStep: currentStep)
+                        FloatingActionBar(
+                            currentStep: $currentStep,
+                            totalSteps: totalSteps,
+                            onCookingMode: { showCookingMode = true },
+                            onShare: shareRecipe,
+                            onDone: handleBack
+                        )
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 12)
                 }
-                .transition(.move(edge: .top).combined(with: .opacity))
+
+                // First-recipe celebration overlay
+                if showCelebration {
+                    ConfettiView()
+                        .ignoresSafeArea()
+
+                    VStack {
+                        celebrationToast
+                        Spacer()
+                    }
+                    .transition(.opacity)
+                }
+
+                // Milestone toast
+                if showMilestoneToast {
+                    VStack {
+                        milestoneToastView
+                        Spacer()
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
             }
         }
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             servingCount = max(1, min(99, recipe.baseServings))
             let isFirstRecipe = !hasGeneratedFirstRecipe
@@ -246,6 +260,116 @@ struct RecipeCardView: View {
         .fullScreenCover(isPresented: $showCookingMode) {
             CookingModeView(recipe: recipe, servingCount: servingCount)
         }
+        .fullScreenCover(item: $imageViewerLaunch) { launch in
+            InspirationImageViewer(
+                images: recipe.allInspirationImages,
+                startIndex: launch.startIndex
+            )
+        }
+    }
+
+    private func openImageViewer(at index: Int) {
+        imageViewerLaunch = ImageViewerLaunch(startIndex: index)
+    }
+
+    // MARK: - Content Card
+
+    @ViewBuilder
+    private func cardContent(bottomInset: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            StepProgressTrack(totalSteps: totalSteps, currentStep: currentStep)
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
+                .padding(.bottom, 12)
+
+            TabView(selection: $currentStep) {
+                // Step 0: Prep overview
+                PrepOverviewStep(
+                    recipe: recipe,
+                    checkedIngredients: $checkedIngredients,
+                    expandedSubstitutions: $expandedSubstitutions,
+                    expandedSections: $expandedSections,
+                    servingCount: $servingCount,
+                    showAIReasoning: $showAIReasoning,
+                    bottomInset: bottomInset,
+                    onImageTap: openImageViewer
+                )
+                .tag(0)
+
+                // Steps 1-N: Cooking steps
+                ForEach(Array(cookingSteps.enumerated()), id: \.offset) { index, step in
+                    CookingStepView(
+                        recipe: recipe,
+                        stepIndex: index,
+                        cookingStep: step,
+                        checkedIngredients: $checkedIngredients,
+                        servingCount: $servingCount,
+                        bottomInset: bottomInset
+                    )
+                    .tag(index + 1)
+                }
+
+                // Final step: Completion
+                CompletionStep(recipe: recipe, servingCount: servingCount, bottomInset: bottomInset)
+                    .tag(totalSteps - 1)
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            UnevenRoundedRectangle(
+                topLeadingRadius: Self.cardCornerRadius,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: Self.cardCornerRadius
+            )
+            .fill(Theme.cardSurface)
+            .shadow(color: .black.opacity(0.08), radius: 16, y: -2)
+        )
+    }
+
+    // MARK: - More Menu
+
+    @ViewBuilder
+    private var moreMenuContent: some View {
+        Button {
+            showAIReasoning = true
+        } label: {
+            Label("View AI Reasoning", systemImage: "sparkles")
+        }
+        if !cookingSteps.isEmpty {
+            Button {
+                showCookingMode = true
+            } label: {
+                Label("Hands-Free Cooking Mode", systemImage: "hand.raised.slash")
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    private func handleBack() {
+        if let onDismiss {
+            onDismiss()
+        } else {
+            dismiss()
+        }
+    }
+
+    private func shareRecipe() {
+        var items: [Any] = [recipe.dishName]
+        if let url = DeepLinkHandler.url(for: recipe) {
+            items.append(url)
+        }
+        let activityVC = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootVC = windowScene.keyWindow?.rootViewController else { return }
+        var presenter = rootVC
+        while let presented = presenter.presentedViewController {
+            presenter = presented
+        }
+        activityVC.popoverPresentationController?.sourceView = presenter.view
+        presenter.present(activityVC, animated: true)
     }
 
     // MARK: - Celebration Toast
@@ -304,7 +428,7 @@ struct RecipeCardView: View {
 
     // Vertical positions (as fraction of screen height) to anchor each tooltip
     private let walkthroughAnchors: [CGFloat] = [
-        0.55,  // Step 0: Near the step indicator / top of content
+        0.50,  // Step 0: Near the top of the content card
     ]
 
     private func walkthroughOverlay(step: Int) -> some View {
@@ -391,6 +515,13 @@ struct RecipeCardView: View {
 
 }
 
+// MARK: - Image Viewer Launch Token
+
+private struct ImageViewerLaunch: Identifiable {
+    let id = UUID()
+    let startIndex: Int
+}
+
 // MARK: - Page Indicator
 
 private struct PageIndicatorView: View {
@@ -464,6 +595,11 @@ private struct PageIndicatorView: View {
             approach: "visual-translation"
         ),
         claudeRawResponse: "",
+        estimatedCalories: 620,
+        nutrition: NutritionInfo(calories: 620, protein: 38, carbs: 42, fat: 28, fiber: 6, sugar: 9),
+        prepTime: "20 min",
+        cookTime: "35 min",
+        difficulty: "Medium",
         cookingSteps: [
             CookingStep(instruction: "Prepare the citrus puree: Peel and roughly chop 3 carrots. Roast at 400°F for 25 minutes until caramelized and tender. Transfer to a blender with the juice and zest of 1 orange and 1 tbsp honey. Blend until silky smooth.", ingredientsUsed: ["3 carrots", "1 orange, zested & juiced", "1 tbsp honey"]),
             CookingStep(instruction: "While the carrots roast, pat the scallops completely dry with paper towels — this is critical for a good sear. Season both sides generously with salt and pepper.", ingredientsUsed: ["6 large scallops", "1 tsp salt & pepper"]),

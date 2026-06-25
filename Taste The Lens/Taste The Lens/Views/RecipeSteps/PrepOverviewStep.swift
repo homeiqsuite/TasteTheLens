@@ -1,14 +1,5 @@
 import SwiftUI
 
-// MARK: - Scroll Offset Tracking
-
-private struct ScrollOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
 // MARK: - Section Appear Modifier
 
 private struct SectionAppearModifier: ViewModifier {
@@ -43,11 +34,11 @@ struct PrepOverviewStep: View {
     @Binding var expandedSections: Set<String>
     @Binding var servingCount: Int
     @Binding var showAIReasoning: Bool
-    @Binding var currentStep: Int
+    var bottomInset: CGFloat = 100
+    var onImageTap: ((Int) -> Void)? = nil
     @State private var contentMode: PrepContentMode = .quickStart
     @State private var showFullDescription: Bool = false
     @State private var showAIBreakdown: Bool = false
-    @State private var scrollOffset: CGFloat = 0
     @State private var expandedComponents: Set<String> = []
     @State private var sectionAppeared: Set<String> = []
     @State private var highlightedTranslation: Int? = nil
@@ -59,64 +50,44 @@ struct PrepOverviewStep: View {
     @AppStorage("hasSeenAIReasoningTooltip") private var hasSeenAIReasoningTooltip = false
 
     var body: some View {
-        ZStack(alignment: .top) {
-            ScrollView(.vertical, showsIndicators: true) {
-                VStack(spacing: 0) {
-                    // Scroll offset tracker
-                    GeometryReader { geo in
-                        Color.clear
-                            .preference(
-                                key: ScrollOffsetPreferenceKey.self,
-                                value: geo.frame(in: .named("prepScroll")).minY
-                            )
-                    }
-                    .frame(height: 0)
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(spacing: 0) {
+                topMetaRow
 
-                    // === Stats strip — always first, right below step indicators ===
-                    quickStatsStrip
+                titleRow
 
-                    // === Mode picker + dynamic content area ===
-                    prepModePickerSection
+                statTilesGrid
 
-                    // Mode-specific content (directly below pills so users see it change)
-                    if contentMode == .storyMode {
-                        storySection
-                            .sectionAppearAnimation(key: "story", appeared: $sectionAppeared)
-                    } else if contentMode == .aiBreakdown {
-                        aiBreakdownSection
-                            .sectionAppearAnimation(key: "ai", appeared: $sectionAppeared)
-                    }
+                // === Mode picker + dynamic content area ===
+                prepModePickerSection
 
-                    inlineCTA
-
-                    chapterSpacer
-
-                    // === Ingredients ===
-                    ingredientComponentCards
-                        .sectionAppearAnimation(key: "ingredients", appeared: $sectionAppeared)
-
-                    chapterSpacer
-
-                    // === CHAPTER 5: Full details ===
-                    nutritionSection
-                        .sectionAppearAnimation(key: "nutrition", appeared: $sectionAppeared)
-                    moreDetailsSection
-                        .sectionAppearAnimation(key: "details", appeared: $sectionAppeared)
-
-                    Spacer().frame(height: 20)
+                // Mode-specific content (directly below pills so users see it change)
+                if contentMode == .storyMode {
+                    storySection
+                        .sectionAppearAnimation(key: "story", appeared: $sectionAppeared)
+                } else if contentMode == .aiBreakdown {
+                    aiBreakdownSection
+                        .sectionAppearAnimation(key: "ai", appeared: $sectionAppeared)
                 }
-            }
-            .coordinateSpace(name: "prepScroll")
-            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }
-            .scrollBounceBehavior(.basedOnSize, axes: .vertical)
 
-            // Sticky context header
-            if scrollOffset < -120 {
-                stickyContextHeader
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .animation(.easeInOut(duration: 0.2), value: scrollOffset < -120)
+                chapterSpacer
+
+                // === Ingredients ===
+                ingredientComponentCards
+                    .sectionAppearAnimation(key: "ingredients", appeared: $sectionAppeared)
+
+                chapterSpacer
+
+                // === Full details ===
+                nutritionSection
+                    .sectionAppearAnimation(key: "nutrition", appeared: $sectionAppeared)
+                moreDetailsSection
+                    .sectionAppearAnimation(key: "details", appeared: $sectionAppeared)
+
+                Color.clear.frame(height: bottomInset)
             }
         }
+        .scrollBounceBehavior(.basedOnSize, axes: .vertical)
         .onChange(of: contentMode) { _, newMode in
             withAnimation(.easeInOut(duration: 0.3)) {
                 switch newMode {
@@ -150,43 +121,7 @@ struct PrepOverviewStep: View {
     // MARK: - Chapter Spacer
 
     private var chapterSpacer: some View {
-        Rectangle()
-            .fill(Theme.background)
-            .frame(height: 40)
-    }
-
-    // MARK: - Sticky Context Header
-
-    private var stickyContextHeader: some View {
-        HStack(spacing: 6) {
-            Text(recipe.dishName)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Theme.textPrimary)
-                .lineLimit(1)
-
-            if let cook = recipe.cookTime, !cook.isEmpty {
-                Text("·")
-                    .foregroundStyle(Theme.textQuaternary)
-                Text(cook)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.textTertiary)
-            }
-
-            if let difficulty = recipe.difficulty, !difficulty.isEmpty {
-                Text("·")
-                    .foregroundStyle(Theme.textQuaternary)
-                Text(difficulty)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.textTertiary)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity)
-        .background(
-            Theme.cardSurface
-                .shadow(color: .black.opacity(0.06), radius: 4, y: 2)
-        )
+        Color.clear.frame(height: 28)
     }
 
     // MARK: - Chapter 1: Ultra-Lightweight Top
@@ -203,30 +138,7 @@ struct PrepOverviewStep: View {
             )
         }
         .padding(.horizontal, 20)
-        .padding(.top, 12)
-    }
-
-    private var inlineCTA: some View {
-        Button {
-            HapticManager.medium()
-            withAnimation(.easeInOut(duration: 0.25)) {
-                currentStep = 1
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Text("Let's Cook")
-                    .font(.system(size: 17, weight: .bold))
-                Image(systemName: "arrow.right")
-                    .font(.system(size: 14, weight: .bold))
-            }
-            .foregroundStyle(Theme.darkTextPrimary)
-            .frame(maxWidth: .infinity)
-            .frame(height: 52)
-            .background(Theme.ctaGradient, in: RoundedRectangle(cornerRadius: 14))
-            .shadow(color: Theme.gold.opacity(0.3), radius: 8, y: 4)
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
+        .padding(.top, 20)
     }
 
     // MARK: - Chapter 2: Ingredient Component Cards
@@ -303,7 +215,6 @@ struct PrepOverviewStep: View {
             .padding(.top, 4)
         }
         .padding(.vertical, 16)
-        .background(Theme.cardSurface.opacity(0.5))
     }
 
     private func accentColor(for index: Int) -> Color {
@@ -466,6 +377,8 @@ struct PrepOverviewStep: View {
 
     private var translationMatrixContent: some View {
         VStack(alignment: .leading, spacing: 10) {
+            inspirationStrip
+
             HStack(spacing: 6) {
                 Image(systemName: "arrow.left.arrow.right")
                     .font(.system(size: 14))
@@ -543,119 +456,221 @@ struct PrepOverviewStep: View {
         }
     }
 
-    // MARK: - Quick Stats Strip
+    // MARK: - Inspiration Strip (inside AI Flavor Mapping)
 
-    private var quickStatsStrip: some View {
-        HStack(spacing: 0) {
-            // Servings stepper
-            HStack(spacing: 6) {
-                Button {
-                    if servingCount > 1 {
-                        servingCount -= 1
-                        HapticManager.selection()
+    @ViewBuilder
+    private var inspirationStrip: some View {
+        let images = recipe.allInspirationImages
+        if !images.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("What inspired this — tap to view", systemImage: "photo")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.textTertiary)
+
+                if images.count > 1 {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            ForEach(Array(images.enumerated()), id: \.offset) { index, img in
+                                Button {
+                                    HapticManager.light()
+                                    onImageTap?(index)
+                                } label: {
+                                    Color.clear
+                                        .frame(width: 140, height: 140)
+                                        .overlay {
+                                            Image(uiImage: img)
+                                                .resizable()
+                                                .aspectRatio(contentMode: .fill)
+                                        }
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(Theme.gold.opacity(0.35), lineWidth: 1)
+                                        )
+                                        .overlay(alignment: .bottomLeading) {
+                                            Text("Photo \(index + 1)")
+                                                .font(.system(size: 10, weight: .semibold))
+                                                .foregroundStyle(.white)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 3)
+                                                .background(.black.opacity(0.45), in: Capsule())
+                                                .padding(6)
+                                        }
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Inspiration photo \(index + 1)")
+                            }
+                        }
                     }
-                } label: {
-                    Image(systemName: "minus.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundStyle(servingCount > 1 ? Theme.primary : Theme.textQuaternary)
-                }
-                .disabled(servingCount <= 1)
-
-                VStack(spacing: 1) {
-                    Text("\(servingCount)")
-                        .font(.system(size: 18, weight: .bold, design: .monospaced))
-                        .foregroundStyle(Theme.textPrimary)
-                    Text("servings")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textTertiary)
-                }
-                .fixedSize()
-
-                Button {
-                    if servingCount < 12 {
-                        servingCount += 1
-                        HapticManager.selection()
+                } else if let img = images.first {
+                    Button {
+                        HapticManager.light()
+                        onImageTap?(0)
+                    } label: {
+                        Color.clear
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 140)
+                            .overlay {
+                                Image(uiImage: img)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fill)
+                            }
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Theme.cardBorder, lineWidth: 0.5)
+                            )
+                            .overlay(alignment: .topTrailing) {
+                                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .padding(6)
+                                    .background(.black.opacity(0.4), in: Circle())
+                                    .padding(8)
+                            }
                     }
-                } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundStyle(servingCount < 12 ? Theme.primary : Theme.textQuaternary)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("View inspiration photo")
                 }
-                .disabled(servingCount >= 12)
             }
-            .fixedSize(horizontal: true, vertical: false)
-
-            // Prep time
-            if let prep = recipe.prepTime, !prep.isEmpty {
-                dividerLine
-
-                VStack(spacing: 1) {
-                    Image(systemName: "hands.sparkles")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(Theme.visual)
-                    Text(prep)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textTertiary)
-                    Text("prep")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Theme.textQuaternary)
-                }
-                .frame(maxWidth: .infinity)
-            }
-
-            // Cook time
-            if let cook = recipe.cookTime, !cook.isEmpty {
-                dividerLine
-
-                VStack(spacing: 1) {
-                    Image(systemName: "flame")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(Theme.culinary)
-                    Text(cook)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textTertiary)
-                    Text("cook")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Theme.textQuaternary)
-                }
-                .frame(maxWidth: .infinity)
-            }
-
-            // Difficulty
-            if let difficulty = recipe.difficulty, !difficulty.isEmpty {
-                dividerLine
-
-                VStack(spacing: 1) {
-                    Image(systemName: difficultyIcon(difficulty))
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(difficultyColor(difficulty))
-                    Text(difficulty)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textTertiary)
-                    Text("difficulty")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Theme.textQuaternary)
-                }
-                .frame(maxWidth: .infinity)
-            }
+            .padding(.bottom, 4)
         }
-        .padding(.vertical, 14)
-        .padding(.horizontal, 16)
-        .background(Theme.cardSurface)
-        .overlay(
-            VStack {
-                Theme.divider.frame(height: 1)
-                Spacer()
-                Theme.divider.frame(height: 1)
-            }
-        )
-        .padding(.top, 8)
     }
 
-    private var dividerLine: some View {
-        Theme.divider
-            .frame(width: 1, height: 32)
-            .padding(.horizontal, 12)
+    // MARK: - Top: Meta, Title & Stats
+
+    private var topMetaRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "bookmark.fill")
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.gold)
+            Text(formattedCreatedAt)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.textTertiary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Theme.buttonBg, in: Capsule())
+
+            Spacer()
+
+            if let difficulty = recipe.difficulty, !difficulty.isEmpty {
+                Text(difficulty)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.textSecondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Theme.buttonBg, in: Capsule())
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 14)
+    }
+
+    private var titleRow: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text(recipe.dishName)
+                .font(.system(size: 26, weight: .bold, design: .serif))
+                .foregroundStyle(Theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+
+            servingsPill
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
+    }
+
+    private var servingsPill: some View {
+        HStack(spacing: 10) {
+            Button {
+                if servingCount > 1 {
+                    servingCount -= 1
+                    HapticManager.selection()
+                }
+            } label: {
+                Image(systemName: "minus")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(servingCount > 1 ? Theme.textPrimary : Theme.textQuaternary)
+                    .frame(width: 22, height: 22)
+            }
+            .disabled(servingCount <= 1)
+
+            VStack(spacing: 0) {
+                Text("\(servingCount)")
+                    .font(.system(size: 15, weight: .bold, design: .monospaced))
+                    .foregroundStyle(Theme.textPrimary)
+                Text("serves")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+
+            Button {
+                if servingCount < 12 {
+                    servingCount += 1
+                    HapticManager.selection()
+                }
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(servingCount < 12 ? Theme.textPrimary : Theme.textQuaternary)
+                    .frame(width: 22, height: 22)
+            }
+            .disabled(servingCount >= 12)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Theme.buttonBg, in: Capsule())
+        .overlay(Capsule().stroke(Theme.cardBorder, lineWidth: 0.5))
+        .fixedSize()
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Servings: \(servingCount)")
+    }
+
+    private var statTilesGrid: some View {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(), spacing: 10),
+                GridItem(.flexible(), spacing: 10),
+                GridItem(.flexible(), spacing: 10),
+            ],
+            spacing: 10
+        ) {
+            StatTile(
+                icon: "hands.sparkles",
+                iconColor: Theme.visual,
+                label: "Prep",
+                value: recipe.prepTime ?? "—"
+            )
+            StatTile(
+                icon: "flame",
+                iconColor: Theme.onboardingResult,
+                label: "Cook",
+                value: recipe.cookTime ?? "—"
+            )
+            StatTile(
+                icon: "flame.fill",
+                iconColor: Theme.gold,
+                label: "Calories",
+                value: calorieDisplay
+            )
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 14)
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+    }
+
+    private var formattedCreatedAt: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d · h:mm a"
+        return formatter.string(from: recipe.createdAt)
+    }
+
+    private var calorieDisplay: String {
+        guard let calories = recipe.nutrition?.calories ?? recipe.estimatedCalories else {
+            return "—"
+        }
+        return "\(scaledNutrient(calories)) kcal"
     }
 
     // MARK: - Nutrition
@@ -721,12 +736,8 @@ struct PrepOverviewStep: View {
                     }
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
-            .background(Theme.cardSurface)
-            .overlay(
-                VStack { Spacer(); Theme.divider.frame(height: 1) }
-            )
+            .lightCard()
+            .padding(.horizontal, 16)
         }
     }
 
@@ -981,22 +992,6 @@ struct PrepOverviewStep: View {
         while let presented = presenter.presentedViewController { presenter = presented }
         activityVC.popoverPresentationController?.sourceView = presenter.view
         presenter.present(activityVC, animated: true)
-    }
-
-    private func difficultyIcon(_ difficulty: String) -> String {
-        switch difficulty {
-        case "Easy": return "gauge.open.with.lines.needle.33percent"
-        case "Advanced": return "gauge.open.with.lines.needle.84percent.exclamation"
-        default: return "gauge.open.with.lines.needle.50percent"
-        }
-    }
-
-    private func difficultyColor(_ difficulty: String) -> Color {
-        switch difficulty {
-        case "Easy": return Theme.visual
-        case "Advanced": return Theme.culinary
-        default: return Theme.primary
-        }
     }
 
     private func approachLabel(_ approach: String) -> String {
