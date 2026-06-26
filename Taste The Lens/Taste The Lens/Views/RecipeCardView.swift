@@ -104,12 +104,17 @@ struct RecipeCardView: View {
                 )
                 .ignoresSafeArea(.container, edges: .top)
 
-                // Layer 2 — White content card overlapping the hero
+                // Layer 2 — White content card overlapping the hero.
+                // IMPORTANT: the paged step TabView lives in `cardContent` and must NOT sit
+                // under an `.ignoresSafeArea` ancestor — doing so breaks the paged TabView's
+                // response to programmatic page changes (tapping "Next Step" wouldn't advance).
+                // The card surface still bleeds to the bottom edge via the background shape's
+                // own `.ignoresSafeArea(.bottom)` (see `cardContent`). The hero spacer subtracts
+                // the top safe-area inset so the card still overlaps the hero by `cardOverlap`.
                 VStack(spacing: 0) {
-                    Color.clear.frame(height: heroHeight - Self.cardOverlap)
+                    Color.clear.frame(height: heroHeight - Self.cardOverlap - proxy.safeAreaInsets.top)
                     cardContent(bottomInset: bottomInset)
                 }
-                .ignoresSafeArea(.container, edges: [.top, .bottom])
 
                 // Layer 3 — Floating circular controls over the hero
                 VStack(spacing: 0) {
@@ -325,6 +330,7 @@ struct RecipeCardView: View {
             )
             .fill(Theme.cardSurface)
             .shadow(color: .black.opacity(0.08), radius: 16, y: -2)
+            .ignoresSafeArea(.container, edges: .bottom)
         )
     }
 

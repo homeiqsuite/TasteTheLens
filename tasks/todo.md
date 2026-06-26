@@ -1,3 +1,29 @@
+# Bug fixes — recipe step nav + onboarding skip (current)
+
+## Bug 1 — "Next Step" stays on same screen (RecipeCardView)
+Root cause: the redesign placed the paged `TabView(selection: $currentStep).page` under an
+`.ignoresSafeArea(.container, edges: [.top, .bottom])` ancestor (Layer 2). A paged TabView under an
+ignoresSafeArea ancestor stops honoring programmatic `selection` changes, so FloatingActionBar's
+"Next Step" updates `currentStep` but the page doesn't move. Old (working) code kept the TabView
+free of any ignoresSafeArea ancestor.
+- [x] Remove `.ignoresSafeArea` from the TabView's ancestor (Layer 2 VStack)
+- [x] Keep the card's bottom bleed via the background shape's own `.ignoresSafeArea(.bottom)`
+- [x] Preserve top alignment by subtracting `proxy.safeAreaInsets.top` from the hero spacer
+- [ ] Runtime verify: "Let's Cook"/"Next Step"/"Previous" advance pages (recipe card is behind the capture→AI flow)
+
+## Bug 2 — onboarding skipped after reinstall (auth)
+Root cause: Supabase session persists in the iOS Keychain across uninstall; `restoreSession()` at launch
+re-authenticates silently, and OnboardingView dismissed onboarding on ANY `isAuthenticated` flip.
+- [x] Only dismiss onboarding on an INTERACTIVE sign-in (`didStartInteractiveSignIn` flag)
+- [ ] (Optional follow-up) Clear a stale Keychain session on first launch after a fresh install
+- [ ] Runtime verify: reinstall → onboarding shows → Next advances through all 3 pages
+
+## Verification
+- [x] `xcodebuild` compile check
+- [ ] On-device tap test for both flows
+
+---
+
 # Pricing Model Implementation — 6 Issues
 
 ## Issue 1: Pantry Pack Credit Adjustment

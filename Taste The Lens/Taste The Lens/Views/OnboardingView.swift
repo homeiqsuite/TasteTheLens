@@ -45,6 +45,11 @@ struct OnboardingView: View {
     @State private var selectedDietaryPrefs: Set<DietaryPreference> = Set(DietaryPreference.current())
 
     @State private var showSignIn = false
+    /// True once the user taps "Log in" to sign in interactively. A *background* session
+    /// restore (Supabase keeps its session in the Keychain, which survives app reinstalls)
+    /// must NOT be treated as an in-onboarding sign-in, or a fresh install gets skipped past
+    /// onboarding the instant the leftover session is restored.
+    @State private var didStartInteractiveSignIn = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -79,8 +84,10 @@ struct OnboardingView: View {
             SignInView()
         }
         .onChange(of: AuthManager.shared.isAuthenticated) { _, isAuth in
-            if isAuth {
-                // User signed in during onboarding — skip straight to dashboard
+            // Only an *interactive* sign-in should dismiss onboarding. A background session
+            // restore (the Supabase session lives in the Keychain, which survives reinstalls)
+            // must not skip a fresh user past onboarding.
+            if isAuth && didStartInteractiveSignIn {
                 isPresented = false
             }
         }
@@ -365,6 +372,7 @@ struct OnboardingView: View {
                 welcomeCTAButton { advance() }
 
                 Button {
+                    didStartInteractiveSignIn = true
                     showSignIn = true
                 } label: {
                     HStack(spacing: 4) {
