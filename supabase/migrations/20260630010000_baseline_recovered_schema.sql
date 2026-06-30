@@ -33,6 +33,12 @@ ALTER TABLE public.rate_limits ENABLE ROW LEVEL SECURITY;
 -- Intentionally no policies: only SECURITY DEFINER functions (which run as the
 -- table owner) and the service role touch this table. Clients have no access.
 
+-- The IP-based guest limiter (check_ip_rate_limit) stores a surrogate uuid derived
+-- from the client IP in user_id, which is NOT a real users row. Drop the legacy FK
+-- to users so those counter rows are accepted. (No-op on a fresh DB built from this
+-- migration, since the CREATE TABLE above defines no such FK.)
+ALTER TABLE public.rate_limits DROP CONSTRAINT IF EXISTS rate_limits_user_id_fkey;
+
 -- ---------------------------------------------------------------------------
 -- check_rate_limit — per (user_id, function_name) counter within the minute
 -- ---------------------------------------------------------------------------
