@@ -151,8 +151,6 @@ final class ImageAnalysisPipeline: Identifiable {
     /// Set when image generation fails but the recipe was still created successfully
     var imageGenerationFailed: Bool = false
 
-    private var creditPool: String?
-
     private var supabase: SupabaseClient { SupabaseManager.shared.client }
 
     /// Network connectivity check using the shared NetworkMonitor.
@@ -279,7 +277,6 @@ final class ImageAnalysisPipeline: Identifiable {
             // Update local credit cache from server response
             if let credits = analysisResponse.credits {
                 await MainActor.run { UsageTracker.shared.updateFromServer(credits) }
-                creditPool = credits.pool
             } else if AuthManager.shared.isAuthenticated {
                 // No credits in response — server may not have resolved the user token.
                 // Sync usage from server so the UI reflects the actual state.
@@ -362,7 +359,6 @@ final class ImageAnalysisPipeline: Identifiable {
             )
 
             completedRecipe = recipe
-            creditPool = nil
             state = .complete
             // Guests: the server now tracks usage authoritatively (returned in
             // `credits`) and `updateFromServer` already synced the count. Only
@@ -397,7 +393,6 @@ final class ImageAnalysisPipeline: Identifiable {
 
         } catch is CancellationError {
             logger.info("Pipeline cancelled")
-            await refundCreditIfNeeded()
             await LiveActivityManager.shared.cancelGeneration()
         } catch let error as EdgeFunctionError where error.isContentRejected {
             let reason = error.rejectionReason ?? "Image not suitable for recipe generation."
@@ -411,7 +406,6 @@ final class ImageAnalysisPipeline: Identifiable {
         } catch {
             logger.error("Pipeline failed: \(error)")
             logger.error("Pipeline error type: \(type(of: error)), description: \(String(describing: error))")
-            await refundCreditIfNeeded()
             state = .failed(error.localizedDescription)
             await LiveActivityManager.shared.endGeneration(dishName: nil)
         }
@@ -478,7 +472,6 @@ final class ImageAnalysisPipeline: Identifiable {
             // Update local credit cache from server response
             if let credits = analysisResponse.credits {
                 await MainActor.run { UsageTracker.shared.updateFromServer(credits) }
-                creditPool = credits.pool
             } else if AuthManager.shared.isAuthenticated {
                 Task { await UsageTracker.shared.syncUsageFromServer() }
             }
@@ -567,7 +560,6 @@ final class ImageAnalysisPipeline: Identifiable {
             )
 
             completedRecipe = recipe
-            creditPool = nil
             state = .complete
             // Guests: the server now tracks usage authoritatively (returned in
             // `credits`) and `updateFromServer` already synced the count. Only
@@ -602,7 +594,6 @@ final class ImageAnalysisPipeline: Identifiable {
 
         } catch is CancellationError {
             logger.info("Fusion pipeline cancelled")
-            await refundCreditIfNeeded()
             await LiveActivityManager.shared.cancelGeneration()
         } catch let error as EdgeFunctionError where error.isContentRejected {
             let reason = error.rejectionReason ?? "Image not suitable for recipe generation."
@@ -615,29 +606,9 @@ final class ImageAnalysisPipeline: Identifiable {
             await LiveActivityManager.shared.endGeneration(dishName: nil)
         } catch {
             logger.error("Fusion pipeline failed: \(error)")
-            await refundCreditIfNeeded()
             state = .failed(error.localizedDescription)
             await LiveActivityManager.shared.endGeneration(dishName: nil)
         }
-    }
-
-    // MARK: - Credit Refund
-
-    /// Refunds the credit deducted during analysis if the pipeline fails or is cancelled after deduction.
-    private func refundCreditIfNeeded() async {
-        guard let pool = creditPool,
-              let userId = AuthManager.shared.currentUser?.id.uuidString else { return }
-
-        do {
-            try await SupabaseManager.shared.client
-                .rpc("refund_credit", params: ["p_user_id": userId, "p_pool": pool])
-                .execute()
-            logger.info("Credit refunded to pool: \(pool)")
-            await UsageTracker.shared.syncCreditsFromServer()
-        } catch {
-            logger.error("Failed to refund credit: \(error)")
-        }
-        creditPool = nil
     }
 
     // MARK: - Analysis Request Builder
