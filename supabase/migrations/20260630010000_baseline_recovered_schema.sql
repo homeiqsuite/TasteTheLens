@@ -212,8 +212,11 @@ BEGIN
 END;
 $function$;
 
-REVOKE ALL ON FUNCTION public.refund_credit(uuid, text) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.refund_credit(uuid, text) TO service_role;
+-- NOTE: refund_credit's grants are intentionally left untouched. The iOS client
+-- calls it directly as the `authenticated` role (ImageAnalysisPipeline refund-on-
+-- failure path), so locking it to service_role only would break that flow.
+-- (CREATE OR REPLACE above preserves the existing grants.) Tightening this safely
+-- requires moving the client refund into the edge function first — tracked separately.
 
 -- ---------------------------------------------------------------------------
 -- Storage buckets for recipe imagery (private; access governed by RLS policies)
