@@ -674,6 +674,138 @@ img {
 }
 
 /* ============================================================
+   MEET YOUR CHEFS
+   ============================================================ */
+.chefs-section {
+    overflow: hidden;
+}
+
+.chef-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+}
+
+.chef-card {
+    padding: 24px 22px;
+    border: 2px solid rgba(123, 63, 160, 0.2);
+    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+    cursor: default;
+}
+
+.chef-card:hover {
+    transform: translateY(-6px) rotate(-1deg);
+    border-color: rgba(123, 63, 160, 0.4);
+    box-shadow: 0 8px 24px rgba(123, 63, 160, 0.18);
+}
+
+.chef-glyph {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    font-size: 26px;
+    margin-bottom: 12px;
+}
+
+.chef-glyph--teal { background: rgba(155, 95, 192, 0.12); }
+.chef-glyph--gold { background: rgba(232, 168, 50, 0.12); }
+.chef-glyph--terracotta { background: rgba(199, 59, 142, 0.12); }
+
+.chef-name {
+    font-family: var(--font-serif);
+    font-size: 19px;
+    font-weight: 900;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.chef-subtitle {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
+
+.chef-tagline {
+    font-family: var(--font-accent);
+    font-size: 14px;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+/* ============================================================
+   APP STORE BADGE
+   ============================================================ */
+.appstore-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 20px;
+    background: #000000;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 12px;
+    color: #FFFFFF;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+    cursor: pointer;
+}
+
+.appstore-badge:hover {
+    transform: translateY(-3px) scale(1.03);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+.appstore-badge-logo {
+    display: flex;
+    align-items: center;
+    color: #FFFFFF;
+}
+
+.appstore-badge-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+    text-align: left;
+}
+
+.appstore-badge-small {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.2px;
+}
+
+.appstore-badge-large {
+    font-family: var(--font-sans);
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+}
+
+/* Hero badge entrance (driven by initHeroAnimation) */
+.hero-appstore {
+    opacity: 0;
+}
+
+.hero-appstore.animate-in {
+    animation: fadeUp 0.8s ease-out forwards;
+}
+
+/* Download section badge — centered within the gradient CTA card */
+.appstore-badge--light {
+    margin: 0 auto;
+}
+
+.download-note {
+    margin-top: 18px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+/* ============================================================
    WAITLIST CTA
    ============================================================ */
 .waitlist-section {
@@ -1210,7 +1342,7 @@ img {
 }
 
 .faq-item--open .faq-answer {
-    max-height: 200px;
+    max-height: 400px;
     padding-bottom: 20px;
 }
 
@@ -1234,6 +1366,10 @@ img {
         grid-template-columns: repeat(2, 1fr);
     }
 
+    .chef-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
     .waitlist-input-group {
         flex-wrap: nowrap;
     }
@@ -1243,6 +1379,10 @@ img {
 /* Desktop (1024px+) */
 @media (min-width: 1024px) {
     .features-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .chef-grid {
         grid-template-columns: repeat(3, 1fr);
     }
 

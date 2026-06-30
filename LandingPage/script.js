@@ -1,89 +1,7 @@
 /* ============================================================
    TASTE THE LENS — Landing Page Script
-   Supabase waitlist + animations + geometric overlay
+   Animations + geometric overlay
    ============================================================ */
-
-// --- API Configuration (Edge Functions — no credentials exposed) ---
-const EDGE_FUNCTION_BASE = 'https://marimaxtqnzmsynsvhrc.supabase.co/functions/v1';
-
-// --- Waitlist Form ---
-function initWaitlistForm() {
-    const form = document.getElementById('waitlist-form');
-    const input = document.getElementById('waitlist-email');
-    const button = document.getElementById('waitlist-submit');
-    const message = document.getElementById('waitlist-message');
-
-    if (!form) return;
-
-    let isSubmitting = false;
-
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        if (isSubmitting) return;
-
-        const email = input.value.trim();
-        message.textContent = '';
-        message.className = 'waitlist-message';
-        input.classList.remove('error');
-
-        // Client-side validation
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!email || !emailRegex.test(email)) {
-            input.classList.add('error');
-            message.textContent = 'Please enter a valid email address.';
-            message.className = 'waitlist-message error';
-            input.focus();
-            return;
-        }
-
-        // Submit via edge function (no Supabase credentials exposed)
-        isSubmitting = true;
-        button.disabled = true;
-        button.classList.add('loading');
-
-        try {
-            const referralSource = new URLSearchParams(window.location.search).get('ref');
-
-            const response = await fetch(`${EDGE_FUNCTION_BASE}/waitlist-signup`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, referral_source: referralSource || null })
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || 'Request failed');
-            }
-
-            button.classList.remove('loading');
-            button.classList.add('success');
-
-            if (data.message === 'already_registered') {
-                message.textContent = "You're already on the list! We'll be in touch.";
-            } else {
-                message.textContent = "You're on the list! We'll notify you when we launch.";
-            }
-            message.className = 'waitlist-message success';
-            input.value = '';
-
-            // Reset button after 3s
-            setTimeout(() => {
-                button.classList.remove('success');
-                button.disabled = false;
-                isSubmitting = false;
-            }, 3000);
-
-        } catch (err) {
-            console.error('Waitlist error:', err);
-            button.classList.remove('loading');
-            button.disabled = false;
-            isSubmitting = false;
-            message.textContent = 'Something went wrong. Please try again.';
-            message.className = 'waitlist-message error';
-        }
-    });
-}
 
 // --- Geometric Overlay (from ProcessingAnimations.swift GeometricOverlay) ---
 function initGeometricOverlay() {
@@ -189,7 +107,7 @@ function initHeroAnimation() {
     const title = document.querySelector('.hero-title');
     const tagline = document.querySelector('.hero-tagline');
     const sub = document.querySelector('.hero-sub');
-    const cta = document.querySelector('.hero-cta');
+    const cta = document.querySelector('.hero-cta, .hero-appstore');
     const visual = document.querySelector('.hero-visual');
     const scrollHint = document.querySelector('.scroll-hint');
 
@@ -267,7 +185,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initGeometricOverlay();
     initHeroAnimation();
     initScrollAnimations();
-    initWaitlistForm();
     initNavScroll();
     initSmoothScroll();
     initFAQ();
