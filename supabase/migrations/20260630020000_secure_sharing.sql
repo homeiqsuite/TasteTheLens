@@ -121,10 +121,14 @@ GRANT EXECUTE ON FUNCTION public.get_shared_meal_plan(uuid)       TO anon, authe
 GRANT EXECUTE ON FUNCTION public.get_shared_meal_plan_meals(uuid) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.get_shared_recipe(uuid)          TO anon, authenticated;
 
-REVOKE ALL ON FUNCTION public.share_meal_plan(uuid)   FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.unshare_meal_plan(uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.share_recipe(uuid)      FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.unshare_recipe(uuid)    FROM PUBLIC;
+-- Revoke from anon explicitly too: Supabase's default privileges auto-grant
+-- EXECUTE to anon on new public functions, which REVOKE ... FROM PUBLIC alone
+-- does not undo. (auth.uid() inside already makes anon calls a no-op, but keep
+-- the grant matrix clean and quiet the security advisor.)
+REVOKE ALL ON FUNCTION public.share_meal_plan(uuid)   FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.unshare_meal_plan(uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.share_recipe(uuid)      FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.unshare_recipe(uuid)    FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.share_meal_plan(uuid)   TO authenticated;
 GRANT EXECUTE ON FUNCTION public.unshare_meal_plan(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.share_recipe(uuid)      TO authenticated;
