@@ -558,7 +558,7 @@ private struct PrivacyNoticeSheet: View {
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 24)
 
-                        Text("Recipes are AI-generated for creative inspiration only. Always use your own judgment when preparing and tasting food. Try any recipe at your own risk.")
+                        Text("Recipes are AI-generated for creative inspiration only — not medical, nutritional, or food-safety advice. Always verify every ingredient against your own allergies and dietary needs, and use your own judgment when preparing and tasting food. Try any recipe at your own risk.")
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.darkTextTertiary)
                             .multilineTextAlignment(.center)
@@ -588,6 +588,7 @@ private struct PrivacyNoticeSheet: View {
                                     privacyBullet("No photo data is shared with third parties for advertising")
                                     privacyBullet("Accepting this notice is required to process your photo")
                                     privacyBullet("Recipes are AI-generated for inspiration only — try them at your own risk")
+                                    privacyBullet("Not medical or nutritional advice — always verify allergens against the ingredient list")
                                 }
                                 .transition(.opacity.combined(with: .move(edge: .top)))
                             }

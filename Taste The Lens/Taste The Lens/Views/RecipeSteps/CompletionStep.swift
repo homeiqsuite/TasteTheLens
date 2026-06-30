@@ -54,6 +54,12 @@ struct CompletionStep: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
 
+                Text("AI-generated recipe — not medical or nutritional advice. Verify allergens against the ingredient list before cooking.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textSecondary.opacity(0.7))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+
                 Spacer().frame(height: 12)
 
                 // Primary share actions
@@ -282,27 +288,22 @@ struct CompletionStep: View {
     }
 
     private func shareRecipeLink() {
-        if let url = DeepLinkHandler.url(for: recipe) {
-            HapticManager.medium()
-            presentShareSheet(items: [recipe.dishName, url])
-            return
-        }
-
-        // Recipe not yet synced — need remoteId to create a shareable link
+        // A share link requires the recipe to live on the server (so the recipient
+        // can resolve the token), which requires the user to be signed in.
         guard AuthManager.shared.isAuthenticated else {
             activeSheet = .authPrompt
             return
         }
 
         isSharingRecipeLink = true
-        Task {
-            await SyncManager.shared.syncRecipe(recipe)
-            await MainActor.run {
-                isSharingRecipeLink = false
-                if let url = DeepLinkHandler.url(for: recipe) {
-                    HapticManager.medium()
-                    presentShareSheet(items: [recipe.dishName, url])
-                }
+        Task { @MainActor in
+            defer { isSharingRecipeLink = false }
+            do {
+                let url = try await SyncManager.shared.shareLinkForRecipe(recipe)
+                HapticManager.medium()
+                presentShareSheet(items: [recipe.dishName, url])
+            } catch {
+                // Couldn't sync/mint a link; surface nothing rather than a broken link.
             }
         }
     }

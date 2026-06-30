@@ -282,4 +282,209 @@ extension ChefTheme {
         heroSubtitle: "Your chef, your rules",
         prefersDarkMode: true
     )
+
+    /// The Nutritionist — fresh emerald/teal, wellness, light theme
+    static let healthyFoods = ChefTheme(
+        dashboardBg: Color(red: 0.957, green: 0.988, blue: 0.973),       // #F4FCF8
+        cardBg: Color(red: 0.976, green: 1.0, blue: 0.988),              // #F9FFFC
+        cardShadow: Color(red: 0.114, green: 0.690, blue: 0.541).opacity(0.06),
+        cardBorder: Color(red: 0.831, green: 0.918, blue: 0.882),        // #D4EAE1
+        accent: Color(red: 0.114, green: 0.690, blue: 0.541),            // #1DB08A
+        accentDeep: Color(red: 0.0, green: 0.545, blue: 0.420),          // #008B6B
+        accentOrange: Color(red: 0.231, green: 0.812, blue: 0.639),      // #3BCFA3
+        impactColor: Color(red: 0.961, green: 0.643, blue: 0.235),       // #F5A43C
+        heroGradient: LinearGradient(
+            colors: [
+                Color(red: 0.231, green: 0.812, blue: 0.639),            // #3BCFA3
+                Color(red: 0.114, green: 0.690, blue: 0.541),            // #1DB08A
+                Color(red: 0.0, green: 0.545, blue: 0.420),              // #008B6B
+            ],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        ),
+        ctaGradient: LinearGradient(
+            colors: [
+                Color(red: 0.231, green: 0.812, blue: 0.639),
+                Color(red: 0.114, green: 0.690, blue: 0.541),
+            ],
+            startPoint: .leading, endPoint: .trailing
+        ),
+        impactGradient: LinearGradient(
+            colors: [
+                Color(red: 0.961, green: 0.643, blue: 0.235),
+                Color(red: 0.114, green: 0.690, blue: 0.541),
+            ],
+            startPoint: .leading, endPoint: .trailing
+        ),
+        textPrimary: Color(red: 0.102, green: 0.102, blue: 0.102),       // #1A1A1A
+        textSecondary: Color(red: 0.29, green: 0.29, blue: 0.29),        // #4A4A4A
+        textTertiary: Color(red: 0.541, green: 0.541, blue: 0.541),      // #8A8A8A
+        textQuaternary: Color(red: 0.69, green: 0.69, blue: 0.69),       // #B0B0B0
+        heroIcon: "heart.fill",
+        heroSubtitle: "Nutritious, balanced, delicious",
+        prefersDarkMode: false
+    )
+
+    /// The Healer — soothing blue, calm, light theme
+    static let gerdHealing = ChefTheme(
+        dashboardBg: Color(red: 0.957, green: 0.976, blue: 0.992),       // #F4F9FE
+        cardBg: Color(red: 0.973, green: 0.984, blue: 1.0),              // #F8FBFF
+        cardShadow: Color(red: 0.227, green: 0.541, blue: 0.792).opacity(0.06),
+        cardBorder: Color(red: 0.835, green: 0.890, blue: 0.957),        // #D5E3F4
+        accent: Color(red: 0.227, green: 0.541, blue: 0.792),            // #3A8ACA
+        accentDeep: Color(red: 0.149, green: 0.404, blue: 0.659),        // #2667A8
+        accentOrange: Color(red: 0.376, green: 0.667, blue: 0.871),      // #60AADE
+        impactColor: Color(red: 0.318, green: 0.722, blue: 0.682),       // #51B8AE
+        heroGradient: LinearGradient(
+            colors: [
+                Color(red: 0.376, green: 0.667, blue: 0.871),            // #60AADE
+                Color(red: 0.227, green: 0.541, blue: 0.792),            // #3A8ACA
+                Color(red: 0.149, green: 0.404, blue: 0.659),            // #2667A8
+            ],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        ),
+        ctaGradient: LinearGradient(
+            colors: [
+                Color(red: 0.376, green: 0.667, blue: 0.871),
+                Color(red: 0.227, green: 0.541, blue: 0.792),
+            ],
+            startPoint: .leading, endPoint: .trailing
+        ),
+        impactGradient: LinearGradient(
+            colors: [
+                Color(red: 0.318, green: 0.722, blue: 0.682),
+                Color(red: 0.227, green: 0.541, blue: 0.792),
+            ],
+            startPoint: .leading, endPoint: .trailing
+        ),
+        textPrimary: Color(red: 0.102, green: 0.102, blue: 0.102),       // #1A1A1A
+        textSecondary: Color(red: 0.29, green: 0.29, blue: 0.29),        // #4A4A4A
+        textTertiary: Color(red: 0.541, green: 0.541, blue: 0.541),      // #8A8A8A
+        textQuaternary: Color(red: 0.69, green: 0.69, blue: 0.69),       // #B0B0B0
+        heroIcon: "cross.fill",
+        heroSubtitle: "Gentle, soothing, reflux-safe",
+        prefersDarkMode: false
+    )
+
+    /// The Botanist — vibrant leaf green, vegan, light theme
+    static let plantBased = ChefTheme(
+        dashboardBg: Color(red: 0.953, green: 0.980, blue: 0.949),       // #F3FAF2
+        cardBg: Color(red: 0.973, green: 1.0, blue: 0.969),              // #F8FFF7
+        cardShadow: Color(red: 0.298, green: 0.682, blue: 0.275).opacity(0.06),
+        cardBorder: Color(red: 0.839, green: 0.910, blue: 0.831),        // #D6E8D4
+        accent: Color(red: 0.298, green: 0.682, blue: 0.275),            // #4CAE46
+        accentDeep: Color(red: 0.196, green: 0.541, blue: 0.196),        // #328A32
+        accentOrange: Color(red: 0.486, green: 0.776, blue: 0.337),      // #7CC656
+        impactColor: Color(red: 0.918, green: 0.561, blue: 0.220),       // #EA8F38
+        heroGradient: LinearGradient(
+            colors: [
+                Color(red: 0.486, green: 0.776, blue: 0.337),            // #7CC656
+                Color(red: 0.298, green: 0.682, blue: 0.275),            // #4CAE46
+                Color(red: 0.196, green: 0.541, blue: 0.196),            // #328A32
+            ],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        ),
+        ctaGradient: LinearGradient(
+            colors: [
+                Color(red: 0.486, green: 0.776, blue: 0.337),
+                Color(red: 0.298, green: 0.682, blue: 0.275),
+            ],
+            startPoint: .leading, endPoint: .trailing
+        ),
+        impactGradient: LinearGradient(
+            colors: [
+                Color(red: 0.918, green: 0.561, blue: 0.220),
+                Color(red: 0.298, green: 0.682, blue: 0.275),
+            ],
+            startPoint: .leading, endPoint: .trailing
+        ),
+        textPrimary: Color(red: 0.102, green: 0.102, blue: 0.102),       // #1A1A1A
+        textSecondary: Color(red: 0.29, green: 0.29, blue: 0.29),        // #4A4A4A
+        textTertiary: Color(red: 0.541, green: 0.541, blue: 0.541),      // #8A8A8A
+        textQuaternary: Color(red: 0.69, green: 0.69, blue: 0.69),       // #B0B0B0
+        heroIcon: "leaf.fill",
+        heroSubtitle: "100% plants, maximum flavor",
+        prefersDarkMode: false
+    )
+
+    /// The Gut Guide — calming periwinkle/indigo, light theme
+    static let lowFodmap = ChefTheme(
+        dashboardBg: Color(red: 0.965, green: 0.965, blue: 0.992),       // #F6F6FD
+        cardBg: Color(red: 0.980, green: 0.980, blue: 1.0),             // #FAFAFF
+        cardShadow: Color(red: 0.424, green: 0.388, blue: 0.839).opacity(0.06),
+        cardBorder: Color(red: 0.871, green: 0.863, blue: 0.949),        // #DEDCF2
+        accent: Color(red: 0.424, green: 0.388, blue: 0.839),           // #6C63D6
+        accentDeep: Color(red: 0.310, green: 0.275, blue: 0.722),        // #4F46B8
+        accentOrange: Color(red: 0.553, green: 0.522, blue: 0.898),      // #8D85E5
+        impactColor: Color(red: 0.424, green: 0.388, blue: 0.839),
+        heroGradient: LinearGradient(
+            colors: [
+                Color(red: 0.553, green: 0.522, blue: 0.898),           // #8D85E5
+                Color(red: 0.424, green: 0.388, blue: 0.839),           // #6C63D6
+                Color(red: 0.310, green: 0.275, blue: 0.722),           // #4F46B8
+            ],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        ),
+        ctaGradient: LinearGradient(
+            colors: [
+                Color(red: 0.553, green: 0.522, blue: 0.898),
+                Color(red: 0.424, green: 0.388, blue: 0.839),
+            ],
+            startPoint: .leading, endPoint: .trailing
+        ),
+        impactGradient: LinearGradient(
+            colors: [
+                Color(red: 0.553, green: 0.522, blue: 0.898),
+                Color(red: 0.424, green: 0.388, blue: 0.839),
+            ],
+            startPoint: .leading, endPoint: .trailing
+        ),
+        textPrimary: Color(red: 0.102, green: 0.102, blue: 0.102),       // #1A1A1A
+        textSecondary: Color(red: 0.29, green: 0.29, blue: 0.29),        // #4A4A4A
+        textTertiary: Color(red: 0.541, green: 0.541, blue: 0.541),      // #8A8A8A
+        textQuaternary: Color(red: 0.69, green: 0.69, blue: 0.69),       // #B0B0B0
+        heroIcon: "stethoscope",
+        heroSubtitle: "Gut-friendly, low-FODMAP meals",
+        prefersDarkMode: false
+    )
+
+    /// The Alkalist — fresh cyan/aqua, light theme
+    static let alkaline = ChefTheme(
+        dashboardBg: Color(red: 0.949, green: 0.988, blue: 0.992),       // #F2FCFD
+        cardBg: Color(red: 0.973, green: 0.996, blue: 1.0),             // #F8FEFF
+        cardShadow: Color(red: 0.059, green: 0.710, blue: 0.788).opacity(0.06),
+        cardBorder: Color(red: 0.812, green: 0.929, blue: 0.945),        // #CFEDF1
+        accent: Color(red: 0.059, green: 0.710, blue: 0.788),           // #0FB5C9
+        accentDeep: Color(red: 0.039, green: 0.561, blue: 0.627),        // #0A8FA0
+        accentOrange: Color(red: 0.231, green: 0.804, blue: 0.808),      // #3BCDCE
+        impactColor: Color(red: 0.961, green: 0.643, blue: 0.235),       // #F5A43C
+        heroGradient: LinearGradient(
+            colors: [
+                Color(red: 0.231, green: 0.804, blue: 0.808),           // #3BCDCE
+                Color(red: 0.059, green: 0.710, blue: 0.788),           // #0FB5C9
+                Color(red: 0.039, green: 0.561, blue: 0.627),           // #0A8FA0
+            ],
+            startPoint: .topLeading, endPoint: .bottomTrailing
+        ),
+        ctaGradient: LinearGradient(
+            colors: [
+                Color(red: 0.231, green: 0.804, blue: 0.808),
+                Color(red: 0.059, green: 0.710, blue: 0.788),
+            ],
+            startPoint: .leading, endPoint: .trailing
+        ),
+        impactGradient: LinearGradient(
+            colors: [
+                Color(red: 0.961, green: 0.643, blue: 0.235),
+                Color(red: 0.059, green: 0.710, blue: 0.788),
+            ],
+            startPoint: .leading, endPoint: .trailing
+        ),
+        textPrimary: Color(red: 0.102, green: 0.102, blue: 0.102),       // #1A1A1A
+        textSecondary: Color(red: 0.29, green: 0.29, blue: 0.29),        // #4A4A4A
+        textTertiary: Color(red: 0.541, green: 0.541, blue: 0.541),      // #8A8A8A
+        textQuaternary: Color(red: 0.69, green: 0.69, blue: 0.69),       // #B0B0B0
+        heroIcon: "drop.fill",
+        heroSubtitle: "Alkaline, fresh & balanced",
+        prefersDarkMode: false
+    )
 }

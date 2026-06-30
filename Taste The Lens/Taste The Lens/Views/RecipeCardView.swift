@@ -363,19 +363,23 @@ struct RecipeCardView: View {
     }
 
     private func shareRecipe() {
-        var items: [Any] = [recipe.dishName]
-        if let url = DeepLinkHandler.url(for: recipe) {
-            items.append(url)
+        Task { @MainActor in
+            var items: [Any] = [recipe.dishName]
+            // Mint a token-scoped share link (no-op share of just the name if the
+            // recipe can't be synced, e.g. the user isn't signed in).
+            if let url = try? await SyncManager.shared.shareLinkForRecipe(recipe) {
+                items.append(url)
+            }
+            let activityVC = UIActivityViewController(activityItems: items, applicationActivities: nil)
+            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let rootVC = windowScene.keyWindow?.rootViewController else { return }
+            var presenter = rootVC
+            while let presented = presenter.presentedViewController {
+                presenter = presented
+            }
+            activityVC.popoverPresentationController?.sourceView = presenter.view
+            presenter.present(activityVC, animated: true)
         }
-        let activityVC = UIActivityViewController(activityItems: items, applicationActivities: nil)
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let rootVC = windowScene.keyWindow?.rootViewController else { return }
-        var presenter = rootVC
-        while let presented = presenter.presentedViewController {
-            presenter = presented
-        }
-        activityVC.popoverPresentationController?.sourceView = presenter.view
-        presenter.present(activityVC, animated: true)
     }
 
     // MARK: - Celebration Toast

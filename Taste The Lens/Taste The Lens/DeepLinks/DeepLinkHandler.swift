@@ -1,7 +1,12 @@
 import Foundation
 
 enum DeepLink {
+    /// Shared recipe, identified by its secret share token (not the row id).
     case recipe(String)
+    /// Shared meal plan, identified by its secret share token (not the row id).
+    case mealPlan(String)
+    /// A single shared meal: the parent plan's share token + the meal's row id.
+    case meal(planToken: String, mealId: String)
     case challenge(String)
     case tastingMenu(String)
     case resetCallback(String)
@@ -9,21 +14,40 @@ enum DeepLink {
 
 struct DeepLinkHandler {
     static func parse(_ url: URL) -> DeepLink? {
-        // Handle tastethelens://recipe/{uuid}
         guard url.scheme == "tastethelens" else { return nil }
 
         let pathComponents = url.pathComponents.filter { $0 != "/" }
 
+        // tastethelens://recipe/{shareToken}
         if url.host == "recipe" {
-            // tastethelens://recipe/{remoteId}
-            if let idString = pathComponents.first, !idString.isEmpty {
-                return .recipe(idString)
+            if let token = pathComponents.first, UUID(uuidString: token) != nil {
+                return .recipe(token)
             }
-            // Also handle tastethelens://recipe?id={remoteId}
             if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-               let idString = components.queryItems?.first(where: { $0.name == "id" })?.value,
-               !idString.isEmpty {
-                return .recipe(idString)
+               let token = components.queryItems?.first(where: { $0.name == "token" })?.value,
+               UUID(uuidString: token) != nil {
+                return .recipe(token)
+            }
+        }
+
+        // tastethelens://mealplan/{shareToken}
+        if url.host == "mealplan" {
+            if let token = pathComponents.first, UUID(uuidString: token) != nil {
+                return .mealPlan(token)
+            }
+            if let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+               let token = components.queryItems?.first(where: { $0.name == "token" })?.value,
+               UUID(uuidString: token) != nil {
+                return .mealPlan(token)
+            }
+        }
+
+        // tastethelens://meal/{planShareToken}/{mealId}
+        if url.host == "meal", pathComponents.count >= 2 {
+            let planToken = pathComponents[0]
+            let mealId = pathComponents[1]
+            if UUID(uuidString: planToken) != nil, UUID(uuidString: mealId) != nil {
+                return .meal(planToken: planToken, mealId: mealId)
             }
         }
 
@@ -68,9 +92,21 @@ struct DeepLinkHandler {
         URL(string: "tastethelens://menu/\(code)")
     }
 
-    /// Generate a shareable URL for a recipe (requires remoteId — recipe must be synced first)
-    static func url(for recipe: Recipe) -> URL? {
-        guard let remoteId = recipe.remoteId else { return nil }
-        return URL(string: "tastethelens://recipe/\(remoteId)")
+    // MARK: - Token-based share links
+    //
+    // Share links carry a per-item secret `share_token` (minted server-side via
+    // `SyncManager.shareLink…`), NOT the row id. Only the holder of the token can
+    // resolve the item; the row id is never bulk-enumerable. See SyncManager.
+
+    static func recipeURL(token: String) -> URL? {
+        URL(string: "tastethelens://recipe/\(token)")
+    }
+
+    static func mealPlanURL(token: String) -> URL? {
+        URL(string: "tastethelens://mealplan/\(token)")
+    }
+
+    static func mealURL(planToken: String, mealId: String) -> URL? {
+        URL(string: "tastethelens://meal/\(planToken)/\(mealId)")
     }
 }

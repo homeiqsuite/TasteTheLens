@@ -70,9 +70,14 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         didReceive response: UNNotificationResponse
     ) async {
         let userInfo = response.notification.request.content.userInfo
-        if let deepLink = userInfo["deep_link"] as? String,
-           let url = URL(string: deepLink) {
-            await UIApplication.shared.open(url)
+        // Only follow deep links that parse as a recognized in-app route
+        // (scheme == "tastethelens"). Never open an arbitrary URL from a push
+        // payload — a spoofed/compromised push could otherwise force-open any link.
+        guard let deepLink = userInfo["deep_link"] as? String,
+              let url = URL(string: deepLink),
+              DeepLinkHandler.parse(url) != nil else {
+            return
         }
+        await UIApplication.shared.open(url)
     }
 }

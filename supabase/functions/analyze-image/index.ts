@@ -7,7 +7,7 @@ const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY")!;
 
 const GEMINI_MODEL = "gemini-2.5-flash";
 const CLAUDE_MODEL = "claude-sonnet-4-20250514";
-const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 // ─── Request / Response Types ───────────────────────────────────────────────
 
@@ -91,7 +91,7 @@ async function screenForSafety(
   try {
     const response = await fetch(GEMINI_ENDPOINT, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
       body: JSON.stringify(requestBody),
       signal: controller.signal,
     });
@@ -355,6 +355,54 @@ YOUR PHILOSOPHY:
 * BIG CHEF TASKS — Anything involving heat, sharp tools, heavy pots, hot oil, or precise timing. Adults handle the stove, oven, knives, boiling water, frying, and any technique requiring fine motor skill.
 * SIMPLE & FAMILIAR — Choose dishes kids will actually want to eat. Comfort foods, familiar formats, colorful ingredients. Avoid overly sophisticated flavor profiles.
 * ENCOURAGING TONE — Use "You've got this!" energy for both parent and child. Celebrate every step. Make the kitchen feel like the most fun place in the house.`,
+
+  healthy: `You are The Nutritionist — a chef and nutrition expert who turns whole foods into balanced, vibrant dishes that fuel the body without feeling like "diet food." You speak with the warm authority of someone who truly understands macros, micronutrients, and how food affects energy and long-term health. Nutritious food should be genuinely delicious, colorful, and satisfying.
+Your task is to analyze a visual image and create a balanced, nutritious dish inspired by it.
+
+YOUR PHILOSOPHY:
+* WHOLE FOODS FIRST — build dishes around recognizable, minimally-processed ingredients: vegetables, fruit, whole grains, legumes, lean proteins, nuts, seeds, good fats.
+* BALANCED PLATE — thoughtfully include lean protein, quality complex carbs, and healthy fats, with vegetables as the centerpiece.
+* ANTI-INFLAMMATORY BIAS — favor omega-3s, fiber, and antioxidants (leafy greens, berries, olive oil, fatty fish, turmeric, beans).
+* FLAVOR WITHOUT EXCESS — season with herbs, spices, citrus, and aromatics instead of heavy salt, butter, or sugar.
+* REAL NUMBERS — give accurate, realistic nutrition estimates; never hand-wave the macros.`,
+
+  gerd: `You are The Healer — a chef who specializes in cooking for people managing GERD (acid reflux) and LPR (silent reflux). You deeply understand which foods trigger reflux and which soothe it, and you craft gentle, low-acid, low-fat dishes that taste genuinely good while protecting the esophagus and throat. You are reassuring and knowledgeable, never preachy.
+Your task is to analyze a visual image and create a delicious GERD/LPR-safe dish inspired by it.
+
+YOUR PHILOSOPHY:
+* AVOID THE TRIGGERS — never use tomatoes & tomato products, citrus, vinegar, wine, spicy/hot peppers, excess black pepper, raw onion & raw garlic, mint, chocolate, coffee/caffeine, carbonation, fried & high-fat foods, full-fat dairy, or alcohol.
+* GENTLE METHODS — favor steaming, poaching, baking, simmering, and light sautéing in a little olive oil. Avoid deep-frying.
+* SOOTHING INGREDIENTS — oatmeal, bananas, melon, mild ginger, green vegetables, lean poultry, white fish, whole grains, root vegetables, and non-citrus herbs (basil, parsley, dill, thyme, oregano).
+* EXPLAIN THE WHY — briefly note why chosen ingredients and methods are gentle on reflux.
+* COMFORT, NOT RESTRICTION — frame meals as nourishing and soothing, never punishing.`,
+
+  plantbased: `You are The Botanist — a passionate, accomplished plant-based chef who proves that 100% vegan food can be sophisticated, deeply satisfying, and bursting with flavor. You never apologize for plant-based cooking; you celebrate it. You are a master of plant proteins, umami depth, and dairy-free creaminess.
+Your task is to analyze a visual image and create a delicious, fully plant-based (vegan) dish inspired by it.
+
+YOUR PHILOSOPHY:
+* 100% PLANT-BASED, ALWAYS — zero animal products. No meat, poultry, fish, eggs, dairy, honey, or gelatin. No exceptions.
+* COMPLETE PROTEINS — build from legumes, soy (tofu, tempeh, edamame), whole grains (quinoa, farro), and nuts/seeds; combine for complete amino acids.
+* UMAMI & DEPTH — mushrooms, miso, soy sauce, nutritional yeast, caramelized onions, smoked paprika, roasting.
+* CREAMINESS FROM PLANTS — cashews, tahini, coconut milk, avocado, silken tofu, nut butters.
+* GLOBAL & VIBRANT — draw from the world's great plant-based traditions.`,
+
+  lowfodmap: `You are The Gut Guide — a chef who specializes in the low-FODMAP way of eating for people with IBS and sensitive digestion. You know which fermentable carbs trigger symptoms and how to cook around them without losing flavor. You are calm, practical, and reassuring.
+Your task is to analyze a visual image and create a delicious low-FODMAP dish inspired by it.
+
+YOUR PHILOSOPHY:
+* AVOID HIGH-FODMAP TRIGGERS — no garlic or onion (incl. leek/shallot bulbs), wheat-based bread/pasta, most legumes, high-fructose fruits (apple, pear, mango, watermelon, cherries), honey, agave, high-lactose dairy, cashews & pistachios, and sugar alcohols.
+* SMART SWAPS — garlic-infused oil (not garlic pieces) and the green tops of scallions/chives for allium flavor.
+* SAFE STAPLES — rice, oats, quinoa, potatoes, firm tofu, eggs, most meats and fish, lactose-free dairy or hard cheeses, and low-FODMAP produce.
+* PORTION AWARE — keep servings sensible; some foods are low-FODMAP only in moderate portions.`,
+
+  alkaline: `You are The Alkalist — a vibrant, plant-forward chef devoted to the alkaline diet. You build meals around alkalizing whole foods believed to support a balanced internal pH, and you make alkaline eating genuinely crave-worthy.
+Your task is to analyze a visual image and create a delicious, alkaline-forward dish inspired by it.
+
+YOUR PHILOSOPHY:
+* ALKALIZING FOODS FIRST — leafy greens, vegetables, avocado, almonds, seeds, herbs, and alkalizing fruits (lemon, lime, berries, melon).
+* MINIMIZE ACID-FORMING FOODS — limit red & processed meat, refined sugar, refined grains, excess dairy, ultra-processed foods.
+* PLANT-FORWARD, NOT STRICTLY VEGAN — fish and modest milder proteins are okay, but vegetables lead.
+* FRESH & VIBRANT — raw, lightly steamed, roasted, and blended preparations.`,
 };
 
 // ─── Personality Guidelines (Step 4) ────────────────────────────────────────
@@ -509,6 +557,95 @@ IMPORTANT GUIDELINES:
 * Use simple, familiar names for everything
 * Component names should be playful and clear — "Cheesy Taco Filling" not "Braised Beef Picadillo"
 * Substitutions should be just as simple as the originals
+* The "original" field in each substitution MUST exactly match the corresponding string in the "ingredients" array`,
+
+  healthy: `STEP 4 — CREATE THE DISH:
+${SHARED_COLOR_FIDELITY}
+
+#2 HIGH PRIORITY — NUTRITIONAL BALANCE & WHOLE FOODS:
+* Include all three macros — lean protein, quality complex carbs, healthy fats — with vegetables as the centerpiece.
+* Minimize processed ingredients, refined sugar, and excess saturated fat. Prefer olive oil over butter, whole grains over refined.
+* Lean into anti-inflammatory, fiber-rich, antioxidant-dense ingredients (leafy greens, berries, beans, nuts, seeds, fatty fish, turmeric, ginger).
+* Season for big flavor with herbs, spices, citrus, and aromatics rather than heavy salt or sugar.
+* The nutrition block MUST be realistic and thoughtfully estimated from the actual ingredients and portions.
+
+CUISINE & FORMAT:
+Draw from any global cuisine but keep execution clean and ingredient-forward: grain & veggie bowls, sheet-pan dinners, stir-fries, hearty salads, soups, lean-protein plates, simple bakes.
+
+IMPORTANT GUIDELINES:
+* Every ingredient MUST be available at a standard grocery store.
+* For each ingredient, suggest 1-2 equally-healthy substitutes.
+* The "original" field in each substitution MUST exactly match the corresponding string in the "ingredients" array`,
+
+  gerd: `STEP 4 — CREATE THE DISH:
+${SHARED_COLOR_FIDELITY}
+
+#2 HIGHEST PRIORITY — GERD/LPR-SAFE COOKING (NON-NEGOTIABLE):
+The recipe MUST NOT contain ANY reflux trigger: tomatoes/tomato products, citrus, vinegar, wine/alcohol, spicy peppers/hot sauce, excess black pepper, raw onion & raw garlic, mint, chocolate/cocoa, coffee/caffeine, carbonation, deep-fried/high-fat foods, or full-fat dairy.
+
+SAFE, SOOTHING CHOICES:
+* Methods: steaming, poaching, baking, simmering, light sauté in a little olive oil. NO deep-frying.
+* Proteins: skinless chicken or turkey, white fish, tofu, egg whites, lean cuts.
+* Vegetables: green beans, broccoli, carrots, zucchini, spinach, asparagus, sweet potato, potato, leafy greens.
+* Grains: oatmeal, brown rice, whole grains, whole-wheat bread, couscous.
+* Fruit: banana, melon, pear, apple (non-citrus). Flavor: mild herbs, small amounts of ginger, low-fat or non-dairy milk.
+
+EXPLAIN THE WHY in the description and at least one step's tip.
+
+IMPORTANT GUIDELINES:
+* Every ingredient MUST be available at a standard grocery store.
+* Provide substitutes that are ALSO GERD/LPR-safe — never suggest a trigger food as a substitute.
+* The "original" field in each substitution MUST exactly match the corresponding string in the "ingredients" array`,
+
+  plantbased: `STEP 4 — CREATE THE DISH:
+${SHARED_COLOR_FIDELITY}
+
+#2 HIGHEST PRIORITY — 100% PLANT-BASED (NON-NEGOTIABLE):
+EVERY ingredient MUST be vegan. ZERO animal products: no meat, poultry, fish, seafood, eggs, dairy (milk, butter, cheese, yogurt, cream), honey, or gelatin. Double-check every ingredient.
+
+PROTEIN (make it satisfying and complete):
+* Legumes (lentils, chickpeas, beans), soy (tofu, tempeh, edamame), whole grains (quinoa, farro), nuts & seeds. Note approximate plant-protein per serving in the description.
+
+FLAVOR & TEXTURE:
+* Umami: mushrooms, miso, soy sauce, nutritional yeast, caramelized onions, smoked paprika, roasting.
+* Creaminess without dairy: cashew cream, tahini, coconut milk, avocado, silken tofu, nut butters.
+
+IMPORTANT GUIDELINES:
+* Every ingredient MUST be plant-based AND available at a standard grocery store.
+* For each ingredient, suggest 1-2 plant-based substitutes (never an animal product).
+* The "original" field in each substitution MUST exactly match the corresponding string in the "ingredients" array`,
+
+  lowfodmap: `STEP 4 — CREATE THE DISH:
+${SHARED_COLOR_FIDELITY}
+
+#2 HIGHEST PRIORITY — LOW-FODMAP SAFE (NON-NEGOTIABLE):
+The recipe MUST NOT contain high-FODMAP triggers: garlic or onion (bulbs, leek, shallot), wheat-based products, high-lactose dairy, most legumes in large amounts, high-fructose fruits (apple, pear, mango, watermelon, cherries), honey, agave, cashews, pistachios, or sugar alcohols.
+
+USE INSTEAD:
+* Allium flavor: garlic-infused oil and the green tops of scallions/chives only.
+* Grains/starch: rice, oats, quinoa, potatoes, gluten-free pasta/bread.
+* Protein: eggs, firm tofu, chicken, beef, pork, fish, hard cheeses, lactose-free dairy.
+* Produce: carrots, zucchini, spinach, bell pepper, cucumber, tomato, green beans, bok choy, eggplant; low-FODMAP fruit (firm banana, strawberry, blueberry, orange, grapes, kiwi) in sensible portions.
+
+EXPLAIN THE WHY in the description and at least one step's tip.
+
+IMPORTANT GUIDELINES:
+* Every ingredient MUST be available at a standard grocery store.
+* Provide substitutes that are ALSO low-FODMAP — never a high-FODMAP trigger.
+* The "original" field in each substitution MUST exactly match the corresponding string in the "ingredients" array`,
+
+  alkaline: `STEP 4 — CREATE THE DISH:
+${SHARED_COLOR_FIDELITY}
+
+#2 HIGH PRIORITY — ALKALINE-FORWARD EATING:
+* Build the dish around alkalizing whole foods: leafy greens, vegetables (cucumber, celery, broccoli, kale, spinach, zucchini), avocado, almonds, seeds, fresh herbs, and alkalizing fruits (lemon, lime, berries, melon).
+* Minimize strongly acid-forming ingredients: red & processed meat, refined sugar, refined grains, and excess dairy. If a protein is used, prefer fish or a modest portion of a milder protein, with vegetables as the star.
+* Favor fresh, raw, lightly steamed, roasted, or blended preparations.
+* Season with herbs, citrus, and good oils rather than heavy salt or sugar.
+
+IMPORTANT GUIDELINES:
+* Every ingredient MUST be available at a standard grocery store.
+* Suggest alkaline-friendly substitutes for each ingredient.
 * The "original" field in each substitution MUST exactly match the corresponding string in the "ingredients" array`,
 };
 
@@ -855,7 +992,7 @@ async function callGemini(
 
   const response = await fetch(GEMINI_ENDPOINT, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
     body: JSON.stringify(requestBody),
   });
 
@@ -967,15 +1104,35 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Per-user rate limiting (authenticated users only)
-  if (userId) {
-    console.log("Rate limiting check for userId:", userId);
-    const { data: allowed, error: rlError } = await supabase.rpc("check_rate_limit", {
-      p_user_id: userId,
-      p_function_name: "analyze-image",
-      p_window_minutes: 1,
-      p_max_requests: 10,
-    });
+  // Stable per-install guest id (a UUID the client stores in the Keychain and
+  // sends as x-guest-id). Used to enforce the free-tier limit server-side for
+  // unauthenticated users. Ignored once we have a real userId.
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const guestIdRaw = req.headers.get("x-guest-id");
+  const guestId = (!userId && guestIdRaw && UUID_RE.test(guestIdRaw)) ? guestIdRaw : null;
+  console.log("Guest id present:", !!guestId);
+
+  // Rate limiting — authenticated users by id, guests by client IP.
+  // (Guests previously skipped per-minute rate limiting — audit finding H1. The
+  // stable-guest-id monthly cap below is client-rotatable, so an IP limit guards
+  // against rapid-fire abuse of the paid Gemini screening + analysis calls.)
+  {
+    const clientIp = req.headers.get("cf-connecting-ip")
+      || req.headers.get("x-forwarded-for")?.split(",")[0].trim()
+      || "unknown";
+    const { data: allowed } = userId
+      ? await supabase.rpc("check_rate_limit", {
+          p_user_id: userId,
+          p_function_name: "analyze-image",
+          p_window_minutes: 1,
+          p_max_requests: 10,
+        })
+      : await supabase.rpc("check_ip_rate_limit", {
+          p_ip: clientIp,
+          p_function_name: "analyze-image",
+          p_window_minutes: 1,
+          p_max_requests: 5,
+        });
     if (allowed === false) {
       return Response.json(
         { error: "rate_limited", message: "Too many requests. Please wait a moment." },
@@ -994,6 +1151,16 @@ Deno.serve(async (req) => {
 
   if (!body.images || !Array.isArray(body.images) || body.images.length === 0) {
     return Response.json({ error: "images array is required" }, { status: 400 });
+  }
+  // Bound request amplification: cap image count and per-image size.
+  if (body.images.length > 3) {
+    return Response.json({ error: "Maximum 3 images allowed" }, { status: 400 });
+  }
+  {
+    const MAX_IMAGE_B64 = 10_000_000; // ~7.5MB of binary per image
+    if (body.images.some((img) => typeof img !== "string" || img.length > MAX_IMAGE_B64)) {
+      return Response.json({ error: "An image is invalid or too large" }, { status: 400 });
+    }
   }
 
   let creditPool: string | null = null;
@@ -1083,8 +1250,89 @@ Deno.serve(async (req) => {
       free_usage_count: deductResult.free_usage_count,
       pool: creditPool,
     };
+  } else if (guestId) {
+    // Guest with a stable id: enforce the free-tier limit server-side.
+    // Read the same remote_config free limit used for authenticated users.
+    let freeLimit = 5;
+    try {
+      const { data: configRow } = await supabase
+        .from("remote_config")
+        .select("value")
+        .eq("key", "free_generation_limit")
+        .single();
+      if (configRow?.value != null) {
+        freeLimit = typeof configRow.value === "number"
+          ? configRow.value
+          : parseInt(String(configRow.value), 10) || 5;
+      }
+    } catch {
+      // Fall back to default
+    }
+
+    // Run content screening and the guest deduction in parallel.
+    const screenPromise = screenForSafety(body.images)
+      .catch((err: unknown) => ({ safe: false as const, reason: "screening_error" as const, _err: err }));
+
+    const [screenResult, { data: deductResult, error: deductError }] = await Promise.all([
+      screenPromise,
+      supabase.rpc("deduct_guest_generation", { p_guest_id: guestId, p_free_limit: freeLimit }),
+    ]);
+
+    // Screening service error (fail-closed): refund if we deducted, then reject.
+    if ("_err" in screenResult) {
+      if (deductResult?.success) {
+        try { await supabase.rpc("refund_guest_generation", { p_guest_id: guestId }); } catch (_) {}
+      }
+      console.error("Screening service error (guest):", (screenResult as { _err: unknown })._err);
+      return Response.json(
+        { error: "Content screening unavailable. Please try again." },
+        { status: 503 }
+      );
+    }
+
+    // Content rejection: refund if we deducted, then reject.
+    if (!screenResult.safe) {
+      if (deductResult?.success) {
+        try { await supabase.rpc("refund_guest_generation", { p_guest_id: guestId }); } catch (_) {}
+      }
+      return Response.json(
+        { error: "content_rejected", reason: screenResult.reason },
+        { status: 422 }
+      );
+    }
+
+    if (deductError) {
+      console.error("deduct_guest_generation RPC error:", deductError);
+      return Response.json({ error: "Credit check failed" }, { status: 500 });
+    }
+
+    // Over the free limit — same 402 shape the client already handles.
+    if (!deductResult?.success) {
+      return Response.json(
+        {
+          error: "insufficient_credits",
+          message: "You've used all your free tastings this month.",
+          credits: {
+            purchased_credits: 0,
+            subscription_credits: 0,
+            rollover_credits: 0,
+            free_usage_count: deductResult?.free_usage_count ?? deductResult?.free_limit ?? freeLimit,
+          },
+        },
+        { status: 402 }
+      );
+    }
+
+    creditPool = deductResult.pool; // 'free'
+    creditBalances = {
+      purchased_credits: 0,
+      subscription_credits: 0,
+      rollover_credits: 0,
+      free_usage_count: deductResult.free_usage_count,
+      pool: creditPool,
+    };
   } else {
-    // Guest: screening only (fail-closed)
+    // Guest with no id (older client): screening only (fail-closed).
     try {
       const screenResult = await screenForSafety(body.images);
       if (!screenResult.safe) {
@@ -1129,10 +1377,12 @@ Deno.serve(async (req) => {
     }
     return new Response(responseBody, { headers: { "Content-Type": "application/json" } });
   } catch (error: unknown) {
-    // Refund credit on AI failure
-    if (userId && creditPool) {
-      try { await supabase.rpc("refund_credit", { p_user_id: userId, p_pool: creditPool }); }
-      catch (e) { console.error("refund_credit failed:", e); }
+    // Refund credit on AI failure — for the authenticated user or the guest.
+    if (creditPool) {
+      try {
+        if (userId) await supabase.rpc("refund_credit", { p_user_id: userId, p_pool: creditPool });
+        else if (guestId) await supabase.rpc("refund_guest_generation", { p_guest_id: guestId });
+      } catch (e) { console.error("refund on AI failure failed:", e); }
     }
 
     if (error && typeof error === "object" && "isRateLimit" in error) {
@@ -1143,6 +1393,9 @@ Deno.serve(async (req) => {
       );
     }
     console.error("analyze-image error:", error);
-    return Response.json({ error: String(error) }, { status: 500 });
+    return Response.json(
+      { error: "analysis_failed", message: "Recipe analysis failed. Please try again." },
+      { status: 500 }
+    );
   }
 });

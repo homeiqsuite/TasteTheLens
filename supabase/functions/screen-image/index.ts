@@ -5,7 +5,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY")!;
 
 const GEMINI_MODEL = "gemini-2.5-flash";
-const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 const SCREENING_PROMPT = `Content safety screener for a food/recipe app. Check if the image is appropriate for culinary inspiration.
 
@@ -67,7 +67,7 @@ async function screenImage(base64Image: string): Promise<ScreeningResult> {
   try {
     const response = await fetch(GEMINI_ENDPOINT, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
       body: JSON.stringify(requestBody),
       signal: controller.signal,
     });
@@ -120,14 +120,25 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Per-user rate limiting (authenticated users only)
-  if (userId) {
-    const { data: allowed } = await supabase.rpc("check_rate_limit", {
-      p_user_id: userId,
-      p_function_name: "screen-image",
-      p_window_minutes: 1,
-      p_max_requests: 15,
-    });
+  // Rate limiting — authenticated users by id, guests by client IP.
+  // (Guests previously skipped rate limiting entirely — audit finding H1.)
+  {
+    const clientIp = req.headers.get("cf-connecting-ip")
+      || req.headers.get("x-forwarded-for")?.split(",")[0].trim()
+      || "unknown";
+    const { data: allowed } = userId
+      ? await supabase.rpc("check_rate_limit", {
+          p_user_id: userId,
+          p_function_name: "screen-image",
+          p_window_minutes: 1,
+          p_max_requests: 15,
+        })
+      : await supabase.rpc("check_ip_rate_limit", {
+          p_ip: clientIp,
+          p_function_name: "screen-image",
+          p_window_minutes: 1,
+          p_max_requests: 15,
+        });
     if (allowed === false) {
       return Response.json(
         { error: "rate_limited", message: "Too many requests. Please wait a moment." },
@@ -151,6 +162,12 @@ Deno.serve(async (req) => {
         { error: "Maximum 3 images allowed" },
         { status: 400 }
       );
+    }
+
+    // Per-image size cap (~7.5MB of binary per image) to bound provider cost.
+    const MAX_IMAGE_B64 = 10_000_000;
+    if (images.some((img) => typeof img !== "string" || img.length > MAX_IMAGE_B64)) {
+      return Response.json({ error: "An image is invalid or too large" }, { status: 400 });
     }
 
     // Screen all images concurrently

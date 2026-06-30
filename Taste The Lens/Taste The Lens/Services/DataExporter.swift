@@ -77,14 +77,9 @@ struct DataExporter {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         let dateString = formatter.string(from: Date())
-        let fileName = "TasteTheLens_Export_\(dateString).json"
-        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-
-        do {
-            try data.write(to: tempURL)
-            return tempURL
-        } catch {
-            return nil
-        }
+        // The export contains the user's email + full recipe collection (PII), so
+        // write it encrypted-at-rest and excluded from backup rather than as a
+        // plain file in the temp directory.
+        return TempFileManager.write(data, fileName: "TasteTheLens_Export_\(dateString).json")
     }
 }

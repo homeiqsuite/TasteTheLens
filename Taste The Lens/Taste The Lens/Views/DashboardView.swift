@@ -12,6 +12,7 @@ struct DashboardView: View {
     @State private var selectedRecipe: Recipe?
     @State private var showChefPicker = false
     @State private var showPaywall = false
+    @State private var showMealPlans = false
     @AppStorage("selectedChef") private var selectedChef = "default"
 
     private let authManager = AuthManager.shared
@@ -55,6 +56,7 @@ struct DashboardView: View {
                 heroMetricCard
                 secondaryTiles
                 chefModeCard
+                mealPlanCard
                 if let lastRecipe = recipes.first {
                     continueCookingSection(lastRecipe)
                 }
@@ -82,6 +84,9 @@ struct DashboardView: View {
         }
         .sheet(isPresented: $showChefPicker) {
             ChefModeView(context: .defaultChef)
+        }
+        .sheet(isPresented: $showMealPlans) {
+            SavedMealPlansView()
         }
         .sheet(isPresented: $showPaywall) {
             PaywallView(context: .featureGated(.fullChallenges))
@@ -289,6 +294,43 @@ struct DashboardView: View {
                     Capsule()
                         .strokeBorder(chefTheme.accent, lineWidth: 1)
                 )
+            }
+            .minimalCard(chefTheme)
+        }
+        .buttonStyle(PremiumCardButtonStyle())
+    }
+
+    // MARK: - Meal Plan
+
+    private var mealPlanCard: some View {
+        Button {
+            HapticManager.light()
+            showMealPlans = true
+        } label: {
+            HStack(spacing: 14) {
+                Circle()
+                    .fill(chefTheme.accent.opacity(0.12))
+                    .frame(width: 48, height: 48)
+                    .overlay(
+                        Image(systemName: "calendar")
+                            .font(.system(size: 20))
+                            .foregroundStyle(chefTheme.accent)
+                    )
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Weekly Meal Plan")
+                        .font(.dsBodyEmph)
+                        .foregroundStyle(chefTheme.textPrimary)
+                    Text("A researched week of meals + grocery list")
+                        .font(.dsCaption)
+                        .foregroundStyle(chefTheme.textTertiary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(chefTheme.textQuaternary)
             }
             .minimalCard(chefTheme)
         }

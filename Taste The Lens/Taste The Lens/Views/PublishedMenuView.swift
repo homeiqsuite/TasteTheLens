@@ -198,11 +198,7 @@ struct PublishedMenuView: View {
         guard !courseData.isEmpty else { return }
 
         let data = PDFExporter.generateMenuPDF(theme: menu.theme, courses: courseData)
-        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("TastingMenu-\(menu.theme).pdf")
-        try? data.write(to: tempURL)
-
-        let activityVC = UIActivityViewController(activityItems: [tempURL], applicationActivities: nil)
-        presentActivityVC(activityVC)
+        SharePresenter.presentPDF(data, fileName: "TastingMenu-\(menu.theme)")
     }
 
     private func exportPDF() {
@@ -215,20 +211,6 @@ struct PublishedMenuView: View {
         guard !courseData.isEmpty else { return }
 
         let data = PDFExporter.generateMenuPDF(theme: menu.theme, courses: courseData)
-        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("TastingMenu-\(menu.theme).pdf")
-        try? data.write(to: tempURL)
-
-        let activityVC = UIActivityViewController(activityItems: [tempURL], applicationActivities: nil)
-        presentActivityVC(activityVC)
-    }
-
-    private func presentActivityVC(_ activityVC: UIActivityViewController) {
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           var topVC = windowScene.windows.first?.rootViewController {
-            while let presented = topVC.presentedViewController {
-                topVC = presented
-            }
-            topVC.present(activityVC, animated: true)
-        }
+        SharePresenter.presentPDF(data, fileName: "TastingMenu-\(menu.theme)")
     }
 }

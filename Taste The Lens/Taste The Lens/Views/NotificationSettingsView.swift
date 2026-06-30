@@ -3,12 +3,18 @@ import UserNotifications
 
 struct NotificationSettingsView: View {
     @State private var pushService = PushNotificationService.shared
+    @State private var reminderService = DailyReminderService.shared
 
     var body: some View {
         ScrollView {
             VStack(spacing: 28) {
                 // System permission status
                 systemPermissionSection
+
+                // Daily local re-engagement reminder
+                if pushService.permissionStatus == .authorized {
+                    dailyReminderSection
+                }
 
                 // Per-category toggles
                 if pushService.permissionStatus == .authorized {
@@ -82,6 +88,23 @@ struct NotificationSettingsView: View {
                 }
             }
             .padding(14)
+        }
+    }
+
+    // MARK: - Daily Reminder
+
+    @ViewBuilder
+    private var dailyReminderSection: some View {
+        settingsSection("Daily Nudge") {
+            preferenceToggle(
+                "Daily Reminder",
+                subtitle: "A clever once-a-day nudge to point your camera at the world and cook something new",
+                icon: "fork.knife",
+                isOn: Binding(
+                    get: { reminderService.isEnabled },
+                    set: { reminderService.isEnabled = $0 }
+                )
+            )
         }
     }
 

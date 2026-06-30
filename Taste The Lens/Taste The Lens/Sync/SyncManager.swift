@@ -172,27 +172,27 @@ final class SyncManager {
 
     /// Fetch a recipe from Supabase by its remote ID (for deep-link resolution).
     /// Returns a hydrated Recipe (with images) that is NOT inserted into any model context.
-    func fetchRecipe(remoteId: String) async throws -> Recipe {
-        logger.info("DeepLink: fetching recipe remoteId=\(remoteId)")
+    func fetchRecipe(shareToken: String) async throws -> Recipe {
+        logger.info("DeepLink: fetching shared recipe")
 
-        let dto: SupabaseRecipeDTO
+        let rows: [SupabaseRecipeDTO]
         do {
-            dto = try await supabase
-                .from("recipes")
-                .select()
-                .eq("id", value: remoteId)
-                .eq("is_deleted", value: false)
-                .single()
+            rows = try await supabase
+                .rpc("get_shared_recipe", params: ["p_token": shareToken])
                 .execute()
                 .value
-            logger.info("DeepLink: recipe row found — \"\(dto.dishName)\"")
         } catch {
-            logger.error("DeepLink: recipes table fetch failed — \(error)")
+            logger.error("DeepLink: get_shared_recipe failed — \(error)")
             throw error
         }
+        guard let dto = rows.first else {
+            logger.error("DeepLink: no shared recipe found for token")
+            throw URLError(.resourceUnavailable)
+        }
+        logger.info("DeepLink: recipe row found — \"\(dto.dishName)\"")
 
         guard let inspirationPath = dto.inspirationImagePath else {
-            logger.error("DeepLink: no inspiration_image_path on recipe \(remoteId)")
+            logger.error("DeepLink: no inspiration_image_path on shared recipe")
             throw URLError(.resourceUnavailable)
         }
 
@@ -225,6 +225,169 @@ final class SyncManager {
         return dto.toRecipe(inspirationData: inspirationData, dishImageData: dishImageData)
     }
 
+    // MARK: - Meal Plan Sharing/Sync
+
+    /// Upload a local meal plan (and its meals + images) to Supabase so it can be
+    /// shared via deep link. Sets `remoteId` on the plan and each meal.
+    @MainActor
+    func syncMealPlan(_ plan: MealPlan) async throws {
+        guard let userId = AuthManager.shared.currentUser?.id.uuidString.lowercased() else {
+            throw URLError(.userAuthenticationRequired)
+        }
+
+        plan.syncStatus = "syncing"
+        plan.userId = userId
+
+        do {
+            // 1. Upsert the plan row.
+            let planDTO = SupabaseMealPlanDTO.from(plan: plan, userId: userId)
+            let planRemoteId: String
+            if let existing = plan.remoteId {
+                try await supabase.from("meal_plans").update(planDTO).eq("id", value: existing).execute()
+                planRemoteId = existing
+            } else {
+                let inserted: [SupabaseMealPlanDTO] = try await supabase.from("meal_plans")
+                    .insert(planDTO).select().execute().value
+                guard let newId = inserted.first?.id else { throw URLError(.cannotParseResponse) }
+                plan.remoteId = newId
+                planRemoteId = newId
+            }
+
+            // 2. Upsert each meal (uploading its image if present).
+            for meal in plan.meals {
+                var imagePath: String? = nil
+                if let imageData = meal.generatedImageData {
+                    let path = "\(userId)/\(planRemoteId)/\(meal.id.uuidString).jpg"
+                    let compressed = UIImage.compressForCloudUpload(imageData)
+                    try await supabase.storage.from("meal-images")
+                        .upload(path, data: compressed, options: .init(upsert: true))
+                    imagePath = path
+                }
+
+                let mealDTO = SupabaseMealDTO.from(meal: meal, mealPlanId: planRemoteId, imagePath: imagePath)
+                if let existing = meal.remoteId {
+                    try await supabase.from("meal_plan_meals").update(mealDTO).eq("id", value: existing).execute()
+                } else {
+                    let inserted: [SupabaseMealDTO] = try await supabase.from("meal_plan_meals")
+                        .insert(mealDTO).select().execute().value
+                    meal.remoteId = inserted.first?.id
+                }
+            }
+
+            plan.syncStatus = "synced"
+            logger.info("Meal plan synced: \(plan.title)")
+        } catch {
+            plan.syncStatus = "failed"
+            logger.error("Meal plan sync failed for \(plan.title): \(error)")
+            throw error
+        }
+    }
+
+    /// Fetch a shared meal plan by remote id (deep-link resolution). Returns a
+    /// transient MealPlan (with meals + images) not inserted into any context.
+    func fetchMealPlan(shareToken: String) async throws -> MealPlan {
+        logger.info("DeepLink: fetching shared meal plan")
+
+        let planRows: [SupabaseMealPlanDTO] = try await supabase
+            .rpc("get_shared_meal_plan", params: ["p_token": shareToken])
+            .execute()
+            .value
+        guard let planDTO = planRows.first else {
+            throw URLError(.resourceUnavailable)
+        }
+
+        let mealDTOs: [SupabaseMealDTO] = try await supabase
+            .rpc("get_shared_meal_plan_meals", params: ["p_token": shareToken])
+            .execute()
+            .value
+
+        var meals: [PlannedMeal] = []
+        for dto in mealDTOs {
+            var imageData: Data? = nil
+            if let path = dto.imagePath {
+                imageData = try? await supabase.storage.from("meal-images").download(path: path)
+            }
+            meals.append(dto.toPlannedMeal(imageData: imageData))
+        }
+
+        logger.info("DeepLink: meal plan hydrated — \"\(planDTO.title)\" (\(meals.count) meals)")
+        return planDTO.toMealPlan(meals: meals)
+    }
+
+    /// Fetch a single shared meal by remote id (deep-link resolution).
+    func fetchMeal(planToken: String, mealId: String) async throws -> PlannedMeal {
+        logger.info("DeepLink: fetching shared meal")
+
+        let mealDTOs: [SupabaseMealDTO] = try await supabase
+            .rpc("get_shared_meal_plan_meals", params: ["p_token": planToken])
+            .execute()
+            .value
+        guard let dto = mealDTOs.first(where: { $0.id == mealId }) else {
+            throw URLError(.resourceUnavailable)
+        }
+
+        var imageData: Data? = nil
+        if let path = dto.imagePath {
+            imageData = try? await supabase.storage.from("meal-images").download(path: path)
+        }
+        return dto.toPlannedMeal(imageData: imageData)
+    }
+
+    // MARK: - Share Link Minting (token-scoped)
+
+    /// Ensure the recipe is synced, mint (or fetch) its share token, return a share URL.
+    @MainActor
+    func shareLinkForRecipe(_ recipe: Recipe) async throws -> URL {
+        if recipe.remoteId == nil {
+            await syncRecipe(recipe)
+        }
+        guard let remoteId = recipe.remoteId else { throw URLError(.cannotCreateFile) }
+        let token = try await mintShareToken(rpc: "share_recipe", id: remoteId)
+        guard let url = DeepLinkHandler.recipeURL(token: token) else { throw URLError(.badURL) }
+        return url
+    }
+
+    /// Ensure the plan is synced, mint (or fetch) its share token, return a share URL.
+    @MainActor
+    func shareLinkForPlan(_ plan: MealPlan) async throws -> URL {
+        if plan.remoteId == nil {
+            try await syncMealPlan(plan)
+        }
+        guard let remoteId = plan.remoteId else { throw URLError(.cannotCreateFile) }
+        let token = try await mintShareToken(rpc: "share_meal_plan", id: remoteId)
+        guard let url = DeepLinkHandler.mealPlanURL(token: token) else { throw URLError(.badURL) }
+        return url
+    }
+
+    /// Ensure the meal's parent plan is synced, mint the plan's share token, return a
+    /// share URL that points at the single meal.
+    @MainActor
+    func shareLinkForMeal(_ meal: PlannedMeal) async throws -> URL {
+        guard let plan = meal.plan else { throw URLError(.cannotCreateFile) }
+        if plan.remoteId == nil {
+            try await syncMealPlan(plan)
+        }
+        guard let planRemoteId = plan.remoteId, let mealId = meal.remoteId else {
+            throw URLError(.cannotCreateFile)
+        }
+        let token = try await mintShareToken(rpc: "share_meal_plan", id: planRemoteId)
+        guard let url = DeepLinkHandler.mealURL(planToken: token, mealId: mealId) else {
+            throw URLError(.badURL)
+        }
+        return url
+    }
+
+    /// Calls an owner-only share RPC (`share_recipe` / `share_meal_plan`) that
+    /// returns the item's share token.
+    private func mintShareToken(rpc: String, id: String) async throws -> String {
+        let rows: [ShareTokenRow] = try await supabase
+            .rpc(rpc, params: ["p_id": id])
+            .execute()
+            .value
+        guard let token = rows.first?.token else { throw URLError(.cannotCreateFile) }
+        return token.uuidString.lowercased()
+    }
+
     // MARK: - Delete Recipe (Soft-Delete on Server)
 
     /// Soft-delete a recipe on Supabase (sets `is_deleted = true`), then hard-delete locally.
@@ -242,6 +405,25 @@ final class SyncManager {
             }
         }
         modelContext.delete(recipe)
+        try? modelContext.save()
+    }
+
+    /// Soft-delete a meal plan on Supabase (if synced), then hard-delete locally
+    /// (cascades to its meals). After this, any shared links stop resolving.
+    @MainActor
+    func deleteMealPlanRemotely(_ plan: MealPlan, modelContext: ModelContext) async {
+        if let remoteId = plan.remoteId {
+            do {
+                try await supabase.from("meal_plans")
+                    .update(["is_deleted": true])
+                    .eq("id", value: remoteId)
+                    .execute()
+                logger.info("Marked meal plan as deleted on server: \(plan.title)")
+            } catch {
+                logger.error("Failed to delete meal plan remotely: \(error)")
+            }
+        }
+        modelContext.delete(plan)
         try? modelContext.save()
     }
 
@@ -306,7 +488,7 @@ final class SyncManager {
                 let prefs = row.dietaryPreferences.compactMap { DietaryPreference(rawValue: $0) }
                 if !prefs.isEmpty {
                     DietaryPreference.save(prefs)
-                    logger.info("Pulled dietary preferences from server: \(prefs.map(\.displayName))")
+                    logger.info("Pulled \(prefs.count) dietary preferences from server")
                 }
             }
         } catch {
@@ -321,4 +503,9 @@ private struct DietaryPrefsRow: Codable {
     enum CodingKeys: String, CodingKey {
         case dietaryPreferences = "dietary_preferences"
     }
+}
+
+/// Decodes the single-column result of the `share_recipe` / `share_meal_plan` RPCs.
+private struct ShareTokenRow: Decodable {
+    let token: UUID
 }

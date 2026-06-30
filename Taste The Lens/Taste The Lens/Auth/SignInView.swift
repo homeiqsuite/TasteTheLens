@@ -108,6 +108,13 @@ struct SignInView: View {
                             .padding(.horizontal, 32)
                     }
 
+                    Text("By continuing, you agree to our [Terms of Service](https://tastethelens.com/terms) and [Privacy Policy](https://tastethelens.com/privacy).")
+                        .font(.system(size: 11))
+                        .tint(gold)
+                        .foregroundStyle(Theme.darkTextHint)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+
                     Spacer()
                 }
             }

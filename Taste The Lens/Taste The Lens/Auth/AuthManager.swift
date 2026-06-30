@@ -162,7 +162,7 @@ final class AuthManager {
             email,
             redirectTo: URL(string: "https://tastethelens.com/reset-password")
         )
-        logger.info("Password reset email sent to \(email)")
+        logger.info("Password reset email sent")
     }
 
     func exchangeCodeForSession(_ code: String) async throws {

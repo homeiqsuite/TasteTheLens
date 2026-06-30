@@ -295,6 +295,182 @@ struct PDFExporter {
             }
         }
     }
+
+    // MARK: - Meal Plan / Meal PDFs
+
+    private static let pageRect = CGRect(x: 0, y: 0, width: 612, height: 792) // Letter
+    private static let pdfMargin: CGFloat = 50
+
+    /// Single planned meal as a one-or-more page PDF.
+    static func generateMealPDF(for meal: PlannedMeal) -> Data {
+        let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
+        return renderer.pdfData { context in
+            context.beginPage()
+            var y = drawMeal(meal, in: context, startY: pdfMargin, showImage: true)
+            drawFooter(at: &y)
+        }
+    }
+
+    /// Whole weekly plan: cover + grocery list + each meal.
+    static func generateMealPlanPDF(for plan: MealPlan) -> Data {
+        let margin = pdfMargin
+        let contentWidth = pageRect.width - margin * 2
+        let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
+
+        return renderer.pdfData { context in
+            // Cover page
+            context.beginPage()
+            let coverTitleFont = UIFont(name: "Georgia-Bold", size: 30) ?? UIFont.boldSystemFont(ofSize: 30)
+            let titleStr = NSAttributedString(string: plan.title, attributes: [.font: coverTitleFont, .foregroundColor: Theme.goldUI])
+            let titleRect = titleStr.boundingRect(with: CGSize(width: contentWidth, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin], context: nil)
+            titleStr.draw(in: CGRect(x: margin, y: pageRect.midY - titleRect.height - 16, width: contentWidth, height: titleRect.height))
+
+            let chefName = ChefPersonality(rawValue: plan.chefPersonality ?? "")?.displayName ?? "Taste The Lens"
+            let subStr = NSAttributedString(
+                string: "\(chefName)  •  \(plan.daysCount) days · \(plan.totalMealCount) meals",
+                attributes: [.font: UIFont.systemFont(ofSize: 14, weight: .medium), .foregroundColor: UIColor.gray]
+            )
+            subStr.draw(at: CGPoint(x: margin, y: pageRect.midY + 6))
+
+            let footerStr = NSAttributedString(string: "Created with Taste The Lens", attributes: [.font: UIFont.systemFont(ofSize: 9, weight: .light), .foregroundColor: UIColor.lightGray])
+            footerStr.draw(at: CGPoint(x: margin, y: pageRect.height - margin + 10))
+
+            // Grocery list page
+            if !plan.groceryList.isEmpty {
+                context.beginPage()
+                var y = margin
+                drawSectionHeader("Grocery List", in: context, y: &y)
+                let grouped = Dictionary(grouping: plan.groceryList, by: { $0.aisle })
+                for aisle in grouped.keys.sorted() {
+                    ensurePageSpace(40, in: context, y: &y)
+                    let aisleStr = NSAttributedString(string: aisle, attributes: [.font: UIFont.systemFont(ofSize: 12, weight: .semibold), .foregroundColor: UIColor.darkText])
+                    aisleStr.draw(at: CGPoint(x: margin, y: y)); y += 18
+                    for item in grouped[aisle]!.sorted(by: { $0.name < $1.name }) {
+                        ensurePageSpace(18, in: context, y: &y)
+                        let line = "• \(item.name) — \(item.quantity)"
+                        NSAttributedString(string: line, attributes: [.font: UIFont.systemFont(ofSize: 11), .foregroundColor: UIColor.darkText]).draw(at: CGPoint(x: margin + 12, y: y))
+                        y += 15
+                    }
+                    y += 8
+                }
+            }
+
+            // Each meal (one page each)
+            for group in plan.mealsByDay {
+                for meal in group.meals {
+                    context.beginPage()
+                    var y = margin
+                    let dayStr = NSAttributedString(string: "DAY \(group.day)", attributes: [.font: UIFont.systemFont(ofSize: 10, weight: .bold), .foregroundColor: Theme.goldUI])
+                    dayStr.draw(at: CGPoint(x: margin, y: y)); y += 18
+                    y = drawMeal(meal, in: context, startY: y, showImage: true)
+                }
+            }
+        }
+    }
+
+    // MARK: - Shared meal drawing
+
+    private static func drawMeal(_ meal: PlannedMeal, in context: UIGraphicsPDFRendererContext, startY: CGFloat, showImage: Bool) -> CGFloat {
+        let margin = pdfMargin
+        let contentWidth = pageRect.width - margin * 2
+        var y = startY
+
+        func ensure(_ needed: CGFloat) { ensurePageSpace(needed, in: context, y: &y) }
+        func draw(_ text: String, font: UIFont, color: UIColor = .darkText) -> CGFloat {
+            let ps = NSMutableParagraphStyle(); ps.lineSpacing = 4
+            let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color, .paragraphStyle: ps]
+            let s = NSAttributedString(string: text, attributes: attrs)
+            let r = s.boundingRect(with: CGSize(width: contentWidth, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
+            s.draw(in: CGRect(x: margin, y: y, width: contentWidth, height: r.height))
+            return r.height
+        }
+
+        // Meal type label
+        y += draw(meal.mealType.uppercased(), font: .systemFont(ofSize: 11, weight: .bold), color: Theme.goldUI) + 4
+        // Dish name
+        y += draw(meal.dishName, font: UIFont(name: "Georgia-Bold", size: 22) ?? .boldSystemFont(ofSize: 22)) + 8
+        // Description
+        if !meal.mealDescription.isEmpty { y += draw(meal.mealDescription, font: .systemFont(ofSize: 12), color: .darkGray) + 12 }
+
+        // Image
+        if showImage, let data = meal.generatedImageData, let image = UIImage(data: data) {
+            let imageHeight: CGFloat = 200
+            ensure(imageHeight + 16)
+            let rect = CGRect(x: margin, y: y, width: contentWidth, height: imageHeight)
+            context.cgContext.saveGState()
+            UIBezierPath(roundedRect: rect, cornerRadius: 8).addClip()
+            let scale = max(contentWidth / image.size.width, imageHeight / image.size.height)
+            let sw = image.size.width * scale, sh = image.size.height * scale
+            image.draw(in: CGRect(x: rect.midX - sw / 2, y: rect.midY - sh / 2, width: sw, height: sh))
+            context.cgContext.restoreGState()
+            y += imageHeight + 16
+        }
+
+        // Meta line (times / difficulty / calories)
+        var meta: [String] = []
+        if let p = meal.prepTime { meta.append("Prep \(p)") }
+        if let c = meal.cookTime { meta.append("Cook \(c)") }
+        if let d = meal.difficulty { meta.append(d) }
+        if let n = meal.nutrition { meta.append("\(n.calories) cal · \(n.protein)g protein · \(n.carbs)g carbs · \(n.fat)g fat") }
+        if !meta.isEmpty { y += draw(meta.joined(separator: "  ·  "), font: .systemFont(ofSize: 11, weight: .medium), color: .gray) + 12 }
+
+        // Research notes
+        if !meal.researchNotes.isEmpty {
+            ensure(30)
+            y += draw("Why this meal: \(meal.researchNotes)", font: .italicSystemFont(ofSize: 11), color: .darkGray) + 14
+        }
+
+        // Ingredients
+        drawSectionHeader("Ingredients", in: context, y: &y)
+        for component in meal.components {
+            ensure(30)
+            if meal.components.count > 1 { y += draw(component.name, font: .systemFont(ofSize: 12, weight: .semibold)) + 4 }
+            for ingredient in component.ingredients {
+                ensure(18)
+                y += draw("• \(ingredient)", font: .systemFont(ofSize: 11)) + 2
+            }
+            y += 6
+        }
+
+        // Cooking steps
+        if !meal.cookingSteps.isEmpty {
+            drawSectionHeader("Cooking Steps", in: context, y: &y)
+            for (i, step) in meal.cookingSteps.enumerated() {
+                ensure(30)
+                y += draw("\(i + 1). \(step.instruction)", font: .systemFont(ofSize: 12)) + 4
+                if let tip = step.tip, !tip.isEmpty {
+                    ensure(18)
+                    y += draw("Tip: \(tip)", font: .italicSystemFont(ofSize: 10), color: .gray) + 6
+                } else { y += 4 }
+            }
+        }
+        return y
+    }
+
+    private static func ensurePageSpace(_ needed: CGFloat, in context: UIGraphicsPDFRendererContext, y: inout CGFloat) {
+        if y + needed > pageRect.height - pdfMargin {
+            context.beginPage()
+            y = pdfMargin
+        }
+    }
+
+    private static func drawSectionHeader(_ title: String, in context: UIGraphicsPDFRendererContext, y: inout CGFloat) {
+        let margin = pdfMargin
+        let contentWidth = pageRect.width - margin * 2
+        ensurePageSpace(40, in: context, y: &y)
+        let s = NSAttributedString(string: title.uppercased(), attributes: [.font: UIFont.systemFont(ofSize: 14, weight: .bold), .foregroundColor: Theme.goldUI])
+        s.draw(at: CGPoint(x: margin, y: y)); y += 20
+        Theme.goldUI30.setStroke()
+        let line = UIBezierPath()
+        line.move(to: CGPoint(x: margin, y: y)); line.addLine(to: CGPoint(x: margin + contentWidth, y: y))
+        line.lineWidth = 0.5; line.stroke()
+        y += 12
+    }
+
+    private static func drawFooter(at y: inout CGFloat) {
+        let footerStr = NSAttributedString(string: "Created with Taste The Lens", attributes: [.font: UIFont.systemFont(ofSize: 9, weight: .light), .foregroundColor: UIColor.lightGray])
+        footerStr.draw(at: CGPoint(x: pdfMargin, y: pageRect.height - pdfMargin + 10))
+    }
 }
 
 // UIColor hex helper for PDF rendering

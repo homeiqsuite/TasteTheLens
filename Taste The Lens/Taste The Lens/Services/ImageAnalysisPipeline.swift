@@ -120,6 +120,21 @@ struct CustomChefConfigPayload: Encodable {
 struct GenerateImageRequest: Encodable {
     let prompt: String
     let provider: String
+    /// When true, the edge function deducts 1 credit for this image (standalone
+    /// meal-plan images). Left nil for the recipe flow, where the image is
+    /// already covered by the analyze-image credit.
+    var chargeCredit: Bool? = nil
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(prompt, forKey: .prompt)
+        try c.encode(provider, forKey: .provider)
+        try c.encodeIfPresent(chargeCredit, forKey: .chargeCredit)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case prompt, provider, chargeCredit
+    }
 }
 
 @Observable
@@ -173,8 +188,12 @@ final class ImageAnalysisPipeline: Identifiable {
         // Always use anon key for Authorization so the Supabase gateway never returns 401.
         request.setValue("Bearer \(AppConfig.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
         // Pass user JWT in a custom header — the edge function reads it for optional auth.
+        // Guests instead send a stable Keychain-backed id so the server can enforce
+        // the free-tier limit (the client count alone is trivially reset).
         if let userToken = await userAccessToken() {
             request.setValue(userToken, forHTTPHeaderField: "x-user-token")
+        } else {
+            request.setValue(GuestIdentity.id, forHTTPHeaderField: "x-guest-id")
         }
         request.httpBody = encodedBody
 
@@ -345,8 +364,12 @@ final class ImageAnalysisPipeline: Identifiable {
             completedRecipe = recipe
             creditPool = nil
             state = .complete
-            // Guest users: track usage locally (server doesn't enforce for unauthenticated users)
-            UsageTracker.shared.incrementGuestUsage()
+            // Guests: the server now tracks usage authoritatively (returned in
+            // `credits`) and `updateFromServer` already synced the count. Only
+            // fall back to a local increment if the server returned no balance.
+            if analysisResponse.credits == nil {
+                UsageTracker.shared.incrementGuestUsage()
+            }
             await CommunityImpactService.shared.recordGeneration()
             if recipe.generatedDishImageData != nil {
                 updateWidgetData(recipe: recipe)
@@ -546,8 +569,12 @@ final class ImageAnalysisPipeline: Identifiable {
             completedRecipe = recipe
             creditPool = nil
             state = .complete
-            // Guest users: track usage locally (server doesn't enforce for unauthenticated users)
-            UsageTracker.shared.incrementGuestUsage()
+            // Guests: the server now tracks usage authoritatively (returned in
+            // `credits`) and `updateFromServer` already synced the count. Only
+            // fall back to a local increment if the server returned no balance.
+            if analysisResponse.credits == nil {
+                UsageTracker.shared.incrementGuestUsage()
+            }
             await CommunityImpactService.shared.recordGeneration()
             if recipe.generatedDishImageData != nil {
                 updateWidgetData(recipe: recipe)
@@ -679,6 +706,7 @@ extension ImageGenerationModel {
         case .imagen4Fast: return "imagen4fast"
         case .fluxPro: return "fluxpro"
         case .fluxSchnell: return "fluxschnell"
+        case .gptImage2: return "gptimage2"
         }
     }
 }
